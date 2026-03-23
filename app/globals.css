@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f6f3ea;
+  --ink: #1f2937;
+  --panel: #fffdf8;
+  --panel-border: #d9d2c3;
+  --accent: #0f766e;
+  --accent-2: #1d4ed8;
+  --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --body-font: "Avenir Next", "Gill Sans Nova", "Segoe UI", sans-serif;
+}
+
+body {
+  @apply text-slate-900;
+  background:
+    radial-gradient(circle at 10% 15%, rgba(15, 118, 110, 0.16), transparent 40%),
+    radial-gradient(circle at 88% 5%, rgba(29, 78, 216, 0.14), transparent 40%),
+    radial-gradient(circle at 55% 100%, rgba(180, 83, 9, 0.12), transparent 40%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--body-font);
+}
+
+a {
+  @apply text-sky-700 hover:text-sky-900;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display-font);
+  letter-spacing: 0.01em;
+}
+
+.sticky-pane thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(241 245 249 / 0.98);
+  box-shadow: inset 0 -1px 0 rgb(226 232 240 / 1);
+}
+
+.orb {
+  position: absolute;
+  width: 28rem;
+  height: 28rem;
+  border-radius: 9999px;
+  filter: blur(40px);
+  opacity: 0.2;
+}
+
+.orb-a {
+  background: #0f766e;
+  top: -8rem;
+  left: -8rem;
+}
+
+.orb-b {
+  background: #1d4ed8;
+  top: -10rem;
+  right: -8rem;
+}
+
+.orb-c {
+  background: #b45309;
+  bottom: -12rem;
+  left: 30%;
+}
