@@ -121,8 +121,6 @@ export const loadReportsPageData = async () => {
     unitHealth,
     leadershipTenure,
     recentMoveIns,
-    convertTrend,
-    turnoverTrend,
     templeRecommendHealth,
     seminaryInstituteByUnit,
     newReturningStrengthening,
@@ -140,8 +138,6 @@ export const loadReportsPageData = async () => {
     getUnitHealthReport(),
     getLeadershipTenureReport(),
     getRecentMoveInsReport(),
-    getRecentConvertGrowth(),
-    getLeadershipTurnover(),
     getTempleRecommendHealthReport(),
     getSeminaryInstituteByUnitReport(),
     getNewReturningStrengtheningReport(),
@@ -161,8 +157,6 @@ export const loadReportsPageData = async () => {
     unitHealth,
     leadershipTenure,
     recentMoveIns,
-    convertTrend,
-    turnoverTrend,
     templeRecommendHealth,
     seminaryInstituteByUnit,
     newReturningStrengthening,
@@ -176,6 +170,10 @@ export const loadReportsPageData = async () => {
     recentBaptismPathCohort
   };
 };
+
+export const loadReportsPageShellData = async () => ({
+  overview: await getReportsOverview()
+});
 
 export const loadYouthPageData = async () => ({
   currentlyServingMissionaries: await getCurrentlyServingMissionaries(),

@@ -127,7 +127,7 @@ export default async function StakeOverviewPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.syncDiff.members.length > 0 ? (
-                  data.syncDiff.members.map((row) => (
+                  data.syncDiff.members.map((row: (typeof data.syncDiff.members)[number]) => (
                     <tr key={`${row.lcrMemberId}-${row.updatedAt}`} className="hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-900">{row.fullName}</td>
                       <td className="px-4 py-2">{row.unitName}</td>
@@ -166,7 +166,7 @@ export default async function StakeOverviewPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.syncDiff.callings.length > 0 ? (
-                  data.syncDiff.callings.map((row) => (
+                  data.syncDiff.callings.map((row: (typeof data.syncDiff.callings)[number]) => (
                     <tr key={`${row.lcrCallingId}-${row.updatedAt}`} className="hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-900">{row.callingTitle}</td>
                       <td className="px-4 py-2">{row.unitName}</td>
@@ -206,7 +206,7 @@ export default async function StakeOverviewPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.syncDiff.contacts.length > 0 ? (
-                  data.syncDiff.contacts.map((row) => (
+                  data.syncDiff.contacts.map((row: (typeof data.syncDiff.contacts)[number]) => (
                     <tr key={`${row.contactType}-${row.memberLcrMemberId}-${row.value}-${row.updatedAt}`} className="hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-900">{row.fullName}</td>
                       <td className="px-4 py-2">{row.unitName}</td>
