@@ -6,6 +6,7 @@ const links = [
   { href: "/members", label: "Members" },
   { href: "/callings", label: "Callings" },
   { href: "/committees", label: "Committees" },
+  { href: "/visual-org", label: "Visual Org" },
   { href: "/youth", label: "Youth" },
   { href: "/stake-overview", label: "Stake Overview" }
 ];
