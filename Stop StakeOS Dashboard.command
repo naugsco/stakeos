@@ -11,7 +11,7 @@ collect_stakeos_next_pids() {
   local cwd
   for pid in $(pgrep -f "next/dist/bin/next" 2>/dev/null || true); do
     cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-    if [[ "$cmd" != *" next dev"* ]]; then
+    if [[ "$cmd" != *" next dev"* && "$cmd" != *" next start"* ]]; then
       continue
     fi
 

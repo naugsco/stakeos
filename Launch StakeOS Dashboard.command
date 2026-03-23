@@ -23,7 +23,7 @@ collect_stakeos_next_pids() {
   local cwd
   for pid in $(pgrep -f "next/dist/bin/next" 2>/dev/null || true); do
     cmd="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-    if [[ "$cmd" != *" next dev"* ]]; then
+    if [[ "$cmd" != *" next dev"* && "$cmd" != *" next start"* ]]; then
       continue
     fi
 
@@ -113,10 +113,17 @@ fi
 # Ensure no stray StakeOS Next process on alternate ports can hold .next files.
 stop_all_stakeos_next
 
-# Clear stale build artifacts before a fresh start.
+# Clear stale build artifacts before a fresh production build.
 rm -rf "$PROJECT_DIR/.next"
 
-nohup npm run dev -- --port "$PORT" >> "$LOG_FILE" 2>&1 &
+echo "[$(date)] Building StakeOS dashboard..." >> "$LOG_FILE"
+if ! npm run build >> "$LOG_FILE" 2>&1; then
+  osascript -e 'display alert "StakeOS" message "Dashboard build failed. Check .run/dashboard.log for details." as critical'
+  exit 1
+fi
+
+echo "[$(date)] Starting StakeOS dashboard..." >> "$LOG_FILE"
+nohup npm run start -- --port "$PORT" >> "$LOG_FILE" 2>&1 &
 
 for _ in {1..60}; do
   if curl -sSf "http://localhost:$PORT/dashboard" >/dev/null 2>&1; then
