@@ -2,6 +2,8 @@
 
 This guide covers how to build and share the Electron desktop version of StakeOS.
 
+For a short maintainer publish checklist, use [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
+
 ## Current Release Model
 
 StakeOS Desktop is currently packaged for macOS through Electron.
@@ -64,17 +66,7 @@ release/mac-arm64/StakeOS Desktop.app
 
 ## Recommended Release Checklist
 
-Before building a release:
-
-1. pull the latest code
-2. run `npm install`
-3. run `npm run desktop:check-release`
-4. run `npm run build`
-5. run `npm run typecheck`
-6. confirm the desktop app still launches locally with `npm run desktop:start`
-7. confirm the first-run setup flow still works
-8. confirm a packaged dry build works with `npm run desktop:pack`
-9. build the release artifacts with `npm run desktop:release`
+Use the dedicated checklist in [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
 
 ## Apple Signing And Notarization
 
@@ -152,6 +144,11 @@ For a GitHub release or direct handoff, share:
 - the desktop release zip or dmg from `release/`
 - the installation guide: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
 
+If you are publishing unsigned macOS builds, also tell users:
+- macOS may block the first launch
+- they can right-click the app and choose `Open`
+- or use `System Settings > Privacy & Security > Open Anyway`
+
 The receiving user still needs:
 - PostgreSQL installed and running
 - a local `stakeos` database
@@ -178,6 +175,7 @@ A practical GitHub workflow is:
 4. link users to:
    - the release asset
    - [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
+   - [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)
    - MCP setup instructions in [README.md](./README.md)
 
 ## Not Yet Included

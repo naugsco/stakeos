@@ -10,6 +10,7 @@ StakeOS runs locally on your machine. It uses:
 This guide is written for a first-time macOS setup.
 
 If you want to build the packaged desktop app after setup is working, use [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md).
+If you are the maintainer publishing a GitHub release, use [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
 
 ## What You Will End Up With
 
@@ -18,6 +19,10 @@ By the end of this guide, you will have:
 - the StakeOS web dashboard running at `http://localhost:3000/dashboard`
 - a working first LCR sync
 - a built MCP server ready for Claude Desktop
+
+If you install StakeOS from an unsigned GitHub desktop release instead of running from source, macOS may ask you to:
+- right-click the app and choose `Open`
+- or allow it in `System Settings > Privacy & Security`
 
 ## Recommended Setup
 

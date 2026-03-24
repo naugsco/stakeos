@@ -4,6 +4,7 @@ StakeOS is a private local AI assistant system for stake leadership, built aroun
 
 For a first-time public installation walkthrough, start with [StakeOS Installation Guide](./FIRST_TIME_SETUP.md).
 For desktop packaging and GitHub release workflow, use [StakeOS Desktop Release Guide](./DESKTOP_RELEASE.md).
+For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GITHUB_RELEASE_CHECKLIST.md).
 
 ## Stack
 
@@ -124,6 +125,11 @@ Release artifacts are written to `release/` and now include:
 - `.dmg`
 
 If Apple signing/notarization credentials are configured, the same release command can notarize the macOS build. See [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md).
+For a clean publish flow, use [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
+
+If you distribute unsigned macOS builds through GitHub, users may need to:
+- right-click the app and choose `Open`
+- or use `System Settings > Privacy & Security > Open Anyway`
 
 ### Dashboard
 
