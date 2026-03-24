@@ -12,6 +12,7 @@
     "build:backend": "tsup src/mcp/server.ts src/scripts/runFullSync.ts src/scripts/runCallingSync.ts src/db/migrate.ts src/scripts/seedSyncSnapshots.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
     "desktop:start": "electron electron/main.cjs",
     "desktop:clean": "rm -rf release",
+    "desktop:check-release": "node scripts/checkMacReleasePrereqs.mjs",
     "desktop:pack": "npm run build && electron-builder --dir",
     "desktop:release": "npm run desktop:clean && npm run build && electron-builder --mac zip dmg",
     "desktop:dist": "npm run desktop:release",

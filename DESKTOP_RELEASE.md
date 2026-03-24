@@ -17,6 +17,7 @@ Important constraints:
 Run:
 
 ```bash
+npm run desktop:check-release
 npm run desktop:release
 ```
 
@@ -24,6 +25,8 @@ This does three things:
 1. removes the previous `release/` folder
 2. builds the Next.js app and backend bundles
 3. packages macOS desktop release artifacts
+
+Use `npm run desktop:check-release` first to verify whether this Mac is ready for a signed/notarized build.
 
 Release artifacts are written to:
 
@@ -65,12 +68,13 @@ Before building a release:
 
 1. pull the latest code
 2. run `npm install`
-3. run `npm run build`
-4. run `npm run typecheck`
-5. confirm the desktop app still launches locally with `npm run desktop:start`
-6. confirm the first-run setup flow still works
-7. confirm a packaged dry build works with `npm run desktop:pack`
-8. build the release artifacts with `npm run desktop:release`
+3. run `npm run desktop:check-release`
+4. run `npm run build`
+5. run `npm run typecheck`
+6. confirm the desktop app still launches locally with `npm run desktop:start`
+7. confirm the first-run setup flow still works
+8. confirm a packaged dry build works with `npm run desktop:pack`
+9. build the release artifacts with `npm run desktop:release`
 
 ## Apple Signing And Notarization
 
