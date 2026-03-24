@@ -8,7 +8,8 @@ const links = [
   { href: "/committees", label: "Committees" },
   { href: "/visual-org", label: "Visual Org" },
   { href: "/youth", label: "Youth" },
-  { href: "/stake-overview", label: "Stake Overview" }
+  { href: "/stake-overview", label: "Stake Overview" },
+  { href: "/settings", label: "Settings" }
 ];
 
 export function Navigation() {

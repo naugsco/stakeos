@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
+import { loadDesktopConfig } from "@/src/config/desktopConfig";
 
 const loadEnv = () => {
   const entry = process.argv[1] ? resolve(process.argv[1]) : "";
@@ -22,6 +23,11 @@ const loadEnv = () => {
 };
 
 loadEnv();
+
+const effectiveProcessEnv = {
+  ...process.env,
+  ...loadDesktopConfig()
+};
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -54,7 +60,7 @@ const envSchema = z.object({
   STAKE_COUNCIL_EMAILS: z.string().optional()
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema.parse(effectiveProcessEnv);
 
 export const splitEmails = (value?: string): string[] => {
   if (!value) {

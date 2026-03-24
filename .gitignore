@@ -16,3 +16,7 @@ npm-debug.log*
 
 .DS_Store
 tsconfig.tsbuildinfo
+StakeOS Dashboard.app/
+scripts/stakeos_dashboard_launcher.applescript
+stakeos.png
+StakeOS.png

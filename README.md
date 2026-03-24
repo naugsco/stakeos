@@ -94,6 +94,17 @@ What happens:
 
 ## Running StakeOS
 
+### Desktop Shell
+
+```bash
+npm run desktop:start
+```
+
+What it does:
+- builds StakeOS if needed
+- starts a local desktop-only StakeOS server on port `3232`
+- opens StakeOS in an Electron app window instead of the browser
+
 ### Dashboard
 
 ```bash
@@ -183,6 +194,7 @@ npm run scheduler
 npm run mcp:dev
 npm run mcp:build
 npm run mcp:start
+npm run desktop:start
 ```
 
 ## Project Structure
