@@ -615,12 +615,6 @@ Seed baseline snapshots:
 npm run sync:seed-baseline
 ```
 
-Run the scheduler:
-
-```bash
-npm run scheduler
-```
-
 Build the MCP server:
 
 ```bash

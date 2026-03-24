@@ -61,8 +61,35 @@ export function SyncControlPanel({ daysSinceLastSync, latestCompletedAt, units, 
     }
   };
 
+  const freshnessTone =
+    daysSinceLastSync === null
+      ? "border-slate-200 bg-white"
+      : daysSinceLastSync >= 7
+        ? "border-rose-300 bg-rose-50/90 animate-pulse"
+        : daysSinceLastSync >= 2
+          ? "border-amber-300 bg-amber-50/90"
+          : "border-emerald-200 bg-emerald-50/70";
+
+  const freshnessTextTone =
+    daysSinceLastSync === null
+      ? "text-slate-900"
+      : daysSinceLastSync >= 7
+        ? "text-rose-800"
+        : daysSinceLastSync >= 2
+          ? "text-amber-900"
+          : "text-slate-900";
+
+  const freshnessCaption =
+    daysSinceLastSync === null
+      ? "No successful LCR sync recorded yet."
+      : daysSinceLastSync >= 7
+        ? "LCR data is more than a week old. Run an update now."
+        : daysSinceLastSync >= 2
+          ? "LCR data is getting stale. A manual update is recommended."
+          : "LCR data is current.";
+
   return (
-    <section className="rounded-2xl border border-amber-900/15 bg-[var(--panel)] px-4 py-3 shadow-sm">
+    <section className={`rounded-2xl border px-4 py-3 shadow-sm transition ${freshnessTone}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
@@ -91,14 +118,17 @@ export function SyncControlPanel({ daysSinceLastSync, latestCompletedAt, units, 
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Days Since Last LCR Sync</p>
             <div className="mt-1 flex items-end gap-3">
-              <p className="text-2xl font-semibold text-slate-900">
+              <p className={`text-2xl font-semibold ${freshnessTextTone}`}>
                 {daysSinceLastSync === null ? "n/a" : daysSinceLastSync}
               </p>
-              <p className="pb-1 text-xs text-slate-500">
+              <p className={`pb-1 text-xs ${daysSinceLastSync !== null && daysSinceLastSync >= 7 ? "text-rose-700" : daysSinceLastSync !== null && daysSinceLastSync >= 2 ? "text-amber-700" : "text-slate-500"}`}>
                 Last successful sync:{" "}
                 {latestCompletedAt ? new Date(latestCompletedAt).toLocaleString() : "No successful sync recorded"}
               </p>
             </div>
+            <p className={`mt-1 text-xs ${daysSinceLastSync !== null && daysSinceLastSync >= 7 ? "text-rose-700" : daysSinceLastSync !== null && daysSinceLastSync >= 2 ? "text-amber-700" : "text-slate-500"}`}>
+              {freshnessCaption}
+            </p>
           </div>
         </div>
 

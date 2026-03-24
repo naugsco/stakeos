@@ -11,7 +11,6 @@ For a first-time public installation walkthrough, start with [StakeOS Installati
 - PostgreSQL
 - Next.js + Tailwind + Recharts (dashboard)
 - MCP server for Claude Desktop
-- node-cron automations
 - Nodemailer email delivery
 - dotenv configuration
 
@@ -20,7 +19,7 @@ For a first-time public installation walkthrough, start with [StakeOS Installati
 1. Directory Sync Engine
 - Playwright automation for LCR directory data extraction.
 - Manual login flow (no credential capture/storage in StakeOS).
-- Nightly full directory sync + hourly calling sync.
+- Manual full directory sync + manual calling sync.
 
 2. Leadership Intelligence Database
 - PostgreSQL schema for leadership/member intelligence.
@@ -72,7 +71,7 @@ cp .env.example .env
 
 Update `.env` values:
 - `DATABASE_URL`
-- `SMTP_*` values (for email tools/automation)
+- `SMTP_*` values (for email tools)
 - `STAKE_*` metadata and report recipients
 
 ### 3. Create schema
@@ -112,20 +111,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
-
-### Scheduler (automations + recurring sync)
-
-```bash
-npm run scheduler
-```
-
-Scheduled tasks:
-- Nightly full directory sync (`1:30 AM`)
-- Hourly calling sync (`HH:05`)
-- Weekly stake presidency report
-- Weekly stake council newsletter
-- Youth advancement report
-- Mission readiness report
 
 ### Build everything
 
@@ -190,7 +175,6 @@ npm run typecheck
 npm run lint
 npm run sync:full
 npm run sync:callings
-npm run scheduler
 npm run mcp:dev
 npm run mcp:build
 npm run mcp:start
@@ -203,5 +187,4 @@ npm run desktop:start
 - `src/db/*` - PostgreSQL schema and migration
 - `src/services/*` - intelligence, reports, email, WhatsApp data services
 - `src/mcp/server.ts` - MCP server/tool definitions
-- `src/scheduler/*` - node-cron automation jobs
 - `app/*` + `components/*` - Next.js dashboard UI

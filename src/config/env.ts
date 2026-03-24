@@ -29,15 +29,27 @@ const effectiveProcessEnv = {
   ...loadDesktopConfig()
 };
 
+const emptyStringToUndefined = (value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  DATABASE_URL: z.string().min(1).default("postgresql://localhost:5432/stakeos"),
+  DATABASE_URL: z.preprocess(emptyStringToUndefined, z.string().min(1).default("postgresql://localhost:5432/stakeos")),
   PLAYWRIGHT_USER_DATA_DIR: z.string().default(".playwright/profile"),
   PLAYWRIGHT_HEADLESS: z
     .string()
     .optional()
     .transform((value) => value === "true"),
-  LCR_DIRECTORY_URL: z.string().url().default("https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/YOUR-REPORT-ID"),
+  LCR_DIRECTORY_URL: z.preprocess(
+    emptyStringToUndefined,
+    z.string().url().default("https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/YOUR-REPORT-ID")
+  ),
   LCR_TIMEOUT_MS: z
     .string()
     .default("180000")
