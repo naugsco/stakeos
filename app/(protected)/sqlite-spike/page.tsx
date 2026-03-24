@@ -5,6 +5,7 @@ import { ComparisonBarMetricsChart } from "@/components/charts/comparison-bar-me
 import { MinisteringCoverageUnitChart } from "@/components/charts/ministering-coverage-unit-chart";
 import { StatCard } from "@/components/stat-card";
 import { loadSqliteSpikeDashboardData } from "@/src/sqlite-spike/queries";
+import Link from "next/link";
 
 export default async function SqliteSpikePage() {
   const data = await loadSqliteSpikeDashboardData();
@@ -16,6 +17,14 @@ export default async function SqliteSpikePage() {
         <p className="text-sm text-slate-600">
           Experimental parallel dashboard backed by SQLite. This does not replace the main PostgreSQL app path.
         </p>
+        <div className="mt-3">
+          <Link
+            href="/sqlite-spike/compare"
+            className="inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 shadow-sm hover:bg-amber-50"
+          >
+            Open SQLite vs PostgreSQL Comparison
+          </Link>
+        </div>
       </header>
 
       <section className="rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
