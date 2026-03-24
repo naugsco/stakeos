@@ -119,7 +119,11 @@ Release zip:
 npm run desktop:release
 ```
 
-Release artifacts are written to `release/`.
+Release artifacts are written to `release/` and now include:
+- `.zip`
+- `.dmg`
+
+If Apple signing/notarization credentials are configured, the same release command can notarize the macOS build. See [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md).
 
 ### Dashboard
 

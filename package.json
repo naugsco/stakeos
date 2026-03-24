@@ -13,7 +13,7 @@
     "desktop:start": "electron electron/main.cjs",
     "desktop:clean": "rm -rf release",
     "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:release": "npm run desktop:clean && npm run build && electron-builder --mac zip",
+    "desktop:release": "npm run desktop:clean && npm run build && electron-builder --mac zip dmg",
     "desktop:dist": "npm run desktop:release",
     "start": "next start",
     "lint": "next lint",
@@ -42,6 +42,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@types/node": "^22.10.1",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
@@ -63,6 +64,7 @@
     "productName": "StakeOS Desktop",
     "icon": "build/icon.icns",
     "asar": false,
+    "afterSign": "build/notarize.cjs",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -79,9 +81,18 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "target": [
-        "zip"
+        "zip",
+        "dmg"
       ]
+    },
+    "dmg": {
+      "artifactName": "StakeOS-Desktop-${version}-${arch}.${ext}",
+      "sign": false
     }
   }
 }

@@ -10,7 +10,7 @@ Important constraints:
 - the desktop app still depends on local PostgreSQL
 - the user still needs a valid LCR custom report URL
 - the user still logs in to LCR manually through the Playwright browser session
-- macOS signing/notarization is not configured yet, so local release builds use ad-hoc signing
+- if Apple signing/notarization credentials are not present, the release will still build with ad-hoc signing and skip notarization automatically
 
 ## What the Release Produces
 
@@ -23,7 +23,7 @@ npm run desktop:release
 This does three things:
 1. removes the previous `release/` folder
 2. builds the Next.js app and backend bundles
-3. packages a macOS desktop release zip
+3. packages macOS desktop release artifacts
 
 Release artifacts are written to:
 
@@ -31,16 +31,18 @@ Release artifacts are written to:
 release/
 ```
 
-Typical artifact name:
+Typical artifact names:
 
 ```text
 StakeOS-Desktop-<version>-<arch>.zip
+StakeOS-Desktop-<version>-<arch>.dmg
 ```
 
 Example:
 
 ```text
 release/StakeOS-Desktop-1.0.0-arm64.zip
+release/StakeOS-Desktop-1.0.0-arm64.dmg
 ```
 
 ## Fast Validation Build
@@ -68,13 +70,82 @@ Before building a release:
 5. confirm the desktop app still launches locally with `npm run desktop:start`
 6. confirm the first-run setup flow still works
 7. confirm a packaged dry build works with `npm run desktop:pack`
-8. build the release zip with `npm run desktop:release`
+8. build the release artifacts with `npm run desktop:release`
+
+## Apple Signing And Notarization
+
+StakeOS Desktop now supports optional notarization during `npm run desktop:release`.
+
+If no Apple credentials are configured:
+- the build still succeeds
+- the app uses ad-hoc signing
+- notarization is skipped automatically
+
+If Apple credentials are configured, the same release command will:
+- sign the app with your Developer ID identity
+- notarize the app with `notarytool`
+- produce the release zip and dmg
+
+### Supported Credential Options
+
+Use one of these approaches.
+
+### Option 1: Keychain profile
+
+Recommended if you already use `xcrun notarytool store-credentials`.
+
+Environment variable:
+
+```bash
+export APPLE_KEYCHAIN_PROFILE="stakeos-notary"
+```
+
+### Option 2: App Store Connect API key
+
+Environment variables:
+
+```bash
+export APPLE_API_KEY="/absolute/path/to/AuthKey_ABC123XYZ.p8"
+export APPLE_API_KEY_ID="ABC123XYZ"
+export APPLE_API_ISSUER="00000000-0000-0000-0000-000000000000"
+```
+
+### Option 3: Apple ID + app-specific password
+
+Environment variables:
+
+```bash
+export APPLE_ID="you@example.com"
+export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+export APPLE_TEAM_ID="TEAMID1234"
+```
+
+### Signing Requirements
+
+For a proper outside-the-App-Store macOS release, your machine should have a valid:
+
+```text
+Developer ID Application
+```
+
+certificate in Keychain.
+
+If no matching identity is available, `electron-builder` falls back to ad-hoc signing.
+
+### Skip Notarization Explicitly
+
+If you want to build release artifacts without notarization even though credentials are present:
+
+```bash
+export SKIP_STAKEOS_NOTARIZE=1
+npm run desktop:release
+```
 
 ## What To Share With Another User
 
 For a GitHub release or direct handoff, share:
 - the source repo link
-- the desktop release zip from `release/`
+- the desktop release zip or dmg from `release/`
 - the installation guide: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
 
 The receiving user still needs:
@@ -88,6 +159,7 @@ The receiving user still needs:
 
 StakeOS Desktop currently uses:
 - `electron-builder`
+- `@electron/notarize`
 - `asar: false`
 
 That `asar: false` setting is intentional for now. Next.js production runtime expects a real working directory for `.next` and related server assets. This should be revisited later, but it is the correct pragmatic choice for a working release today.
@@ -98,7 +170,7 @@ A practical GitHub workflow is:
 
 1. push the source changes to `main`
 2. run `npm run desktop:release`
-3. upload the generated zip from `release/` to a GitHub Release
+3. upload the generated zip and/or dmg from `release/` to a GitHub Release
 4. link users to:
    - the release asset
    - [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
@@ -107,9 +179,8 @@ A practical GitHub workflow is:
 ## Not Yet Included
 
 These are not done yet:
-- signed Developer ID builds
-- notarized macOS releases
-- `.dmg` installer
+- automated signing identity discovery guidance inside the app
+- notarization verification UI inside the repo tooling
 - automatic PostgreSQL installation
 - automatic Playwright/Chromium installation inside the packaged app
 
