@@ -2,18 +2,22 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadMemberDetailPageData } from "@/lib/dashboardData";
+import { loadMemberDetailPageDataBySource } from "@/lib/dashboardData";
 
 interface MemberDetailPageProps {
   params: {
     lcrMemberId: string;
   };
+  searchParams?: {
+    source?: string;
+  };
 }
 
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
-export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
-  const member = await loadMemberDetailPageData(params.lcrMemberId);
+export default async function MemberDetailPage({ params, searchParams }: MemberDetailPageProps) {
+  const source = searchParams?.source === "sqlite" ? "sqlite" : "postgres";
+  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, source);
   if (!member) {
     notFound();
   }
@@ -21,7 +25,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <Link href="/members" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">
+        <Link
+          href={source === "sqlite" ? "/members?source=sqlite" : "/members"}
+          className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
+        >
           ← Back to Members
         </Link>
         <h1 className="text-2xl font-semibold text-slate-900">{member.fullName}</h1>
@@ -195,7 +202,14 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               {member.householdMembers.map((person) => (
                 <tr key={person.lcrMemberId} className="hover:bg-slate-50">
                   <td className="px-3 py-2">
-                    <Link href={`/members/${encodeURIComponent(person.lcrMemberId)}`} className="font-medium text-slate-900 hover:underline">
+                    <Link
+                      href={
+                        source === "sqlite"
+                          ? `/members/${encodeURIComponent(person.lcrMemberId)}?source=sqlite`
+                          : `/members/${encodeURIComponent(person.lcrMemberId)}`
+                      }
+                      className="font-medium text-slate-900 hover:underline"
+                    >
                       {person.fullName}
                     </Link>
                   </td>

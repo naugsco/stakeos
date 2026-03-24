@@ -65,7 +65,13 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
-export function MembersTable({ members }: { members: MemberRow[] }) {
+export function MembersTable({
+  members,
+  source = "postgres"
+}: {
+  members: MemberRow[];
+  source?: "postgres" | "sqlite";
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchTerm, setSearchTerm] = useState("");
@@ -129,7 +135,14 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           {visibleRows.map((member) => (
             <tr key={member.lcrMemberId} className="hover:bg-slate-50">
               <td className="px-4 py-3 font-medium text-slate-900">
-                <Link href={`/members/${encodeURIComponent(member.lcrMemberId)}`} className="hover:underline">
+                <Link
+                  href={
+                    source === "sqlite"
+                      ? `/members/${encodeURIComponent(member.lcrMemberId)}?source=sqlite`
+                      : `/members/${encodeURIComponent(member.lcrMemberId)}`
+                  }
+                  className="hover:underline"
+                >
                   {member.fullName}
                 </Link>
               </td>

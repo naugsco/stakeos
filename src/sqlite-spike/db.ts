@@ -29,6 +29,53 @@ export const openSqliteSpikeDb = () => {
 export const ensureSqliteSpikeSchema = (db: Database.Database) => {
   const schema = readFileSync(schemaPath, "utf8");
   db.exec(schema);
+  const columns = db.prepare("PRAGMA table_info(members)").all() as Array<{ name: string }>;
+  const columnNames = new Set(columns.map((column) => column.name));
+  const missingColumns: Array<{ name: string; type: string }> = [
+    { name: "primary_email", type: "TEXT" },
+    { name: "primary_phone", type: "TEXT" },
+    { name: "address_line1", type: "TEXT" },
+    { name: "address_line2", type: "TEXT" },
+    { name: "city", type: "TEXT" },
+    { name: "state_or_province", type: "TEXT" },
+    { name: "postal_code", type: "TEXT" },
+    { name: "country", type: "TEXT" },
+    { name: "birth_country", type: "TEXT" },
+    { name: "birthplace", type: "TEXT" },
+    { name: "move_in_date", type: "TEXT" },
+    { name: "is_convert", type: "INTEGER" },
+    { name: "confirmation_date", type: "TEXT" },
+    { name: "endowment_date", type: "TEXT" },
+    { name: "endowment_status", type: "TEXT" },
+    { name: "temple_recommend_type", type: "TEXT" },
+    { name: "mission_language", type: "TEXT" },
+    { name: "is_accountable", type: "INTEGER" },
+    { name: "is_born_in_covenant", type: "INTEGER" },
+    { name: "is_divorced", type: "INTEGER" },
+    { name: "is_married", type: "INTEGER" },
+    { name: "marriage_date", type: "TEXT" },
+    { name: "marriage_status", type: "TEXT" },
+    { name: "potential_institute_student", type: "INTEGER" },
+    { name: "potential_seminary_student", type: "INTEGER" },
+    { name: "ministering_brothers", type: "TEXT" },
+    { name: "ministering_sisters", type: "TEXT" },
+    { name: "spouse_name", type: "TEXT" },
+    { name: "head_of_house", type: "TEXT" },
+    { name: "household_position", type: "TEXT" },
+    { name: "sealing_to_parents", type: "TEXT" },
+    { name: "sealing_to_spouse", type: "TEXT" },
+    { name: "priesthood_type", type: "TEXT" },
+    { name: "priesthood_office", type: "TEXT" },
+    { name: "ordination_date", type: "TEXT" },
+    { name: "institute_status", type: "TEXT" },
+    { name: "seminary_status", type: "TEXT" }
+  ];
+
+  for (const column of missingColumns) {
+    if (!columnNames.has(column.name)) {
+      db.exec(`ALTER TABLE members ADD COLUMN ${column.name} ${column.type}`);
+    }
+  }
 };
 
 export const getSqliteSpikeStatus = () => {

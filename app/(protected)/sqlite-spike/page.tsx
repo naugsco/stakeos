@@ -2,8 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { BarMetricsChart } from "@/components/charts/bar-metrics-chart";
 import { ComparisonBarMetricsChart } from "@/components/charts/comparison-bar-metrics-chart";
+import { DashboardOverviewCards } from "@/components/dashboard-overview-cards";
 import { MinisteringCoverageUnitChart } from "@/components/charts/ministering-coverage-unit-chart";
-import { StatCard } from "@/components/stat-card";
 import { loadSqliteSpikeDashboardData } from "@/src/sqlite-spike/queries";
 import Link from "next/link";
 
@@ -24,6 +24,12 @@ export default async function SqliteSpikePage() {
           >
             Open SQLite vs PostgreSQL Comparison
           </Link>
+          <Link
+            href="/members?source=sqlite"
+            className="ml-3 inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
+          >
+            Open SQLite Members
+          </Link>
         </div>
       </header>
 
@@ -42,13 +48,11 @@ export default async function SqliteSpikePage() {
         ) : null}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total Members" value={data.overview.totalMembers} />
-        <StatCard label="Current Callings" value={data.overview.currentCallings} />
-        <StatCard label="Recommend Active" value={data.overview.recommendActive} />
-        <StatCard label="Mission Ready" value={data.overview.missionReady} />
-        <StatCard label="Recent Baptisms This Year" value={data.overview.recentBaptismsThisYear} />
-      </section>
+      <DashboardOverviewCards
+        overview={data.overview}
+        showRecommendRecovered={false}
+        missionReadyHint="SQLite-backed summary cards using the shared overview abstraction."
+      />
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div>

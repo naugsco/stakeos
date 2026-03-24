@@ -41,6 +41,44 @@ import {
   missionEligibleMembers
 } from "@/src/services/intelligenceService";
 import { getSyncDiffReport } from "@/src/services/advancedMcpService";
+import {
+  loadSqliteSpikeDashboardData,
+  loadSqliteSpikeMemberDetail,
+  loadSqliteSpikeMemberList,
+  loadSqliteSpikeReportsShellData
+} from "@/src/sqlite-spike/queries";
+import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
+
+export type DashboardDataSource = "postgres" | "sqlite";
+
+export const loadDashboardOverviewMetrics = async (
+  source: DashboardDataSource,
+  unit?: string | null
+): Promise<DashboardOverviewMetrics> => {
+  if (source === "sqlite") {
+    return (await loadSqliteSpikeDashboardData()).overview;
+  }
+
+  const selectedUnit = unit?.trim() ? unit.trim() : null;
+  const [overview, templeRecommendHealth, missionReadiness, recentBaptisms] = await Promise.all([
+    getStakeOverview(selectedUnit),
+    getTempleRecommendHealthSummary(selectedUnit),
+    getMissionReadinessCompositeReport(selectedUnit),
+    getRecentBaptismSummary(12, selectedUnit)
+  ]);
+
+  const recommendActive = templeRecommendHealth.statusCounts.find((row) => row.label === "Active")?.value ?? 0;
+  const missionReady = missionReadiness.summary.find((row) => row.label === "Ready")?.value ?? 0;
+  const recentBaptismsThisYear = recentBaptisms.summary.find((row) => row.label === "This Year")?.value ?? 0;
+
+  return {
+    totalMembers: overview.totalMembers,
+    currentCallings: overview.currentCallings,
+    recommendActive,
+    missionReady,
+    recentBaptismsThisYear
+  };
+};
 
 export const loadDashboardData = async (unit?: string | null) => {
   const selectedUnit = unit?.trim() ? unit.trim() : null;
@@ -103,8 +141,12 @@ export const loadDashboardData = async (unit?: string | null) => {
 };
 
 export const loadMembersPageData = async () => getMemberList();
+export const loadMembersPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeMemberList() : getMemberList();
 
 export const loadMemberDetailPageData = async (lcrMemberId: string) => getMemberDetail(lcrMemberId);
+export const loadMemberDetailPageDataBySource = async (lcrMemberId: string, source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeMemberDetail(lcrMemberId) : getMemberDetail(lcrMemberId);
 
 export const loadCallingsPageData = async () => ({
   callings: await getCallingsList()
@@ -174,6 +216,23 @@ export const loadReportsPageData = async () => {
 export const loadReportsPageShellData = async () => ({
   overview: await getReportsOverview()
 });
+
+export const loadReportsPageShellDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite"
+    ? (() => loadSqliteSpikeReportsShellData().then((data) => ({
+        source,
+        overview: data.overview,
+        sqliteSummaries: {
+          templeRecommendHealth: data.templeRecommendHealth,
+          recentBaptisms: data.recentBaptisms,
+          recommendExpirationRisk: data.recommendExpirationRisk
+        }
+      })))()
+    : {
+        source,
+        overview: await getReportsOverview(),
+        sqliteSummaries: null
+      };
 
 export const loadYouthPageData = async () => ({
   currentlyServingMissionaries: await getCurrentlyServingMissionaries(),
