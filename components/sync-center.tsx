@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 
 type SyncStatusPayload = {
   running: boolean;
@@ -32,7 +33,11 @@ type SyncLogPayload = {
 const cardClassName =
   "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 
-export function SyncCenter() {
+type SyncCenterProps = {
+  source: "postgres" | "sqlite";
+};
+
+export function SyncCenter({ source }: SyncCenterProps) {
   const [status, setStatus] = useState<SyncStatusPayload | null>(null);
   const [log, setLog] = useState<SyncLogPayload | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -44,16 +49,16 @@ export function SyncCenter() {
   const logRef = useRef<HTMLPreElement | null>(null);
 
   const loadStatus = useCallback(async () => {
-    const response = await fetch("/api/sync/status", { cache: "no-store" });
+    const response = await fetch(`/api/sync/status?source=${source}`, { cache: "no-store" });
     const payload = (await response.json()) as SyncStatusPayload;
     setStatus(payload);
-  }, []);
+  }, [source]);
 
   const loadLog = useCallback(async () => {
-    const response = await fetch("/api/sync/log?lines=160", { cache: "no-store" });
+    const response = await fetch(`/api/sync/log?source=${source}&lines=160`, { cache: "no-store" });
     const payload = (await response.json()) as SyncLogPayload;
     setLog(payload);
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     void Promise.all([loadStatus(), loadLog()]);
@@ -83,9 +88,8 @@ export function SyncCenter() {
     setMessage(null);
 
     try {
-      const response = await fetch(kind === "full" ? "/api/sync/full" : "/api/sync/callings", {
-        method: "POST"
-      });
+      const endpoint = kind === "full" ? "/api/sync/full" : "/api/sync/callings";
+      const response = await fetch(`${endpoint}?source=${source}`, { method: "POST" });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -180,15 +184,29 @@ export function SyncCenter() {
     }
   };
 
+  const switchHref = source === "sqlite" ? "/sync-center?source=postgres" : "/sync-center";
+
   return (
     <div className="space-y-8">
       <section className="rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Desktop Operations</p>
         <h1 className="mt-3 font-serif text-4xl text-slate-900">Sync Center</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Run LCR sync jobs from the desktop app and monitor progress without leaving StakeOS. Full sync refreshes the
-          entire directory. Calling sync updates callings only.
+          {source === "sqlite"
+            ? "Run SQLite-backed LCR sync jobs from the desktop app and monitor progress without leaving StakeOS. Full sync refreshes the SQLite directory store and reseeds exact snapshot diffs."
+            : "Run PostgreSQL-backed LCR sync jobs from the desktop app and monitor progress without leaving StakeOS. Full sync refreshes the entire directory. Calling sync updates callings only."}
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+            {source === "sqlite" ? "SQLite Default View" : "PostgreSQL View"}
+          </span>
+          <Link
+            href={switchHref}
+            className="text-sm font-medium text-teal-700 underline decoration-teal-300 underline-offset-4"
+          >
+            {source === "sqlite" ? "Switch To PostgreSQL Sync Center" : "Return To SQLite Sync Center"}
+          </Link>
+        </div>
         {message ? (
           <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>
         ) : null}
@@ -219,7 +237,9 @@ export function SyncCenter() {
                 disabled={Boolean(status?.running) || action !== null}
                 className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {action === "callings" ? "Starting Calling Sync..." : "Run Calling Sync"}
+                {action === "callings"
+                  ? `Starting ${source === "sqlite" ? "SQLite" : "Calling"} Sync...`
+                  : "Run Calling Sync"}
               </button>
             </div>
           </div>
@@ -235,7 +255,13 @@ export function SyncCenter() {
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active Sync</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
-                  {status?.activeJob ? (status.activeJob.kind === "full" ? "Full Directory" : "Calling Only") : "None"}
+                  {status?.activeJob
+                    ? status.activeJob.kind === "full"
+                      ? "Full Directory"
+                      : source === "sqlite"
+                        ? "SQLite Refresh"
+                        : "Calling Only"
+                    : "None"}
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">

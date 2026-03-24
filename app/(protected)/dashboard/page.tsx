@@ -61,7 +61,7 @@ export default async function DashboardPage({
         </div>
         {source === "sqlite" ? (
           <p className="mt-2 text-xs text-slate-500">
-            SQLite is the default dashboard data source on this branch. Unit-scoped dashboard filtering is still PostgreSQL-only for now.
+            SQLite is the default dashboard data source on this branch.
           </p>
         ) : null}
       </header>

@@ -3,6 +3,15 @@ import type { VisualOrgAssignedPerson, VisualOrgMeetingRoster, VisualOrgPayload,
 
 const fullNameExpr = `TRIM(CONCAT_WS(' ', NULLIF(m.first_name, ''), NULLIF(m.middle_name, ''), NULLIF(m.last_name, '')))`; 
 
+export type VisualOrgSourceRow = {
+  lcrMemberId: string;
+  fullName: string;
+  unitName: string;
+  callingTitle: string;
+  email: string | null;
+  phoneNumber: string | null;
+};
+
 type RoleDefinition = {
   roleId: string;
   roleTitle: string;
@@ -115,7 +124,7 @@ const MEETING_ROLE_IDS: Record<string, { title: string; attendeeRoleIds: string[
 const BROAD_CALLING_PATTERN =
   "(stake|bishop|branch president|branch presidency|clerk|executive secretary|elders quorum|relief society|young women|primary|sunday school|mission leader|temple and family history)";
 
-const normalizeUnit = (unit?: string | null) => {
+export const normalizeVisualOrgUnit = (unit?: string | null) => {
   const trimmed = unit?.trim();
   if (!trimmed || /^entire stake$/i.test(trimmed) || /^all units$/i.test(trimmed)) {
     return null;
@@ -148,15 +157,8 @@ const dedupePeople = (rows: VisualOrgAssignedPerson[]) => {
 };
 
 export const getVisualOrgData = async (unit?: string | null): Promise<VisualOrgPayload> => {
-  const selectedUnit = normalizeUnit(unit);
-  const result = await query<{
-    lcrMemberId: string;
-    fullName: string;
-    unitName: string;
-    callingTitle: string;
-    email: string | null;
-    phoneNumber: string | null;
-  }>(
+  const selectedUnit = normalizeVisualOrgUnit(unit);
+  const result = await query<VisualOrgSourceRow>(
     `
     SELECT
       m.lcr_member_id AS "lcrMemberId",
@@ -194,6 +196,13 @@ export const getVisualOrgData = async (unit?: string | null): Promise<VisualOrgP
     [BROAD_CALLING_PATTERN, selectedUnit]
   );
 
+  return buildVisualOrgPayload(result.rows, selectedUnit);
+};
+
+export const buildVisualOrgPayload = (
+  rows: VisualOrgSourceRow[],
+  selectedUnit: string | null
+): VisualOrgPayload => {
   const assignments = Object.fromEntries(
     ROLE_DEFINITIONS.map((definition) => [
       definition.roleId,
@@ -206,7 +215,7 @@ export const getVisualOrgData = async (unit?: string | null): Promise<VisualOrgP
     ])
   ) as Record<string, VisualOrgRoleAssignment>;
 
-  for (const row of result.rows) {
+  for (const row of rows) {
     const definition = matchRole(row.callingTitle, selectedUnit);
     if (!definition) {
       continue;

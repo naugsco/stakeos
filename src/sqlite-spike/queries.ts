@@ -22,7 +22,9 @@ import type {
   YouthOrganizationTransitionRow,
   YouthTransitionMilestoneRow
 } from "@/src/services/intelligenceService";
+import { buildVisualOrgPayload, normalizeVisualOrgUnit, type VisualOrgSourceRow } from "@/src/services/visualOrgService";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
+import type { VisualOrgPayload } from "@/src/types/visualOrg";
 
 interface SpikeMemberRow {
   lcrMemberId?: string;
@@ -93,6 +95,7 @@ interface SpikeMemberRow {
 interface SpikeCallingRow {
   unitName: string | null;
   isCurrent: number;
+  lcrMemberId?: string | null;
 }
 
 interface SpikeCallingDetailRow {
@@ -135,6 +138,19 @@ interface SqliteSpikeMissionEligibleRow {
 }
 
 const unitLabel = (row: { unitName: string | null; unitAbbreviation: string | null }) => row.unitName || row.unitAbbreviation || "Unknown";
+const normalizeSelectedUnit = (unit?: string | null) => {
+  const trimmed = unit?.trim();
+  return trimmed ? trimmed : null;
+};
+const matchesSelectedUnit = (
+  row: { unitName: string | null; unitAbbreviation?: string | null },
+  selectedUnit: string | null
+) => {
+  if (!selectedUnit) {
+    return true;
+  }
+  return unitLabel({ unitName: row.unitName, unitAbbreviation: row.unitAbbreviation ?? null }) === selectedUnit;
+};
 const toBool = (value: number | null | undefined) => value === 1;
 const startOfToday = () => {
   const now = new Date();
@@ -558,7 +574,8 @@ export type SqliteSpikeSyncDiffReport = {
   }>;
 };
 
-export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboardData> => {
+export const loadSqliteSpikeDashboardData = async (selectedUnitArg?: string | null): Promise<SqliteSpikeDashboardData> => {
+  const selectedUnit = normalizeSelectedUnit(selectedUnitArg);
   const status = getSqliteSpikeStatus();
 
   if (!status.exists || status.members === 0) {
@@ -583,7 +600,7 @@ export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboa
 
   const db = openSqliteSpikeDb();
   try {
-    const members = db.prepare(
+    const allMembers = db.prepare(
       `SELECT
         lcr_member_id AS lcrMemberId,
         unit_name AS unitName,
@@ -646,10 +663,20 @@ export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboa
        FROM members`
     ).all() as SpikeMemberRow[];
 
-    const callings = db.prepare(
-      `SELECT unit_name AS unitName, is_current AS isCurrent
+    const allCallings = db.prepare(
+      `SELECT unit_name AS unitName, is_current AS isCurrent, lcr_member_id AS lcrMemberId
        FROM callings`
     ).all() as SpikeCallingRow[];
+
+    const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
+    const memberIds = new Set(members.map((member) => member.lcrMemberId ?? ""));
+    const callings = selectedUnit
+      ? allCallings.filter(
+          (calling) =>
+            (calling.lcrMemberId && memberIds.has(calling.lcrMemberId)) ||
+            (calling.unitName ?? "Unknown") === selectedUnit
+        )
+      : allCallings;
 
     const today = startOfToday();
     const last30DaysThreshold = daysAgoThreshold(30);
@@ -851,6 +878,26 @@ export const loadSqliteSpikeMemberList = async (): Promise<SqliteSpikeMemberRow[
   }
 };
 
+export const loadSqliteSpikeAvailableUnits = async (): Promise<string[]> => {
+  const status = getSqliteSpikeStatus();
+  if (!status.exists || status.members === 0) {
+    return [];
+  }
+
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(
+      `SELECT DISTINCT COALESCE(NULLIF(unit_name, ''), NULLIF(unit_abbreviation, ''), 'Unknown') AS unitName
+       FROM members
+       ORDER BY unitName`
+    ).all() as Array<{ unitName: string }>;
+
+    return rows.map((row) => row.unitName).filter((unitName) => unitName && unitName !== "Unknown");
+  } finally {
+    db.close();
+  }
+};
+
 export const loadSqliteSpikeMemberDetail = async (lcrMemberId: string): Promise<MemberDetail | null> => {
   const status = getSqliteSpikeStatus();
   if (!status.exists || status.members === 0) {
@@ -1036,8 +1083,9 @@ export const loadSqliteSpikeMemberDetail = async (lcrMemberId: string): Promise<
   }
 };
 
-export const loadSqliteSpikeReportsShellData = async (): Promise<SqliteSpikeReportsShellData> => {
-  const dashboard = await loadSqliteSpikeDashboardData();
+export const loadSqliteSpikeReportsShellData = async (selectedUnitArg?: string | null): Promise<SqliteSpikeReportsShellData> => {
+  const selectedUnit = normalizeSelectedUnit(selectedUnitArg);
+  const dashboard = await loadSqliteSpikeDashboardData(selectedUnit);
   const status = getSqliteSpikeStatus();
   if (!status.exists || status.members === 0) {
     return {
@@ -1063,7 +1111,7 @@ export const loadSqliteSpikeReportsShellData = async (): Promise<SqliteSpikeRepo
   const db = openSqliteSpikeDb();
   try {
     const today = startOfToday();
-    const members = db.prepare(
+    const allMembers = db.prepare(
       `SELECT
         lcr_member_id AS lcrMemberId,
         preferred_name AS preferredName,
@@ -1089,11 +1137,15 @@ export const loadSqliteSpikeReportsShellData = async (): Promise<SqliteSpikeRepo
        FROM members`
     ).all() as SpikeMemberRow[];
 
-    const callings = db.prepare(
+    const allCallings = db.prepare(
       `SELECT title, lcr_member_id AS lcrMemberId
        FROM callings
        WHERE is_current = 1`
     ).all() as Array<{ title: string; lcrMemberId: string | null }>;
+
+    const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
+    const memberIds = new Set(members.map((member) => member.lcrMemberId ?? ""));
+    const callings = allCallings.filter((calling) => !selectedUnit || (calling.lcrMemberId ? memberIds.has(calling.lcrMemberId) : false));
 
     const leadershipCallings = callings.filter((row) => /(president|bishop|high councilor)/i.test(row.title)).length;
     const unitsRepresented = new Set(members.map((row) => unitLabel(row)).filter(Boolean)).size;
@@ -1193,10 +1245,11 @@ export const loadSqliteSpikeReportsShellData = async (): Promise<SqliteSpikeRepo
   }
 };
 
-export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullReportsData> => {
+export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | null): Promise<SqliteSpikeFullReportsData> => {
+  const selectedUnit = normalizeSelectedUnit(selectedUnitArg);
   const [dashboard, shell, status] = await Promise.all([
-    loadSqliteSpikeDashboardData(),
-    loadSqliteSpikeReportsShellData(),
+    loadSqliteSpikeDashboardData(selectedUnit),
+    loadSqliteSpikeReportsShellData(selectedUnit),
     Promise.resolve(getSqliteSpikeStatus())
   ]);
 
@@ -1229,7 +1282,7 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
 
   const db = openSqliteSpikeDb();
   try {
-    const members = db.prepare(
+    const allMembers = db.prepare(
       `SELECT
         lcr_member_id AS lcrMemberId,
         household_id AS householdId,
@@ -1295,7 +1348,7 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
        FROM members`
     ).all() as SpikeMemberRow[];
 
-    const callings = db.prepare(
+    const allCallings = db.prepare(
       `SELECT
         lcr_member_id AS lcrMemberId,
         unit_name AS unitName,
@@ -1307,7 +1360,7 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
        FROM callings`
     ).all() as SpikeCallingDetailRow[];
 
-    const households = db.prepare(
+    const allHouseholds = db.prepare(
       `SELECT
         id,
         household_name AS householdName,
@@ -1320,6 +1373,21 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
         country
        FROM households`
     ).all() as SpikeHouseholdRow[];
+
+    const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
+    const householdIds = new Set(
+      members
+        .map((member) => member.householdId)
+        .filter((value): value is number => value !== null && value !== undefined)
+    );
+    const memberIds = new Set(members.map((member) => member.lcrMemberId ?? ""));
+    const callings = allCallings.filter((calling) =>
+      !selectedUnit
+        ? true
+        : (calling.lcrMemberId && memberIds.has(calling.lcrMemberId)) ||
+          matchesSelectedUnit({ unitName: calling.unitName, unitAbbreviation: null }, selectedUnit)
+    );
+    const households = allHouseholds.filter((household) => householdIds.has(household.id));
 
     const membersByUnit = new Map<string, SpikeMemberRow[]>();
     const householdMembersById = new Map<number, SpikeMemberRow[]>();
@@ -1963,7 +2031,43 @@ export const loadSqliteSpikeCommitteesPageData = async (): Promise<{ committees:
   };
 };
 
-export const loadSqliteSpikeYouthPageData = async () => {
+export const loadSqliteSpikeVisualOrgData = async (selectedUnitArg?: string | null): Promise<VisualOrgPayload> => {
+  const status = getSqliteSpikeStatus();
+  const selectedUnit = normalizeVisualOrgUnit(selectedUnitArg);
+  if (!status.exists || status.members === 0) {
+    return buildVisualOrgPayload([], selectedUnit);
+  }
+
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(
+      `SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), 'Unknown') AS unitName,
+        c.title AS callingTitle,
+        m.primary_email AS email,
+        m.primary_phone AS phoneNumber
+      FROM callings c
+      JOIN members m ON m.lcr_member_id = c.lcr_member_id
+      WHERE c.is_current = 1
+        AND (
+          ? IS NULL
+          OR COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), 'Unknown') = ?
+          OR c.title LIKE 'Stake %'
+        )
+        AND (m.member_status IS NULL OR lower(m.member_status) LIKE 'active%')
+      ORDER BY unitName, c.title, m.last_name, m.first_name`
+    ).all(selectedUnit, selectedUnit) as VisualOrgSourceRow[];
+
+    return buildVisualOrgPayload(rows, selectedUnit);
+  } finally {
+    db.close();
+  }
+};
+
+export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | null) => {
+  const selectedUnit = normalizeSelectedUnit(selectedUnitArg);
   const status = getSqliteSpikeStatus();
   if (!status.exists || status.members === 0) {
     return {
@@ -1978,12 +2082,12 @@ export const loadSqliteSpikeYouthPageData = async () => {
     };
   }
 
-  const [reports, members, currentCallings] = await Promise.all([
-    loadSqliteSpikeFullReportsData(),
+  const [reports, members, currentCallingsRows] = await Promise.all([
+    loadSqliteSpikeFullReportsData(selectedUnit),
     (async () => {
       const db = openSqliteSpikeDb();
       try {
-        return db.prepare(`SELECT
+        const rows = db.prepare(`SELECT
           lcr_member_id AS lcrMemberId,
           unit_name AS unitName,
           unit_abbreviation AS unitAbbreviation,
@@ -2012,15 +2116,24 @@ export const loadSqliteSpikeYouthPageData = async () => {
           baptism_date AS baptismDate,
           confirmation_date AS confirmationDate
         FROM members`).all() as SpikeMemberRow[];
+        return rows.filter((member) => matchesSelectedUnit(member, selectedUnit));
       } finally { db.close(); }
     })(),
     (async () => {
       const db = openSqliteSpikeDb();
       try {
-        return db.prepare(`SELECT lcr_member_id AS lcrMemberId, title, sustained_on AS sustainedOn FROM callings WHERE is_current = 1`).all() as Array<{ lcrMemberId: string | null; title: string; sustainedOn: string | null }>;
+        return db.prepare(`SELECT lcr_member_id AS lcrMemberId, title, sustained_on AS sustainedOn, unit_name AS unitName FROM callings WHERE is_current = 1`).all() as Array<{ lcrMemberId: string | null; title: string; sustainedOn: string | null; unitName: string | null }>;
       } finally { db.close(); }
     })()
   ]);
+
+  const memberIds = new Set(members.map((member) => member.lcrMemberId ?? ""));
+  const currentCallings = currentCallingsRows.filter(
+    (calling) =>
+      !selectedUnit ||
+      (calling.lcrMemberId && memberIds.has(calling.lcrMemberId)) ||
+      (calling.unitName ?? "Unknown") === selectedUnit
+  );
 
   const callingMap = new Map<string, { title: string; sustainedOn: string | null }>();
   for (const row of currentCallings) {
@@ -2667,10 +2780,11 @@ export const getSqliteSpikeSyncDiffReport = async (options: { limit?: number } =
   }
 };
 
-export const loadSqliteSpikeStakeOverviewPageData = async () => {
+export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: string | null) => {
+  const selectedUnit = normalizeSelectedUnit(selectedUnitArg);
   const status = getSqliteSpikeStatus();
-  const fullReports = await loadSqliteSpikeFullReportsData();
-  const dashboard = await loadSqliteSpikeDashboardData();
+  const fullReports = await loadSqliteSpikeFullReportsData(selectedUnit);
+  const dashboard = await loadSqliteSpikeDashboardData(selectedUnit);
   const syncDiff = await getSqliteSpikeSyncDiffReport({ limit: 30 });
   if (!status.exists || status.members === 0) {
     return {
@@ -2683,9 +2797,11 @@ export const loadSqliteSpikeStakeOverviewPageData = async () => {
   }
   const db = openSqliteSpikeDb();
   try {
-    const callings = db.prepare(`SELECT title, unit_name AS unitName, sustained_on AS sustainedOn, set_apart_on AS setApartOn, released_on AS releasedOn, is_current AS isCurrent, lcr_member_id AS lcrMemberId FROM callings`).all() as Array<{ title: string; unitName: string | null; sustainedOn: string | null; setApartOn: string | null; releasedOn: string | null; isCurrent: number; lcrMemberId: string | null }>;
-    const members = db.prepare(`SELECT lcr_member_id AS lcrMemberId, unit_name AS unitName, unit_abbreviation AS unitAbbreviation, temple_recommend_status AS templeRecommendStatus, is_convert AS isConvert, baptism_date AS baptismDate, move_in_date AS moveInDate, has_ministering_brothers AS hasMinisteringBrothers, has_ministering_sisters AS hasMinisteringSisters, age, birthdate, is_attending_seminary AS isAttendingSeminary, is_attending_institute AS isAttendingInstitute FROM members`).all() as SpikeMemberRow[];
+    const allCallings = db.prepare(`SELECT title, unit_name AS unitName, sustained_on AS sustainedOn, set_apart_on AS setApartOn, released_on AS releasedOn, is_current AS isCurrent, lcr_member_id AS lcrMemberId FROM callings`).all() as Array<{ title: string; unitName: string | null; sustainedOn: string | null; setApartOn: string | null; releasedOn: string | null; isCurrent: number; lcrMemberId: string | null }>;
+    const allMembers = db.prepare(`SELECT lcr_member_id AS lcrMemberId, unit_name AS unitName, unit_abbreviation AS unitAbbreviation, temple_recommend_status AS templeRecommendStatus, is_convert AS isConvert, baptism_date AS baptismDate, move_in_date AS moveInDate, has_ministering_brothers AS hasMinisteringBrothers, has_ministering_sisters AS hasMinisteringSisters, age, birthdate, is_attending_seminary AS isAttendingSeminary, is_attending_institute AS isAttendingInstitute FROM members`).all() as SpikeMemberRow[];
     const syncRow = db.prepare(`SELECT sync_type AS syncType, status, completed_at AS completedAt FROM sync_logs WHERE status = 'success' ORDER BY completed_at DESC LIMIT 1`).get() as { syncType: string; status: string; completedAt: string | null } | undefined;
+    const callings = allCallings.filter((calling) => !selectedUnit || (calling.unitName ?? "Unknown") === selectedUnit);
+    const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
 
     const membersWithCurrentCalling = new Set(callings.filter(c => c.isCurrent === 1 && c.lcrMemberId).map(c => c.lcrMemberId!)).size;
     const overview = {

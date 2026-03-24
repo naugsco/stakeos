@@ -43,6 +43,7 @@ import {
 import { getSyncDiffReport } from "@/src/services/advancedMcpService";
 import {
   loadSqliteSpikeCallingsList,
+  loadSqliteSpikeAvailableUnits,
   loadSqliteSpikeCommitteesPageData,
   loadSqliteSpikeDashboardData,
   loadSqliteSpikeFullReportsData,
@@ -61,7 +62,7 @@ export const loadDashboardOverviewMetrics = async (
   unit?: string | null
 ): Promise<DashboardOverviewMetrics> => {
   if (source === "sqlite") {
-    return (await loadSqliteSpikeDashboardData()).overview;
+    return (await loadSqliteSpikeDashboardData(unit)).overview;
   }
 
   const selectedUnit = unit?.trim() ? unit.trim() : null;
@@ -150,11 +151,13 @@ export const loadDashboardDataBySource = async (source: DashboardDataSource, uni
     return loadDashboardData(unit);
   }
 
-  const [dashboard, fullReports, youth, stakeOverview] = await Promise.all([
-    loadSqliteSpikeDashboardData(),
-    loadSqliteSpikeFullReportsData(),
-    loadSqliteSpikeYouthPageData(),
-    loadSqliteSpikeStakeOverviewPageData()
+  const selectedUnit = unit?.trim() ? unit.trim() : null;
+  const [availableUnits, dashboard, fullReports, youth, stakeOverview] = await Promise.all([
+    loadSqliteSpikeAvailableUnits(),
+    loadSqliteSpikeDashboardData(selectedUnit),
+    loadSqliteSpikeFullReportsData(selectedUnit),
+    loadSqliteSpikeYouthPageData(selectedUnit),
+    loadSqliteSpikeStakeOverviewPageData(selectedUnit)
   ]);
 
   const missionSummary = ["Ready", "Progressing", "Needs Focus"].map((label) => ({
@@ -163,11 +166,11 @@ export const loadDashboardDataBySource = async (source: DashboardDataSource, uni
   }));
 
   return {
-    availableUnits: [] as string[],
-    selectedUnit: null as string | null,
+    availableUnits,
+    selectedUnit,
     overview: {
       totalMembers: stakeOverview.overview.totalMembers,
-      currentCallings: stakeOverview.overview.currentCallings,
+      currentCallings: dashboard.overview.currentCallings,
       latestSync: stakeOverview.overview.latestSync
     },
     daysSinceLastSync: dashboard.status.latestSyncCompletedAt

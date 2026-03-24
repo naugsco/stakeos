@@ -6,10 +6,11 @@ import type { VisualOrgPayload } from "@/src/types/visualOrg";
 
 type VisualOrgBrowserProps = {
   availableUnits: string[];
+  source: "postgres" | "sqlite";
   initialUnit?: string | null;
 };
 
-export function VisualOrgBrowser({ availableUnits, initialUnit = null }: VisualOrgBrowserProps) {
+export function VisualOrgBrowser({ availableUnits, source, initialUnit = null }: VisualOrgBrowserProps) {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(initialUnit);
   const [data, setData] = useState<VisualOrgPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +25,7 @@ export function VisualOrgBrowser({ availableUnits, initialUnit = null }: VisualO
 
       try {
         const params = new URLSearchParams();
+        params.set("source", source);
         if (selectedUnit) {
           params.set("unit", selectedUnit);
         }
@@ -56,7 +58,7 @@ export function VisualOrgBrowser({ availableUnits, initialUnit = null }: VisualO
     return () => {
       cancelled = true;
     };
-  }, [selectedUnit]);
+  }, [selectedUnit, source]);
 
   const scopeLabel = useMemo(() => (selectedUnit ? selectedUnit : "Entire Stake"), [selectedUnit]);
 
