@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,6 +34,8 @@ export interface DiagnosticCheck {
   summary: string;
   detail?: string;
   action?: string;
+  actionKey?: "create_database" | "run_db_migrate" | "install_chromium";
+  actionLabel?: string;
 }
 
 const REQUIRED_FIELDS = ["DATABASE_URL", "LCR_DIRECTORY_URL"] as const;
@@ -196,6 +199,12 @@ const summarizeDiagnostics = (checks: DiagnosticCheck[]) => ({
   info: checks.filter((check) => check.status === "info").length
 });
 
+const commandExists = (command: string) => {
+  const lookupCommand = process.platform === "win32" ? "where" : "which";
+  const result = spawnSync(lookupCommand, [command], { stdio: "ignore" });
+  return result.status === 0;
+};
+
 const validateLcrUrl = (rawUrl?: string): DiagnosticCheck => {
   const value = rawUrl?.trim();
   if (!value) {
@@ -304,6 +313,25 @@ const validateEmailSettings = (effectiveEnv: Record<string, string | undefined>)
   };
 };
 
+const validatePostgresCli = (): DiagnosticCheck => {
+  if (commandExists("psql")) {
+    return {
+      key: "postgres_cli",
+      label: "PostgreSQL CLI",
+      status: "pass",
+      summary: "`psql` is available on this machine."
+    };
+  }
+
+  return {
+    key: "postgres_cli",
+    label: "PostgreSQL CLI",
+    status: "warn",
+    summary: "`psql` is not available in the current PATH.",
+    action: "Install PostgreSQL or update your PATH so local database setup and troubleshooting are easier."
+  };
+};
+
 const validatePlaywright = async (effectiveEnv: Record<string, string | undefined>): Promise<DiagnosticCheck[]> => {
   const checks: DiagnosticCheck[] = [];
   const profileDir = effectiveEnv.PLAYWRIGHT_USER_DATA_DIR?.trim();
@@ -335,7 +363,9 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
       status: executablePath ? "pass" : "warn",
       summary: executablePath ? "Playwright Chromium is available." : "Chromium executable path was not resolved.",
       detail: executablePath || undefined,
-      action: executablePath ? undefined : "Run `npx playwright install chromium` in the StakeOS repo."
+      action: executablePath ? undefined : "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
+      actionKey: executablePath ? undefined : "install_chromium",
+      actionLabel: executablePath ? undefined : "Install Chromium"
     });
   } catch (error) {
     checks.push({
@@ -344,27 +374,168 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
       status: "fail",
       summary: "Playwright Chromium is not available.",
       detail: error instanceof Error ? error.message : "Chromium executable could not be resolved.",
-      action: "Run `npx playwright install chromium` in the StakeOS repo."
+      action: "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
+      actionKey: "install_chromium",
+      actionLabel: "Install Chromium"
     });
   }
 
   return checks;
 };
 
-const testDatabaseConnection = async (databaseUrl?: string) => {
+type DatabaseInspection = {
+  ok: boolean;
+  message: string;
+  exists: boolean;
+  schemaReady: boolean;
+  schemaMessage: string;
+  firstSyncCompleted: boolean;
+  latestSuccessfulSyncAt: string | null;
+  latestSuccessfulSyncType: string | null;
+};
+
+const getAdminDatabaseUrl = (databaseUrl: string) => {
+  const parsed = new URL(databaseUrl);
+  parsed.pathname = "/postgres";
+  return parsed.toString();
+};
+
+const getTargetDatabaseName = (databaseUrl: string) => {
+  const parsed = new URL(databaseUrl);
+  return decodeURIComponent(parsed.pathname.replace(/^\//, ""));
+};
+
+const inspectDatabase = async (databaseUrl?: string): Promise<DatabaseInspection> => {
   if (!databaseUrl) {
-    return { ok: false, message: "DATABASE_URL is missing." };
+    return {
+      ok: false,
+      message: "DATABASE_URL is missing.",
+      exists: false,
+      schemaReady: false,
+      schemaMessage: "Database URL is missing.",
+      firstSyncCompleted: false,
+      latestSuccessfulSyncAt: null,
+      latestSuccessfulSyncType: null
+    };
+  }
+
+  if (!isValidDatabaseUrl(databaseUrl)) {
+    return {
+      ok: false,
+      message: "DATABASE_URL is not a valid PostgreSQL connection string.",
+      exists: false,
+      schemaReady: false,
+      schemaMessage: "Database URL is invalid.",
+      firstSyncCompleted: false,
+      latestSuccessfulSyncAt: null,
+      latestSuccessfulSyncType: null
+    };
   }
 
   const pool = new Pool({ connectionString: databaseUrl, max: 1, idleTimeoutMillis: 2000, connectionTimeoutMillis: 3000 });
 
   try {
     await pool.query("select 1");
-    return { ok: true, message: "Connected" };
+    const schemaResult = await pool.query<{
+      syncLogs: string | null;
+      members: string | null;
+    }>(
+      `
+      SELECT
+        to_regclass('public.sync_logs')::text AS "syncLogs",
+        to_regclass('public.members')::text AS "members"
+      `
+    );
+
+    const schemaReady = Boolean(schemaResult.rows[0]?.syncLogs && schemaResult.rows[0]?.members);
+    let latestSuccessfulSyncAt: string | null = null;
+    let latestSuccessfulSyncType: string | null = null;
+    let firstSyncCompleted = false;
+
+    if (schemaReady) {
+      const syncResult = await pool.query<{ syncType: string; completedAt: string | null }>(
+        `
+        SELECT
+          sync_type AS "syncType",
+          completed_at::text AS "completedAt"
+        FROM sync_logs
+        WHERE status = 'success'
+          AND sync_type = 'nightly_full_directory_sync'
+          AND completed_at IS NOT NULL
+        ORDER BY completed_at DESC, id DESC
+        LIMIT 1
+        `
+      );
+
+      latestSuccessfulSyncAt = syncResult.rows[0]?.completedAt ?? null;
+      latestSuccessfulSyncType = syncResult.rows[0]?.syncType ?? null;
+      firstSyncCompleted = Boolean(latestSuccessfulSyncAt);
+    }
+
+    return {
+      ok: true,
+      message: "Connected",
+      exists: true,
+      schemaReady,
+      schemaMessage: schemaReady ? "StakeOS schema is present." : "StakeOS schema has not been applied yet.",
+      firstSyncCompleted,
+      latestSuccessfulSyncAt,
+      latestSuccessfulSyncType
+    };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to connect to PostgreSQL.";
+
+    if (/does not exist/i.test(message) && /database/i.test(message)) {
+      const adminPool = new Pool({
+        connectionString: getAdminDatabaseUrl(databaseUrl),
+        max: 1,
+        idleTimeoutMillis: 2000,
+        connectionTimeoutMillis: 3000
+      });
+
+      try {
+        const databaseName = getTargetDatabaseName(databaseUrl);
+        const existsResult = await adminPool.query<{ exists: boolean }>(
+          `SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1) AS "exists"`,
+          [databaseName]
+        );
+
+        const exists = Boolean(existsResult.rows[0]?.exists);
+        return {
+          ok: false,
+          message,
+          exists,
+          schemaReady: false,
+          schemaMessage: exists ? "StakeOS schema has not been applied yet." : "Target database does not exist yet.",
+          firstSyncCompleted: false,
+          latestSuccessfulSyncAt: null,
+          latestSuccessfulSyncType: null
+        };
+      } catch {
+        return {
+          ok: false,
+          message,
+          exists: false,
+          schemaReady: false,
+          schemaMessage: "Target database does not exist yet.",
+          firstSyncCompleted: false,
+          latestSuccessfulSyncAt: null,
+          latestSuccessfulSyncType: null
+        };
+      } finally {
+        await adminPool.end().catch(() => undefined);
+      }
+    }
+
     return {
       ok: false,
-      message: error instanceof Error ? error.message : "Unable to connect to PostgreSQL."
+      message,
+      exists: false,
+      schemaReady: false,
+      schemaMessage: "StakeOS cannot inspect the database schema until the connection works.",
+      firstSyncCompleted: false,
+      latestSuccessfulSyncAt: null,
+      latestSuccessfulSyncType: null
     };
   } finally {
     await pool.end().catch(() => undefined);
@@ -375,21 +546,61 @@ export const getDesktopConfigSnapshot = async () => {
   const storedConfig = loadDesktopConfig();
   const effectiveEnv = getEffectiveDesktopEnv();
   const missing = REQUIRED_FIELDS.filter((key) => isMissingValue(key, effectiveEnv));
-  const database = await testDatabaseConnection(effectiveEnv.DATABASE_URL);
+  const database = await inspectDatabase(effectiveEnv.DATABASE_URL);
   const diagnostics = [
+    validatePostgresCli(),
     {
       key: "database",
       label: "PostgreSQL",
       status: database.ok ? "pass" : "fail",
       summary: database.ok ? "Database connection succeeded." : "Database connection failed.",
       detail: database.message,
-      action: database.ok ? undefined : "Confirm PostgreSQL is running and DATABASE_URL points to the correct local database."
+      action: database.ok
+        ? undefined
+        : database.exists
+          ? "Confirm PostgreSQL is running and DATABASE_URL points to the correct local database."
+          : "Create the target database or update DATABASE_URL to a database that already exists.",
+      actionKey: !database.ok && !database.exists && isValidDatabaseUrl(effectiveEnv.DATABASE_URL) ? "create_database" : undefined,
+      actionLabel: !database.ok && !database.exists && isValidDatabaseUrl(effectiveEnv.DATABASE_URL) ? "Create Database" : undefined
+    } satisfies DiagnosticCheck,
+    {
+      key: "schema",
+      label: "StakeOS Schema",
+      status: !database.ok ? "info" : database.schemaReady ? "pass" : "fail",
+      summary: !database.ok
+        ? "Schema check is waiting for a working database connection."
+        : database.schemaReady
+          ? "StakeOS schema is ready."
+          : "StakeOS schema has not been applied yet.",
+      detail: database.schemaMessage,
+      action: !database.ok || database.schemaReady ? undefined : "Run StakeOS database migrations before the first sync.",
+      actionKey: !database.ok || database.schemaReady ? undefined : "run_db_migrate",
+      actionLabel: !database.ok || database.schemaReady ? undefined : "Run Migrations"
     } satisfies DiagnosticCheck,
     validateLcrUrl(effectiveEnv.LCR_DIRECTORY_URL),
     ...(await validatePlaywright(effectiveEnv)),
-    validateEmailSettings(effectiveEnv)
+    validateEmailSettings(effectiveEnv),
+    {
+      key: "first_sync",
+      label: "First Full Sync",
+      status: !database.ok || !database.schemaReady ? "info" : database.firstSyncCompleted ? "pass" : "warn",
+      summary: !database.ok || !database.schemaReady
+        ? "First sync check is waiting for the database and schema to be ready."
+        : database.firstSyncCompleted
+          ? "A successful full directory sync is already recorded."
+          : "StakeOS still needs its first successful full directory sync.",
+      detail: database.latestSuccessfulSyncAt
+        ? `Last successful full sync: ${database.latestSuccessfulSyncAt}`
+        : "Run a full sync after setup so the dashboard and MCP have local data to use."
+    } satisfies DiagnosticCheck
   ];
   const diagnosticSummary = summarizeDiagnostics(diagnostics);
+  const prerequisitesReady =
+    isValidDatabaseUrl(effectiveEnv.DATABASE_URL) &&
+    isValidLcrUrl(effectiveEnv.LCR_DIRECTORY_URL) &&
+    database.exists &&
+    database.schemaReady &&
+    diagnostics.every((check) => check.status !== "fail");
 
   return {
     configPath: getDesktopConfigPath(),
@@ -418,6 +629,11 @@ export const getDesktopConfigSnapshot = async () => {
       emailConfigured: getEmailConfigured(effectiveEnv),
       playwrightConfigured: Boolean(effectiveEnv.PLAYWRIGHT_USER_DATA_DIR),
       lcrConfigured: !isMissingValue("LCR_DIRECTORY_URL", effectiveEnv),
+      schemaReady: database.schemaReady,
+      firstSyncCompleted: database.firstSyncCompleted,
+      latestSuccessfulSyncAt: database.latestSuccessfulSyncAt,
+      latestSuccessfulSyncType: database.latestSuccessfulSyncType,
+      prerequisitesReady,
       diagnostics,
       diagnosticSummary
     }

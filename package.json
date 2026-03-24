@@ -2,12 +2,17 @@
   "name": "stakeos",
   "version": "1.0.0",
   "private": true,
+  "description": "Private AI assistant and leadership dashboard for stake leadership.",
+  "author": "Nicholas Naugle",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build && npm run build:backend",
-    "build:backend": "tsup src/mcp/server.ts src/scripts/runFullSync.ts src/scripts/runCallingSync.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
+    "build:backend": "tsup src/mcp/server.ts src/scripts/runFullSync.ts src/scripts/runCallingSync.ts src/db/migrate.ts src/scripts/seedSyncSnapshots.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
     "desktop:start": "electron electron/main.cjs",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:dist": "npm run build && electron-builder",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -42,6 +47,7 @@
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
     "electron": "^41.0.3",
+    "electron-builder": "^26.0.12",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.5",
     "postcss": "^8.4.49",
@@ -49,5 +55,29 @@
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "build": {
+    "appId": "org.stakeos.desktop",
+    "productName": "StakeOS Desktop",
+    "icon": "build/icon.icns",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      ".next/**/*",
+      "dist/**/*",
+      "public/**/*",
+      "src/db/schema.sql",
+      "package.json",
+      "package-lock.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "zip"
+      ]
+    }
   }
 }

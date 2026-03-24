@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { getDesktopConfigSnapshot } from "@/src/config/desktopConfig";
+import { getRuntimeConfigState } from "@/src/config/runtimeConfigState";
 
 export default async function HomePage() {
-  const snapshot = await getDesktopConfigSnapshot();
-  redirect(snapshot.status.requiredComplete ? "/dashboard" : "/settings?setup=1");
+  const { snapshot, restartRequired } = await getRuntimeConfigState();
+  redirect(snapshot.status.requiredComplete && !restartRequired ? "/dashboard" : `/settings?setup=1${restartRequired ? "&restart=1" : ""}`);
 }

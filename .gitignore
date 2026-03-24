@@ -10,6 +10,9 @@ coverage/
 .playwright/
 .playwright-cli/
 .run/
+release/
+main.cjs
+build/icon.iconset/
 
 npm-debug.log*
 *.pid

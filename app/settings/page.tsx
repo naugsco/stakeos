@@ -1,17 +1,19 @@
 import { DesktopSettingsForm } from "@/components/desktop-settings-form";
-import { getDesktopConfigSnapshot } from "@/src/config/desktopConfig";
+import { getRuntimeConfigState } from "@/src/config/runtimeConfigState";
 
 export const dynamic = "force-dynamic";
 
 type SettingsPageProps = {
   searchParams?: {
     setup?: string;
+    restart?: string;
   };
 };
 
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
-  const snapshot = await getDesktopConfigSnapshot();
+  const { snapshot, restartRequired } = await getRuntimeConfigState();
   const initialSetup = searchParams?.setup === "1";
+  const restartNotice = searchParams?.restart === "1" || restartRequired;
 
-  return <DesktopSettingsForm initialSnapshot={snapshot} initialSetup={initialSetup} />;
+  return <DesktopSettingsForm initialSnapshot={snapshot} initialSetup={initialSetup} restartRequired={restartNotice} />;
 }

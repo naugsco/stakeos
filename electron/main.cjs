@@ -7,7 +7,9 @@ const net = require('node:net');
 const dotenv = require('dotenv');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const RUN_DIR = path.join(PROJECT_ROOT, '.run');
+const RUNTIME_ROOT = app.getPath('userData');
+const RUN_DIR = path.join(RUNTIME_ROOT, '.run');
+const PACKAGED_MODE = app.isPackaged || process.env.STAKEOS_PACKAGED === '1';
 const DESKTOP_PORT = process.env.STAKEOS_DESKTOP_PORT || '3232';
 const CONTROL_PORT = process.env.STAKEOS_CONTROL_PORT || '3233';
 const BASE_URL = `http://127.0.0.1:${DESKTOP_PORT}`;
@@ -15,6 +17,8 @@ const NPM_CMD = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const APP_ICON = [
   path.join(PROJECT_ROOT, 'StakeOS.png'),
   path.join(PROJECT_ROOT, 'stakeos.png'),
+  path.join(process.resourcesPath || '', 'StakeOS.png'),
+  path.join(process.resourcesPath || '', 'stakeos.png'),
 ].find((filePath) => fs.existsSync(filePath));
 const DESKTOP_CONFIG_PATH = (() => {
   const home = require('node:os').homedir();
@@ -463,6 +467,10 @@ function getLatestMtimeMs(targetPath) {
 }
 
 function shouldRebuildArtifacts() {
+  if (PACKAGED_MODE) {
+    return false;
+  }
+
   const nextBuildIdPath = path.join(PROJECT_ROOT, '.next', 'BUILD_ID');
   const backendServerPath = path.join(PROJECT_ROOT, 'dist', 'server.cjs');
 
@@ -538,14 +546,43 @@ function runCommand(args, label) {
   });
 }
 
+function getPackagedNodeEntry(scriptPath, args = []) {
+  return {
+    command: process.execPath,
+    args: [scriptPath, ...args],
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      STAKEOS_PACKAGED: '1',
+      STAKEOS_PROJECT_ROOT: PROJECT_ROOT,
+    },
+  };
+}
+
+function getNextStartCommand() {
+  if (PACKAGED_MODE) {
+    return getPackagedNodeEntry(
+      path.join(PROJECT_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'),
+      ['start', '--port', DESKTOP_PORT],
+    );
+  }
+
+  return {
+    command: NPM_CMD,
+    args: ['run', 'start', '--', '--port', DESKTOP_PORT],
+    env: process.env,
+  };
+}
+
 function startManagedNextServer() {
   updateSplashStatus('Starting local StakeOS server...');
   ensureRunDir();
   const logStream = fs.createWriteStream(path.join(RUN_DIR, 'desktop-next.log'), { flags: 'a' });
-  nextProcess = spawn(NPM_CMD, ['run', 'start', '--', '--port', DESKTOP_PORT], {
+  const nextCommand = getNextStartCommand();
+  nextProcess = spawn(nextCommand.command, nextCommand.args, {
     cwd: PROJECT_ROOT,
     env: {
-      ...process.env,
+      ...nextCommand.env,
       PORT: DESKTOP_PORT,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -695,6 +732,17 @@ async function stopExistingStakeosServerOnDesktopPort() {
 }
 
 async function ensureBuildArtifacts() {
+  const nextBuildIdPath = path.join(PROJECT_ROOT, '.next', 'BUILD_ID');
+  const backendServerPath = path.join(PROJECT_ROOT, 'dist', 'server.cjs');
+
+  if (PACKAGED_MODE) {
+    if (!fs.existsSync(nextBuildIdPath) || !fs.existsSync(backendServerPath)) {
+      throw new Error('The packaged StakeOS app is missing required build artifacts.');
+    }
+    updateSplashStatus('Using bundled StakeOS build...');
+    return;
+  }
+
   if (!shouldRebuildArtifacts()) {
     updateSplashStatus('Using existing StakeOS build...');
     return;
