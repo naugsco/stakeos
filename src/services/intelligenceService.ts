@@ -2863,7 +2863,8 @@ export const getReportsOverview = async () => {
       (
         SELECT COUNT(*)::text
         FROM current_callings_dedup c
-        WHERE c.title ~* '(president|bishop|high councilor)'
+        WHERE c.member_id IS NOT NULL
+          AND c.title ~* '(president|bishop|high councilor)'
       ) AS "leadershipCallings",
       (
         SELECT COUNT(*)::text

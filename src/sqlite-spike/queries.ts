@@ -153,6 +153,11 @@ const safeDate = (value?: string | null) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 };
+const formatMonthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const monthKeyFromValue = (value?: string | null) => {
+  const date = safeDate(value);
+  return date ? formatMonthKey(date) : null;
+};
 const actualAge = (row: Pick<SpikeMemberRow, "age" | "birthdate">) => {
   if (typeof row.age === "number") {
     return row.age;
@@ -214,6 +219,24 @@ const cleanCallingTitle = (value: string | null): string => {
       .replace(/\bwith\s+date\b/gi, " ")
       .replace(/[^A-Za-z0-9 '&,.\-()]+/g, " ")
   );
+};
+const normalizeCallingTitleKey = (value: string | null | undefined) =>
+  collapseWhitespace(cleanCallingTitle(value ?? null).toLowerCase().replace(/[^a-z0-9]+/g, " "));
+const distinctCurrentCallingKeys = (
+  rows: Array<{ lcrMemberId: string | null; title: string; unitName?: string | null }>,
+  filter?: (row: { lcrMemberId: string | null; title: string; unitName?: string | null }) => boolean
+) => {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    if (!row.lcrMemberId) {
+      continue;
+    }
+    if (filter && !filter(row)) {
+      continue;
+    }
+    keys.add(`${row.unitName ?? "Unknown"}::${row.lcrMemberId}::${normalizeCallingTitleKey(row.title)}`);
+  }
+  return keys;
 };
 const canonicalizeName = (value: string | null | undefined) =>
   (value ?? "")
@@ -1232,8 +1255,11 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
       .map(([unitName, rows]) => ({
         unitName,
         memberCount: rows.length,
-        currentCallings: currentCallings.filter((calling) => unitName === (calling.unitName ?? "Unknown")).length,
-        leadershipCallings: currentCallings.filter((calling) => unitName === (calling.unitName ?? "Unknown") && /(president|bishop|high councilor)/i.test(calling.title)).length,
+        currentCallings: distinctCurrentCallingKeys(currentCallings, (calling) => unitName === (calling.unitName ?? "Unknown")).size,
+        leadershipCallings: distinctCurrentCallingKeys(
+          currentCallings,
+          (calling) => unitName === (calling.unitName ?? "Unknown") && /(president|bishop|high councilor)/i.test(calling.title)
+        ).size,
         seminaryAttending: rows.filter((member) => {
           const age = youthProgramAge(member);
           return age !== null && age >= 14 && age <= 18 && toBool(member.isAttendingSeminary);
@@ -1962,11 +1988,12 @@ export const loadSqliteSpikeYouthPageData = async () => {
   ].map(([label, count]) => ({ label: label as string, count: count as number }));
 
   const progression = [
-    { ageBand: '12-13', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13; }).length },
-    { ageBand: '14-15', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15; }).length },
-    { ageBand: '16-17', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17; }).length },
-    { ageBand: '18-25', count: members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25; }).length },
-    { ageBand: '26-35', count: members.filter(m => { const age=actualAge(m); return age !== null && age >=26 && age <=35; }).length }
+    { ageBand: 'Turns 12 / 12', count: members.filter(m => youthProgramAge(m) === 12).length },
+    { ageBand: '13-15', count: members.filter(m => { const age = youthProgramAge(m); return age !== null && age >= 13 && age <= 15; }).length },
+    { ageBand: '16-17', count: members.filter(m => { const age = youthProgramAge(m); return age !== null && age >= 16 && age <= 17; }).length },
+    { ageBand: '18 Transition', count: members.filter(m => youthProgramAge(m) === 18).length },
+    { ageBand: 'YSA 19-25', count: members.filter(m => { const age = actualAge(m); return age !== null && age >= 19 && age <= 25; }).length },
+    { ageBand: 'YSA 26-35', count: members.filter(m => { const age = actualAge(m); return age !== null && age >= 26 && age <= 35; }).length }
   ];
 
   const endowment: EndowmentCandidateRow[] = members.filter((member) => {
@@ -2031,23 +2058,21 @@ export const loadSqliteSpikeStakeOverviewPageData = async () => {
     const convertMap = new Map(monthKeys.map(k => [k, 0]));
     for (const calling of callings) {
       if (/(president|bishop|high councilor)/i.test(calling.title)) {
-        const sustainDate = calling.sustainedOn ?? calling.setApartOn;
-        if (sustainDate) {
-          const k = sustainDate.slice(0,7);
-          if (sustainedMap.has(k)) sustainedMap.set(k, (sustainedMap.get(k) ?? 0) + 1);
+        const sustainKey = monthKeyFromValue(calling.sustainedOn ?? calling.setApartOn);
+        if (sustainKey && sustainedMap.has(sustainKey)) {
+          sustainedMap.set(sustainKey, (sustainedMap.get(sustainKey) ?? 0) + 1);
         }
-        if (calling.releasedOn) {
-          const k = calling.releasedOn.slice(0,7);
-          if (releasedMap.has(k)) releasedMap.set(k, (releasedMap.get(k) ?? 0) + 1);
+        const releasedKey = monthKeyFromValue(calling.releasedOn);
+        if (releasedKey && releasedMap.has(releasedKey)) {
+          releasedMap.set(releasedKey, (releasedMap.get(releasedKey) ?? 0) + 1);
         }
       }
     }
     for (const member of members) {
       if (toBool(member.isConvert)) {
-        const date = member.baptismDate ?? member.moveInDate;
-        if (date) {
-          const k = date.slice(0,7);
-          if (convertMap.has(k)) convertMap.set(k, (convertMap.get(k) ?? 0) + 1);
+        const monthKey = monthKeyFromValue(member.baptismDate ?? member.moveInDate);
+        if (monthKey && convertMap.has(monthKey)) {
+          convertMap.set(monthKey, (convertMap.get(monthKey) ?? 0) + 1);
         }
       }
     }
