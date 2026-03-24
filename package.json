@@ -20,6 +20,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx src/db/migrate.ts",
+    "sqlite:spike:init": "tsx src/sqlite-spike/init.ts",
+    "sqlite:spike:sync": "tsx src/sqlite-spike/runFullSync.ts",
     "sync:seed-baseline": "tsx src/scripts/seedSyncSnapshots.ts",
     "sync:full": "tsx src/scripts/runFullSync.ts",
     "sync:callings": "tsx src/scripts/runCallingSync.ts",
@@ -30,6 +32,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
+    "better-sqlite3": "^12.8.0",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
@@ -44,6 +47,7 @@
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.1",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",

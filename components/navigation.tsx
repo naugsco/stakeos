@@ -10,7 +10,8 @@ const links = [
   { href: "/youth", label: "Youth" },
   { href: "/stake-overview", label: "Stake Overview" },
   { href: "/settings", label: "Settings" },
-  { href: "/sync-center", label: "Sync Center" }
+  { href: "/sync-center", label: "Sync Center" },
+  { href: "/sqlite-spike", label: "SQLite Spike" }
 ];
 
 export function Navigation() {
