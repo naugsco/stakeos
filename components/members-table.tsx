@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CopyPhoneLink, EmailAddressLink } from "@/components/contact-links";
 import { useMemo, useState } from "react";
 
 type MemberRow = {
@@ -149,8 +150,8 @@ export function MembersTable({
               <td className="px-4 py-3 text-slate-700">{member.unitName ?? "-"}</td>
               <td className="px-4 py-3 text-slate-700">{member.age ?? "-"}</td>
               <td className="px-4 py-3 text-slate-700">{member.gender ?? "-"}</td>
-              <td className="px-4 py-3 text-slate-700">{member.email ?? "-"}</td>
-              <td className="px-4 py-3 text-slate-700">{member.phoneNumber ?? "-"}</td>
+              <td className="px-4 py-3 text-slate-700"><EmailAddressLink email={member.email} /></td>
+              <td className="px-4 py-3 text-slate-700"><CopyPhoneLink phone={member.phoneNumber} /></td>
             </tr>
           ))}
           {visibleRows.length === 0 ? (

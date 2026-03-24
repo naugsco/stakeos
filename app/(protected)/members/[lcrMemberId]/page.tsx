@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { EmailListInline, PhoneListInline } from "@/components/contact-links";
 import { loadMemberDetailPageDataBySource } from "@/lib/dashboardData";
 
 interface MemberDetailPageProps {
@@ -78,10 +79,10 @@ export default async function MemberDetailPage({ params, searchParams }: MemberD
                 .join(", ") || "-"}
             </p>
             <p>
-              <span className="text-slate-500">Emails:</span> {member.emails.join(", ") || "-"}
+              <span className="text-slate-500">Emails:</span> <EmailListInline emails={member.emails} />
             </p>
             <p>
-              <span className="text-slate-500">Phones:</span> {member.phoneNumbers.join(", ") || "-"}
+              <span className="text-slate-500">Phones:</span> <PhoneListInline phones={member.phoneNumbers} />
             </p>
           </div>
         </article>

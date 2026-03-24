@@ -2,7 +2,6 @@ import {
   getDashboardUnits,
   getCommitteeRosters,
   endowmentCandidates,
-  getCurrentlyServingMissionaries,
   getCallingsList,
   getCovenantPathProgressionReport,
   getHouseholdOutreachReport,
@@ -308,7 +307,6 @@ export const loadReportsPageShellDataBySource = async (source: DashboardDataSour
       };
 
 export const loadYouthPageData = async () => ({
-  currentlyServingMissionaries: await getCurrentlyServingMissionaries(),
   missionEligible: await missionEligibleMembers(),
   missionYouthPipeline: await getMissionYouthPipelineReport(),
   seminaryInstituteOpportunity: await getSeminaryInstituteOpportunityReport(),

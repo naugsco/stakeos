@@ -120,7 +120,6 @@ export default async function YouthPage({ searchParams }: { searchParams?: { sou
       </section>
 
       <YouthBrowser
-        currentlyServingMissionaries={data.currentlyServingMissionaries}
         missionEligible={data.missionEligible}
         missionYouthPipeline={data.missionYouthPipeline}
         seminaryInstituteOpportunity={data.seminaryInstituteOpportunity}

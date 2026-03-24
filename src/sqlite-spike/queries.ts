@@ -2071,7 +2071,6 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
   const status = getSqliteSpikeStatus();
   if (!status.exists || status.members === 0) {
     return {
-      currentlyServingMissionaries: [] as CurrentlyServingMissionaryRow[],
       missionEligible: [] as MissionEligibleRow[],
       missionYouthPipeline: [] as MissionYouthPipelineRow[],
       seminaryInstituteOpportunity: [] as SqliteSpikeFullReportsData["seminaryInstituteOpportunity"],
@@ -2165,22 +2164,6 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
     currentCalling: callingMap.get(member.lcrMemberId ?? '')?.title ?? null
   })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
 
-  const currentlyServingMissionaries: CurrentlyServingMissionaryRow[] = members.filter((member) => {
-    return Boolean(String(member.missionStatus ?? '').trim()) || (Boolean(String(member.missionCountry ?? '').trim()) && !toBool(member.isReturnedMissionary));
-  }).map((member) => ({
-    lcrMemberId: member.lcrMemberId ?? '',
-    fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
-    unitName: member.unitName ?? member.unitAbbreviation ?? null,
-    gender: member.gender ?? null,
-    age: actualAge(member),
-    missionCountry: member.missionCountry ?? null,
-    missionStatus: member.missionStatus ?? null,
-    templeRecommendStatus: member.templeRecommendStatus ?? null,
-    email: member.primaryEmail ?? null,
-    phoneNumber: member.primaryPhone ?? null,
-    currentCalling: callingMap.get(member.lcrMemberId ?? '')?.title ?? null
-  })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
-
   const missionYouthPipeline: MissionYouthPipelineRow[] = members.filter((member) => {
     const age = actualAge(member);
     return age !== null && age >= 17 && age <= 25 && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
@@ -2263,7 +2246,6 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
   })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
 
   return {
-    currentlyServingMissionaries,
     missionEligible,
     missionYouthPipeline,
     seminaryInstituteOpportunity: reports.seminaryInstituteOpportunity,

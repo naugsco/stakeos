@@ -1024,8 +1024,8 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
   }, [selected, view]);
 
   return (
-    <svg ref={svgRef} width={width} height={height} style={{ display: "block", background: "#0f172a", borderRadius: 0, cursor: "grab", touchAction: "none" }}>
-      <rect width={width} height={height} fill="#0f172a" />
+    <svg ref={svgRef} width={width} height={height} style={{ display: "block", background: "#f4efe3", borderRadius: 0, cursor: "grab", touchAction: "none" }}>
+      <rect width={width} height={height} fill="#f4efe3" />
     </svg>
   );
 }
@@ -1074,9 +1074,7 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
   const meetingEmails = meetingRoster.map(person => person.email).filter(Boolean);
   const meetingPhones = meetingRoster.map(person => person.phoneNumber).filter(Boolean);
   const roleMailto = buildMailtoHref(roleEmails, `${data.title} Follow-Up`);
-  const roleSms = buildSmsHref(rolePhones);
   const meetingMailto = buildMailtoHref(meetingEmails, `${data.title} Coordination`);
-  const meetingSms = buildSmsHref(meetingPhones);
   return (
     <div style={{ background: "#fffdf8", borderTop: `3px solid ${data.color || "#3b82f6"}`, borderTopLeftRadius: 20, borderTopRightRadius: 20, border: "1px solid #d9d2c3", borderBottom: "none", padding: isMobile ? "14px 16px" : "20px 24px", color: "#1f2937", fontFamily: "'Outfit',sans-serif", animation: "panelSlide 0.3s ease", maxHeight: isMobile ? "60vh" : 480, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 24px rgba(15, 23, 42, 0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1134,10 +1132,10 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
                       </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {person.email ? (
-                          <a href={`mailto:${person.email}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", textDecoration: "none", fontWeight: 600 }}>Email</a>
+                          <a href={`mailto:${person.email}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", textDecoration: "none", fontWeight: 600 }}>{person.email}</a>
                         ) : null}
                         {person.phoneNumber ? (
-                          <a href={`sms:${person.phoneNumber}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", textDecoration: "none", fontWeight: 600 }}>Text</a>
+                          <button onClick={() => onCopyPhones([person.phoneNumber], `Copied ${person.phoneNumber}.`)} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", textDecoration: "none", fontWeight: 600, border: "none", cursor: "pointer" }}>{person.phoneNumber}</button>
                         ) : null}
                       </div>
                     </div>
@@ -1145,15 +1143,12 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
                 ))}
               </div>
             )}
-            {(roleMailto || roleSms) ? (
+            {(roleMailto || rolePhones.length > 0) ? (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                 {roleMailto ? (
                   <a href={roleMailto} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#0f766e", color: "#fff", textDecoration: "none", fontWeight: 700 }}>Email</a>
                 ) : null}
-                {rolePhones.length === 1 && roleSms ? (
-                  <a href={roleSms} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#1d4ed8", color: "#fff", textDecoration: "none", fontWeight: 700 }}>Text</a>
-                ) : null}
-                {rolePhones.length > 1 ? (
+                {rolePhones.length > 0 ? (
                   <button onClick={() => onCopyPhones(rolePhones, "Assigned phones copied.")} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#1d4ed8", color: "#fff", textDecoration: "none", fontWeight: 700, border: "none", cursor: "pointer" }}>Copy Phones</button>
                 ) : null}
               </div>
@@ -1182,15 +1177,12 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
                 <span style={{ position: "absolute", left: 0, color: data.color }}>›</span>{t}
               </div>
             ))}
-            {(meetingMailto || meetingSms) ? (
+            {(meetingMailto || meetingPhones.length > 0) ? (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
                 {meetingMailto ? (
                   <a href={meetingMailto} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#0f766e", color: "#fff", textDecoration: "none", fontWeight: 700 }}>Email Attendees</a>
                 ) : null}
-                {meetingPhones.length === 1 && meetingSms ? (
-                  <a href={meetingSms} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#1d4ed8", color: "#fff", textDecoration: "none", fontWeight: 700 }}>Text Attendee</a>
-                ) : null}
-                {meetingPhones.length > 1 ? (
+                {meetingPhones.length > 0 ? (
                   <button onClick={() => onCopyPhones(meetingPhones, "Attendee phone list copied.")} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 999, background: "#1d4ed8", color: "#fff", textDecoration: "none", fontWeight: 700, border: "none", cursor: "pointer" }}>Copy Attendee Phones</button>
                 ) : null}
               </div>
@@ -1213,10 +1205,10 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
                       </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {person.email ? (
-                          <a href={`mailto:${person.email}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", textDecoration: "none", fontWeight: 600 }}>Email</a>
+                          <a href={`mailto:${person.email}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", textDecoration: "none", fontWeight: 600 }}>{person.email}</a>
                         ) : null}
                         {person.phoneNumber ? (
-                          <a href={`sms:${person.phoneNumber}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", textDecoration: "none", fontWeight: 600 }}>Text</a>
+                          <button onClick={() => onCopyPhones([person.phoneNumber], `Copied ${person.phoneNumber}.`)} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", textDecoration: "none", fontWeight: 600, border: "none", cursor: "pointer" }}>{person.phoneNumber}</button>
                         ) : null}
                       </div>
                     </div>

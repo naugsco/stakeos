@@ -27,7 +27,7 @@ const getCommandForKind = (kind: SyncJobKind, source: SyncDataSource) => {
       return "npm run sqlite:spike:init && npm run sqlite:spike:sync && npm run sqlite:spike:seed-baseline";
     }
 
-    return "npm run sqlite:spike:init && npm run sqlite:spike:sync && npm run sqlite:spike:seed-baseline";
+    return "npm run sqlite:spike:init && npm run sqlite:spike:callings";
   }
 
   if (kind === "full") {

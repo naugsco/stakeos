@@ -819,6 +819,33 @@ export const persistSqliteSpikeSnapshot = async (syncType: string, snapshot: Dir
   }
 };
 
+export const persistSqliteSpikeCallingsSnapshot = async (
+  syncType: string,
+  snapshot: DirectorySnapshot
+): Promise<PersistResult> => {
+  const db = openSqliteSpikeDb();
+  ensureSqliteSpikeSchema(db);
+  const logId = insertSyncLog(db, syncType);
+
+  try {
+    const persist = db.transaction(() => {
+      persistCallings(db, snapshot);
+      insertCallingSnapshots(db, logId, snapshot);
+    });
+
+    persist();
+
+    const recordsProcessed = snapshot.callings.length;
+    completeSyncLog(db, logId, "success", recordsProcessed);
+    return { recordsProcessed };
+  } catch (error) {
+    completeSyncLog(db, logId, "error", 0, error instanceof Error ? error.message : String(error));
+    throw error;
+  } finally {
+    db.close();
+  }
+};
+
 export const seedSqliteSpikeSnapshotsFromCurrentState = async (
   syncType = "sqlite_spike_baseline_seed"
 ): Promise<PersistResult> => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ContactMethodsInline } from "@/components/contact-links";
 import { MemberNameLink } from "@/components/member-name-link";
 
 type SortDirection = "asc" | "desc";
@@ -45,20 +46,6 @@ type MissionEligibleRow = {
   currentCalling: string | null;
 };
 
-type CurrentlyServingMissionaryRow = {
-  lcrMemberId: string;
-  fullName: string;
-  unitName: string | null;
-  gender: string | null;
-  age: number | null;
-  missionCountry: string | null;
-  missionStatus: string | null;
-  templeRecommendStatus: string | null;
-  email: string | null;
-  phoneNumber: string | null;
-  currentCalling: string | null;
-};
-
 type MissionYouthRow = {
   lcrMemberId: string;
   unitName: string;
@@ -99,7 +86,6 @@ type SeminaryInstituteOpportunityRow = {
 };
 
 interface YouthBrowserProps {
-  currentlyServingMissionaries: CurrentlyServingMissionaryRow[];
   missionEligible: MissionEligibleRow[];
   missionYouthPipeline: MissionYouthRow[];
   seminaryInstituteOpportunity: SeminaryInstituteOpportunityRow[];
@@ -126,17 +112,12 @@ const missionGenderBucket = (value: string | null | undefined): "Men" | "Women" 
 };
 
 export function YouthBrowser({
-  currentlyServingMissionaries,
   missionEligible,
   missionYouthPipeline,
   seminaryInstituteOpportunity,
   endowment,
   source = "postgres"
 }: YouthBrowserProps & { source?: "postgres" | "sqlite" }) {
-  const [servingSortKey, setServingSortKey] = useState<
-    "unitName" | "fullName" | "age" | "missionCountry" | "missionStatus"
-  >("unitName");
-  const [servingSortDirection, setServingSortDirection] = useState<SortDirection>("asc");
   const [missionSortKey, setMissionSortKey] = useState<
     "unitName" | "fullName" | "age" | "gender" | "missionStatus" | "currentCalling"
   >("age");
@@ -168,11 +149,6 @@ export function YouthBrowser({
     return [...missionEligible]
       .sort((left, right) => compareValues(left[missionSortKey], right[missionSortKey], missionSortDirection));
   }, [missionEligible, missionSortDirection, missionSortKey]);
-
-  const sortedCurrentlyServing = useMemo(() => {
-    return [...currentlyServingMissionaries]
-      .sort((left, right) => compareValues(left[servingSortKey], right[servingSortKey], servingSortDirection));
-  }, [currentlyServingMissionaries, servingSortDirection, servingSortKey]);
 
   const sortedPipeline = useMemo(() => {
     return [...missionYouthPipeline]
@@ -242,15 +218,6 @@ export function YouthBrowser({
     setMissionSortDirection("asc");
   };
 
-  const toggleServingSort = (key: "unitName" | "fullName" | "age" | "missionCountry" | "missionStatus") => {
-    if (key === servingSortKey) {
-      setServingSortDirection((value) => (value === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setServingSortKey(key);
-    setServingSortDirection("asc");
-  };
-
   const togglePipelineSort = (
     key:
       | "unitName"
@@ -295,66 +262,6 @@ export function YouthBrowser({
 
   return (
     <section className="space-y-6">
-      <div id="currently-serving-missionaries" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-          <h2 className="text-lg font-semibold">Currently Serving Missionaries</h2>
-          <p className="text-xs text-slate-600">
-            Counted only when LCR shows a nonblank mission status, or a mission country while returned missionary is false.
-          </p>
-        </header>
-        {sortedCurrentlyServing.length === 0 ? (
-          <div className="px-4 py-4 text-sm text-slate-600">
-            No currently serving missionaries matched the current LCR data. In this sync, `mission status` is blank and every populated `mission country` belongs to a returned missionary.
-          </div>
-        ) : (
-          <div className="max-h-[24rem] overflow-auto">
-            <table className="sticky-pane min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <tr>
-                  {[
-                    { key: "unitName", label: "Unit" },
-                    { key: "fullName", label: "Member" },
-                    { key: "age", label: "Age" },
-                    { key: "missionCountry", label: "Mission Country" },
-                    { key: "missionStatus", label: "Mission Status" }
-                  ].map((column) => {
-                    const key = column.key as "unitName" | "fullName" | "age" | "missionCountry" | "missionStatus";
-                    const active = servingSortKey === key;
-                    return (
-                      <th key={column.key} className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleServingSort(key)}
-                          className="inline-flex items-center gap-1 text-left hover:text-slate-900"
-                        >
-                          <span>{column.label}</span>
-                          <span aria-hidden="true">{active ? (servingSortDirection === "asc" ? "▲" : "▼") : ""}</span>
-                        </button>
-                      </th>
-                    );
-                  })}
-                  <th className="px-4 py-3">Contact</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sortedCurrentlyServing.map((member) => (
-                  <tr key={member.lcrMemberId} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">{member.unitName ?? "-"}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
-                    </td>
-                    <td className="px-4 py-3">{member.age ?? "-"}</td>
-                    <td className="px-4 py-3">{member.missionCountry ?? "-"}</td>
-                    <td className="px-4 py-3">{member.missionStatus ?? "-"}</td>
-                    <td className="px-4 py-3">{member.phoneNumber ?? member.email ?? "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       <div id="mission-youth-pipeline" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
           <h2 className="text-lg font-semibold">Mission & Youth Pipeline (Age 17-25)</h2>
@@ -483,7 +390,7 @@ export function YouthBrowser({
                   <td className="px-4 py-3">{row.age ?? "-"}</td>
                   <td className="px-4 py-3">{boolLabel(row.potentialFlag)}</td>
                   <td className="px-4 py-3">{row.statusText ?? "-"}</td>
-                  <td className="px-4 py-3">{row.phoneNumber ?? row.email ?? "-"}</td>
+                  <td className="px-4 py-3"><ContactMethodsInline phone={row.phoneNumber} email={row.email} /></td>
                 </tr>
               ))}
             </tbody>
@@ -534,7 +441,7 @@ export function YouthBrowser({
                   <tr key={member.lcrMemberId} className="hover:bg-slate-50">
                     <td className="px-3 py-2">{member.unitName ?? "-"}</td>
                     <td className="px-3 py-2 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
+                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} source={source} />
                     </td>
                     <td className="px-3 py-2">{member.age ?? "-"}</td>
                     <td className="px-3 py-2">{member.gender ?? "-"}</td>
@@ -582,7 +489,7 @@ export function YouthBrowser({
                 {sortedEndowment.map((member) => (
                   <tr key={member.lcrMemberId} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
+                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} source={source} />
                     </td>
                     <td className="px-3 py-2">{member.age ?? "-"}</td>
                     <td className="px-3 py-2">{member.missionStatus ?? "-"}</td>
