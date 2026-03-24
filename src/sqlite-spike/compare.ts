@@ -1,4 +1,5 @@
 import { loadDashboardData } from "@/lib/dashboardData";
+import { query } from "@/src/db/pool";
 import { loadSqliteSpikeDashboardData } from "@/src/sqlite-spike/queries";
 
 export interface SqliteComparisonRow {
@@ -11,6 +12,8 @@ export interface SqliteComparisonRow {
 }
 
 export interface SqliteComparisonReport {
+  postgresLatestFullSyncAt: string | null;
+  sqliteLatestFullSyncAt: string | null;
   rows: SqliteComparisonRow[];
   nonZeroRows: SqliteComparisonRow[];
   exactMatchCount: number;
@@ -31,8 +34,24 @@ const noteForMetric = (category: string, metric: string, diff: number) => {
     return "PostgreSQL uses current_callings_dedup. SQLite spike currently counts raw is_current rows.";
   }
 
+  if (metric === "Filled Current Callings") {
+    return "This is the apples-to-apples filled-calling comparison. It excludes vacancy placeholders.";
+  }
+
+  if (metric === "Current Calling Vacancies") {
+    return "SQLite vacancy modeling is not implemented yet. PostgreSQL derives these from the current_callings_dedup pipeline.";
+  }
+
   if (category === "Temple Recommend Health" && metric === "Limited Use") {
     return "SQLite spike explicitly buckets Limited Use recommends. The main dashboard summary may still be collapsing or omitting them.";
+  }
+
+  if (metric === "Total Members") {
+    return "Check snapshot recency first. SQLite is being compared against the current PostgreSQL snapshot, which may be from a different full-sync run.";
+  }
+
+  if (category === "Ministering Coverage Totals" && (metric === "Eligible Active Members" || metric === "No Assigned")) {
+    return "This tracks the same -5 member drift as Total Members. Check snapshot recency before treating it as a porting bug.";
   }
 
   if (category === "Recent Baptisms" || category === "Recommend Expiration Risk") {
@@ -55,7 +74,20 @@ const noteForMetric = (category: string, metric: string, diff: number) => {
 };
 
 export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonReport> => {
-  const [postgres, sqlite] = await Promise.all([loadDashboardData(), loadSqliteSpikeDashboardData()]);
+  const [postgres, sqlite, latestFullSync] = await Promise.all([
+    loadDashboardData(),
+    loadSqliteSpikeDashboardData(),
+    query<{ completedAt: string | null }>(
+      `
+      SELECT completed_at::text AS "completedAt"
+      FROM sync_logs
+      WHERE status = 'success'
+        AND sync_type = 'nightly_full_directory_sync'
+      ORDER BY started_at DESC
+      LIMIT 1
+      `
+    )
+  ]);
 
   const postgresTemple = byLabel(postgres.templeRecommendHealth.statusCounts);
   const sqliteTemple = byLabel(sqlite.templeRecommendHealth);
@@ -76,6 +108,9 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
   const sqliteInstituteEligible = sum(sqlite.instituteByUnit.map((row) => row.potential));
   const sqliteInstituteAttending = sum(sqlite.instituteByUnit.map((row) => row.actual));
 
+  const postgresFilledCurrentCallings = postgres.overview.currentCallings - postgres.overview.openCallings;
+  const sqliteCurrentCallings = sqlite.overview.currentCallings;
+
   const postgresMinisteringEligible = sum(postgres.ministeringCoverageByUnit.map((row) => row.eligibleCount));
   const postgresNoAssigned = sum(postgres.ministeringCoverageByUnit.map((row) => row.noAssignedCount));
   const postgresBrothersOnly = sum(postgres.ministeringCoverageByUnit.map((row) => row.brothersOnlyCount));
@@ -90,7 +125,8 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
 
   const rowsBase: Array<Omit<SqliteComparisonRow, "diff" | "note">> = [
     { category: "Overview", metric: "Total Members", postgresValue: postgres.overview.totalMembers, sqliteValue: sqlite.overview.totalMembers },
-    { category: "Overview", metric: "Current Callings", postgresValue: postgres.overview.currentCallings, sqliteValue: sqlite.overview.currentCallings },
+    { category: "Overview", metric: "Filled Current Callings", postgresValue: postgresFilledCurrentCallings, sqliteValue: sqliteCurrentCallings },
+    { category: "Overview", metric: "Current Calling Vacancies", postgresValue: postgres.overview.openCallings, sqliteValue: 0 },
     { category: "Overview", metric: "Recommend Active", postgresValue: postgresTemple.get("Active") ?? 0, sqliteValue: sqlite.overview.recommendActive },
     { category: "Overview", metric: "Mission Ready", postgresValue: postgresMission.get("Ready") ?? 0, sqliteValue: sqlite.overview.missionReady },
     { category: "Overview", metric: "Recent Baptisms This Year", postgresValue: postgresBaptisms.get("This Year") ?? 0, sqliteValue: sqlite.overview.recentBaptismsThisYear },
@@ -137,6 +173,8 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
   const nonZeroRows = rows.filter((row) => row.diff !== 0);
 
   return {
+    postgresLatestFullSyncAt: latestFullSync.rows[0]?.completedAt ?? null,
+    sqliteLatestFullSyncAt: sqlite.status.latestSyncCompletedAt,
     rows,
     nonZeroRows,
     exactMatchCount: rows.length - nonZeroRows.length,

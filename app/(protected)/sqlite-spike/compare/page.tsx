@@ -18,6 +18,10 @@ const diffClassName = (diff: number) => {
 
 export default async function SqliteSpikeComparePage() {
   const report = await buildSqliteComparisonReport();
+  const syncMismatch =
+    report.postgresLatestFullSyncAt &&
+    report.sqliteLatestFullSyncAt &&
+    report.postgresLatestFullSyncAt !== report.sqliteLatestFullSyncAt;
 
   return (
     <div className="space-y-6">
@@ -40,6 +44,29 @@ export default async function SqliteSpikeComparePage() {
         <StatCard label="Compared Metrics" value={report.rows.length} />
         <StatCard label="Exact Matches" value={report.exactMatchCount} />
         <StatCard label="Nonzero Diffs" value={report.nonZeroCount} />
+      </section>
+
+      <section className="rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Snapshot Timing</h2>
+        <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+          <p>
+            PostgreSQL latest full sync:
+            <span className="ml-2 font-medium text-slate-900">
+              {report.postgresLatestFullSyncAt ? new Date(report.postgresLatestFullSyncAt).toLocaleString() : "None"}
+            </span>
+          </p>
+          <p>
+            SQLite latest full sync:
+            <span className="ml-2 font-medium text-slate-900">
+              {report.sqliteLatestFullSyncAt ? new Date(report.sqliteLatestFullSyncAt).toLocaleString() : "None"}
+            </span>
+          </p>
+        </div>
+        {syncMismatch ? (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            PostgreSQL and SQLite are not being compared from the same full-sync timestamp. Small member and status diffs may reflect snapshot recency, not porting errors.
+          </div>
+        ) : null}
       </section>
 
       {report.nonZeroRows.length > 0 ? (
