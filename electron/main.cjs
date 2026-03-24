@@ -726,6 +726,7 @@ function buildApplicationMenu() {
         { label: 'Youth', click: () => navigateTo('/youth') },
         { label: 'Stake Overview', click: () => navigateTo('/stake-overview') },
         { label: 'Settings', click: () => navigateTo('/settings') },
+        { label: 'Sync Center', click: () => navigateTo('/sync-center') },
         { type: 'separator' },
         { label: 'Quit StakeOS', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
       ],

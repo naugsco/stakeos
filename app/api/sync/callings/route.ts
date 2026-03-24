@@ -25,11 +25,11 @@ export async function POST() {
     );
   }
 
-  const state = launchSyncJob("full");
+  const state = launchSyncJob("callings");
 
   return NextResponse.json({
     started: true,
-    message: "Full directory sync started. Complete LCR login in the Playwright browser if prompted.",
+    message: "Calling sync started.",
     job: state
   });
 }

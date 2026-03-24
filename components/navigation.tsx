@@ -9,7 +9,8 @@ const links = [
   { href: "/visual-org", label: "Visual Org" },
   { href: "/youth", label: "Youth" },
   { href: "/stake-overview", label: "Stake Overview" },
-  { href: "/settings", label: "Settings" }
+  { href: "/settings", label: "Settings" },
+  { href: "/sync-center", label: "Sync Center" }
 ];
 
 export function Navigation() {
