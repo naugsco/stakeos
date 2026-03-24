@@ -34,8 +34,8 @@ export default async function StakeOverviewPage() {
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard label="Total Members" value={data.overview.totalMembers} />
-        <StatCard label="Active Callings" value={data.overview.currentCallings} />
-        <StatCard label="Open Callings" value={data.overview.openCallings} />
+        <StatCard label="Members With A Current Calling" value={data.overview.membersWithCurrentCalling} />
+        <StatCard label="Members Without A Current Calling" value={data.overview.membersWithoutCurrentCalling} />
       </section>
 
       <section>

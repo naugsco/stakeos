@@ -41,10 +41,32 @@ export default async function SqliteSpikeComparePage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Compared Metrics" value={report.rows.length} />
+        <StatCard label="Compared Metrics" value={report.supportedRows.length} />
         <StatCard label="Exact Matches" value={report.exactMatchCount} />
         <StatCard label="Nonzero Diffs" value={report.nonZeroCount} />
       </section>
+
+      {report.unsupportedRows.length > 0 ? (
+        <section className="rounded-2xl border border-slate-900/10 bg-[var(--panel)] p-4 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Not Yet Modeled In SQLite Spike</h2>
+          <div className="mt-3 space-y-3">
+            {report.unsupportedRows.map((row) => (
+              <div key={`${row.category}-${row.metric}`} className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{row.category}</p>
+                    <p className="font-medium text-slate-900">{row.metric}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700">
+                    PostgreSQL {row.postgresValue} · SQLite {row.sqliteValue}
+                  </p>
+                </div>
+                {row.note ? <p className="mt-2 text-sm text-slate-600">{row.note}</p> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Snapshot Timing</h2>
@@ -112,14 +134,20 @@ export default async function SqliteSpikeComparePage() {
               {report.rows.map((row) => (
                 <tr
                   key={`${row.category}-${row.metric}`}
-                  className={row.diff === 0 ? "border-t border-slate-200/70" : "border-t border-amber-200 bg-amber-50/40"}
+                  className={
+                    !row.supported
+                      ? "border-t border-slate-200/70 bg-slate-50/80"
+                      : row.diff === 0
+                        ? "border-t border-slate-200/70"
+                        : "border-t border-amber-200 bg-amber-50/40"
+                  }
                 >
                   <td className="px-4 py-3 text-slate-600">{row.category}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">{row.metric}</td>
                   <td className="px-4 py-3 text-slate-700">{row.postgresValue}</td>
                   <td className="px-4 py-3 text-slate-700">{row.sqliteValue}</td>
-                  <td className={`px-4 py-3 font-semibold ${diffClassName(row.diff)}`}>
-                    {row.diff > 0 ? `+${row.diff}` : row.diff}
+                  <td className={`px-4 py-3 font-semibold ${row.supported ? diffClassName(row.diff) : "text-slate-500"}`}>
+                    {row.supported ? (row.diff > 0 ? `+${row.diff}` : row.diff) : "N/A"}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.note ?? "Exact match."}</td>
                 </tr>

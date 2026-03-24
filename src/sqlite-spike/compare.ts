@@ -1,5 +1,6 @@
 import { loadDashboardData } from "@/lib/dashboardData";
 import { query } from "@/src/db/pool";
+import { openSqliteSpikeDb } from "@/src/sqlite-spike/db";
 import { loadSqliteSpikeDashboardData } from "@/src/sqlite-spike/queries";
 
 export interface SqliteComparisonRow {
@@ -9,6 +10,7 @@ export interface SqliteComparisonRow {
   sqliteValue: number;
   diff: number;
   note: string | null;
+  supported: boolean;
 }
 
 export interface SqliteComparisonReport {
@@ -16,6 +18,8 @@ export interface SqliteComparisonReport {
   sqliteLatestFullSyncAt: string | null;
   rows: SqliteComparisonRow[];
   nonZeroRows: SqliteComparisonRow[];
+  supportedRows: SqliteComparisonRow[];
+  unsupportedRows: SqliteComparisonRow[];
   exactMatchCount: number;
   nonZeroCount: number;
 }
@@ -25,21 +29,17 @@ const byLabel = (rows: Array<{ label: string; value: number }>) =>
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
+const supportedForMetric = (_category: string, _metric: string) => {
+  return true;
+};
+
 const noteForMetric = (category: string, metric: string, diff: number) => {
   if (diff === 0) {
     return null;
   }
 
-  if (metric === "Current Callings") {
-    return "PostgreSQL uses current_callings_dedup. SQLite spike currently counts raw is_current rows.";
-  }
-
-  if (metric === "Filled Current Callings") {
-    return "This is the apples-to-apples filled-calling comparison. It excludes vacancy placeholders.";
-  }
-
-  if (metric === "Current Calling Vacancies") {
-    return "SQLite vacancy modeling is not implemented yet. PostgreSQL derives these from the current_callings_dedup pipeline.";
+  if (metric === "Members With A Current Calling" || metric === "Members Without A Current Calling") {
+    return "This compares member-level calling coverage derived from current_callings_dedup on PostgreSQL and current member-bound callings in the SQLite spike.";
   }
 
   if (category === "Temple Recommend Health" && metric === "Limited Use") {
@@ -108,7 +108,6 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
   const sqliteInstituteEligible = sum(sqlite.instituteByUnit.map((row) => row.potential));
   const sqliteInstituteAttending = sum(sqlite.instituteByUnit.map((row) => row.actual));
 
-  const postgresFilledCurrentCallings = postgres.overview.currentCallings - postgres.overview.openCallings;
   const sqliteCurrentCallings = sqlite.overview.currentCallings;
 
   const postgresMinisteringEligible = sum(postgres.ministeringCoverageByUnit.map((row) => row.eligibleCount));
@@ -123,10 +122,51 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
   const sqliteSistersOnly = sum(sqlite.ministeringCoverageByUnit.map((row) => row.sistersOnlyCount));
   const sqliteBothAssigned = sum(sqlite.ministeringCoverageByUnit.map((row) => row.bothAssignedCount));
 
-  const rowsBase: Array<Omit<SqliteComparisonRow, "diff" | "note">> = [
+  const spikeDb = openSqliteSpikeDb();
+  let sqliteWithCallingCount = 0;
+  let sqliteWithoutCallingCount = 0;
+  try {
+    const coverage = spikeDb
+      .prepare(
+        `
+        SELECT
+          SUM(
+            CASE
+              WHEN EXISTS (
+                SELECT 1
+                FROM callings c
+                WHERE c.is_current = 1
+                  AND c.lcr_member_id = m.lcr_member_id
+              ) THEN 1
+              ELSE 0
+            END
+          ) AS with_current_calling,
+          SUM(
+            CASE
+              WHEN NOT EXISTS (
+                SELECT 1
+                FROM callings c
+                WHERE c.is_current = 1
+                  AND c.lcr_member_id = m.lcr_member_id
+              ) THEN 1
+              ELSE 0
+            END
+          ) AS without_current_calling
+        FROM members m
+        `
+      )
+      .get() as { with_current_calling: number; without_current_calling: number };
+    sqliteWithCallingCount = Number(coverage.with_current_calling ?? 0);
+    sqliteWithoutCallingCount = Number(coverage.without_current_calling ?? 0);
+  } finally {
+    spikeDb.close();
+  }
+
+  const rowsBase: Array<Omit<SqliteComparisonRow, "diff" | "note" | "supported">> = [
     { category: "Overview", metric: "Total Members", postgresValue: postgres.overview.totalMembers, sqliteValue: sqlite.overview.totalMembers },
-    { category: "Overview", metric: "Filled Current Callings", postgresValue: postgresFilledCurrentCallings, sqliteValue: sqliteCurrentCallings },
-    { category: "Overview", metric: "Current Calling Vacancies", postgresValue: postgres.overview.openCallings, sqliteValue: 0 },
+    { category: "Overview", metric: "Current Callings", postgresValue: postgres.overview.currentCallings, sqliteValue: sqliteCurrentCallings },
+    { category: "Overview", metric: "Members With A Current Calling", postgresValue: postgres.overview.membersWithCurrentCalling, sqliteValue: sqliteWithCallingCount },
+    { category: "Overview", metric: "Members Without A Current Calling", postgresValue: postgres.overview.membersWithoutCurrentCalling, sqliteValue: sqliteWithoutCallingCount },
     { category: "Overview", metric: "Recommend Active", postgresValue: postgresTemple.get("Active") ?? 0, sqliteValue: sqlite.overview.recommendActive },
     { category: "Overview", metric: "Mission Ready", postgresValue: postgresMission.get("Ready") ?? 0, sqliteValue: sqlite.overview.missionReady },
     { category: "Overview", metric: "Recent Baptisms This Year", postgresValue: postgresBaptisms.get("This Year") ?? 0, sqliteValue: sqlite.overview.recentBaptismsThisYear },
@@ -163,21 +203,27 @@ export const buildSqliteComparisonReport = async (): Promise<SqliteComparisonRep
 
   const rows = rowsBase.map((row) => {
     const diff = row.sqliteValue - row.postgresValue;
+    const supported = supportedForMetric(row.category, row.metric);
     return {
       ...row,
       diff,
+      supported,
       note: noteForMetric(row.category, row.metric, diff)
     };
   });
 
-  const nonZeroRows = rows.filter((row) => row.diff !== 0);
+  const supportedRows = rows.filter((row) => row.supported);
+  const unsupportedRows = rows.filter((row) => !row.supported);
+  const nonZeroRows = supportedRows.filter((row) => row.diff !== 0);
 
   return {
     postgresLatestFullSyncAt: latestFullSync.rows[0]?.completedAt ?? null,
     sqliteLatestFullSyncAt: sqlite.status.latestSyncCompletedAt,
     rows,
+    supportedRows,
+    unsupportedRows,
     nonZeroRows,
-    exactMatchCount: rows.length - nonZeroRows.length,
+    exactMatchCount: supportedRows.length - nonZeroRows.length,
     nonZeroCount: nonZeroRows.length
   };
 };

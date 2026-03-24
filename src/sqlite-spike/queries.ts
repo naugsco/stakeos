@@ -35,6 +35,11 @@ const startOfToday = () => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 };
 const daysBetween = (left: Date, right: Date) => Math.floor((left.getTime() - right.getTime()) / 86400000);
+const daysAgoThreshold = (days: number) => {
+  const today = startOfToday();
+  today.setDate(today.getDate() - days);
+  return today;
+};
 const safeDate = (value?: string | null) => {
   if (!value) {
     return null;
@@ -168,6 +173,8 @@ export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboa
     ).all() as SpikeCallingRow[];
 
     const today = startOfToday();
+    const last30DaysThreshold = daysAgoThreshold(30);
+    const last90DaysThreshold = daysAgoThreshold(90);
     const thisYear = today.getFullYear();
 
     const templeRecommendHealthMap = new Map<string, number>();
@@ -200,11 +207,10 @@ export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboa
 
       const baptismDate = safeDate(member.baptismDate);
       if (baptismDate) {
-        const ageDays = daysBetween(today, baptismDate);
-        if (ageDays <= 30) {
+        if (baptismDate >= last30DaysThreshold) {
           recentBaptismMap.set("Last 30 Days", (recentBaptismMap.get("Last 30 Days") ?? 0) + 1);
         }
-        if (ageDays <= 90) {
+        if (baptismDate >= last90DaysThreshold) {
           recentBaptismMap.set("Last 90 Days", (recentBaptismMap.get("Last 90 Days") ?? 0) + 1);
         }
         if (baptismDate.getFullYear() === thisYear) {
