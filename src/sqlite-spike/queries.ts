@@ -238,6 +238,41 @@ const distinctCurrentCallingKeys = (
   }
   return keys;
 };
+const buildSnapshotCoverage = (latestSnapshotLogId: number | null, previousSnapshotLogId: number | null) => ({
+  latestSnapshotLogId,
+  previousSnapshotLogId,
+  ready: Boolean(latestSnapshotLogId && previousSnapshotLogId),
+  status: latestSnapshotLogId
+    ? previousSnapshotLogId
+      ? "ready"
+      : "baseline-established"
+    : "not-seeded"
+});
+const humanizeField = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b[a-z]/g, (match) => match.toUpperCase());
+const diffSnapshotFields = (
+  current: Record<string, unknown>,
+  previous: Record<string, unknown>,
+  ignoredKeys: string[] = []
+) => {
+  const ignored = new Set(ignoredKeys);
+  const keys = Array.from(new Set([...Object.keys(current), ...Object.keys(previous)]));
+
+  return keys
+    .filter((key) => !ignored.has(key))
+    .filter((key) => JSON.stringify(current[key] ?? null) !== JSON.stringify(previous[key] ?? null))
+    .map(humanizeField);
+};
+const parseSnapshotData = (value: string) => {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
 const canonicalizeName = (value: string | null | undefined) =>
   (value ?? "")
     .normalize("NFD")
@@ -415,6 +450,113 @@ export interface SqliteSpikeReportsShellData {
   recentBaptismMembers: RecentBaptismRow[];
   recommendExpirationMembers: RecommendExpirationRiskRow[];
 }
+
+type SqliteSnapshotLogRow = {
+  id: number;
+  syncType: string;
+  startedAt: string;
+  completedAt: string | null;
+};
+
+type SqliteMemberSnapshotRow = {
+  lcrMemberId: string;
+  fullName: string;
+  unitName: string | null;
+  moveInDate: string | null;
+  rowHash: string;
+  snapshotData: Record<string, unknown>;
+};
+
+type SqliteCallingSnapshotRow = {
+  lcrCallingId: string;
+  unitName: string | null;
+  memberLcrMemberId: string | null;
+  memberName: string | null;
+  callingTitle: string;
+  isCurrent: boolean;
+  sustainedOn: string | null;
+  releasedOn: string | null;
+  rowHash: string;
+  snapshotData: Record<string, unknown>;
+};
+
+type SqliteContactSnapshotRow = {
+  memberLcrMemberId: string;
+  fullName: string;
+  unitName: string | null;
+  value: string;
+  rowHash: string;
+  snapshotData: Record<string, unknown>;
+};
+
+export type SqliteSpikeSyncDiffReport = {
+  latestSync: SqliteSnapshotLogRow | null;
+  previousSync: SqliteSnapshotLogRow | null;
+  windowStart: string | null;
+  windowEnd: string | null;
+  coverage: {
+    members: { latestSnapshotLogId: number | null; previousSnapshotLogId: number | null; ready: boolean; status: string };
+    callings: { latestSnapshotLogId: number | null; previousSnapshotLogId: number | null; ready: boolean; status: string };
+    emails: { latestSnapshotLogId: number | null; previousSnapshotLogId: number | null; ready: boolean; status: string };
+    phones: { latestSnapshotLogId: number | null; previousSnapshotLogId: number | null; ready: boolean; status: string };
+  };
+  comparisonWindows: {
+    members: { start: string | null; end: string | null };
+    callings: { start: string | null; end: string | null };
+    emails: { start: string | null; end: string | null };
+    phones: { start: string | null; end: string | null };
+  };
+  counts: {
+    membersChanged: number;
+    membersAdded: number;
+    membersRemoved: number;
+    membersUpdated: number;
+    callingsChanged: number;
+    callingsAdded: number;
+    callingsRemoved: number;
+    callingsUpdated: number;
+    organizationChanged: number;
+    unitChanged: number;
+    emailChanged: number;
+    emailAdded: number;
+    emailRemoved: number;
+    emailUpdated: number;
+    phoneChanged: number;
+    phoneAdded: number;
+    phoneRemoved: number;
+    phoneUpdated: number;
+  };
+  members: Array<{
+    lcrMemberId: string;
+    fullName: string;
+    unitName: string;
+    moveInDate: string | null;
+    changeType: "Added" | "Removed" | "Changed";
+    changedFields: string[];
+    updatedAt: string;
+  }>;
+  callings: Array<{
+    lcrCallingId: string;
+    unitName: string;
+    callingTitle: string;
+    isCurrent: boolean;
+    sustainedOn: string | null;
+    releasedOn: string | null;
+    changeType: "Added" | "Released" | "Removed" | "Updated";
+    changedFields: string[];
+    updatedAt: string;
+  }>;
+  contacts: Array<{
+    contactType: "Email" | "Phone";
+    memberLcrMemberId: string;
+    fullName: string;
+    unitName: string;
+    value: string;
+    changeType: "Added" | "Removed" | "Changed";
+    changedFields: string[];
+    updatedAt: string;
+  }>;
+};
 
 export const loadSqliteSpikeDashboardData = async (): Promise<SqliteSpikeDashboardData> => {
   const status = getSqliteSpikeStatus();
@@ -2019,16 +2161,523 @@ export const loadSqliteSpikeYouthPageData = async () => {
   };
 };
 
+const loadLatestSqliteSuccessLogs = (db: ReturnType<typeof openSqliteSpikeDb>, limit: number) =>
+  db.prepare(
+    `SELECT
+      id,
+      sync_type AS syncType,
+      started_at AS startedAt,
+      completed_at AS completedAt
+     FROM sync_logs
+     WHERE status = 'success'
+     ORDER BY completed_at DESC, started_at DESC
+     LIMIT ?`
+  ).all(limit) as SqliteSnapshotLogRow[];
+
+const loadSqliteSnapshotLog = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  (db.prepare(
+    `SELECT
+      id,
+      sync_type AS syncType,
+      started_at AS startedAt,
+      completed_at AS completedAt
+     FROM sync_logs
+     WHERE id = ?
+     LIMIT 1`
+  ).get(syncLogId) as SqliteSnapshotLogRow | undefined) ?? null;
+
+const latestSqliteSnapshotLog = (db: ReturnType<typeof openSqliteSpikeDb>, tableName: string) => {
+  const row = db.prepare(
+    `SELECT t.sync_log_id AS syncLogId
+     FROM ${tableName} t
+     JOIN sync_logs s ON s.id = t.sync_log_id
+     WHERE s.status = 'success'
+       AND s.completed_at IS NOT NULL
+     GROUP BY t.sync_log_id
+     ORDER BY MAX(s.completed_at) DESC, t.sync_log_id DESC
+     LIMIT 1`
+  ).get() as { syncLogId?: number } | undefined;
+
+  return row?.syncLogId ?? null;
+};
+
+const previousSqliteSnapshotLog = (db: ReturnType<typeof openSqliteSpikeDb>, tableName: string, latestSyncId: number) => {
+  const row = db.prepare(
+    `SELECT DISTINCT t.sync_log_id AS syncLogId
+     FROM ${tableName} t
+     JOIN sync_logs s ON s.id = t.sync_log_id
+     WHERE s.status = 'success'
+       AND t.sync_log_id < ?
+     ORDER BY t.sync_log_id DESC
+     LIMIT 1`
+  ).get(latestSyncId) as { syncLogId?: number } | undefined;
+
+  return row?.syncLogId ?? null;
+};
+
+const loadSqliteMemberSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  db.prepare(
+    `SELECT
+      lcr_member_id AS lcrMemberId,
+      full_name AS fullName,
+      unit_name AS unitName,
+      move_in_date AS moveInDate,
+      row_hash AS rowHash,
+      snapshot_data AS snapshotData
+     FROM sync_member_snapshots
+     WHERE sync_log_id = ?`
+  ).all(syncLogId).map((row) => ({
+    ...(row as Omit<SqliteMemberSnapshotRow, "snapshotData"> & { snapshotData: string }),
+    snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
+  })) as SqliteMemberSnapshotRow[];
+
+const loadSqliteCallingSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  db.prepare(
+    `SELECT
+      lcr_calling_id AS lcrCallingId,
+      unit_name AS unitName,
+      member_lcr_member_id AS memberLcrMemberId,
+      member_name AS memberName,
+      calling_title AS callingTitle,
+      is_current AS isCurrent,
+      sustained_on AS sustainedOn,
+      released_on AS releasedOn,
+      row_hash AS rowHash,
+      snapshot_data AS snapshotData
+     FROM sync_calling_snapshots
+     WHERE sync_log_id = ?`
+  ).all(syncLogId).map((row) => ({
+    ...(row as Omit<SqliteCallingSnapshotRow, "snapshotData" | "isCurrent"> & { snapshotData: string; isCurrent: number }),
+    isCurrent: (row as { isCurrent: number }).isCurrent === 1,
+    snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
+  })) as SqliteCallingSnapshotRow[];
+
+const loadSqliteEmailSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  db.prepare(
+    `SELECT
+      member_lcr_member_id AS memberLcrMemberId,
+      full_name AS fullName,
+      unit_name AS unitName,
+      email AS value,
+      row_hash AS rowHash,
+      snapshot_data AS snapshotData
+     FROM sync_email_snapshots
+     WHERE sync_log_id = ?`
+  ).all(syncLogId).map((row) => ({
+    ...(row as Omit<SqliteContactSnapshotRow, "snapshotData"> & { snapshotData: string }),
+    snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
+  })) as SqliteContactSnapshotRow[];
+
+const loadSqlitePhoneSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  db.prepare(
+    `SELECT
+      member_lcr_member_id AS memberLcrMemberId,
+      full_name AS fullName,
+      unit_name AS unitName,
+      phone_number AS value,
+      row_hash AS rowHash,
+      snapshot_data AS snapshotData
+     FROM sync_phone_snapshots
+     WHERE sync_log_id = ?`
+  ).all(syncLogId).map((row) => ({
+    ...(row as Omit<SqliteContactSnapshotRow, "snapshotData"> & { snapshotData: string }),
+    snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
+  })) as SqliteContactSnapshotRow[];
+
+export const getSqliteSpikeSyncDiffReport = async (options: { limit?: number } = {}): Promise<SqliteSpikeSyncDiffReport> => {
+  const safeLimit = Math.max(1, Math.min(options.limit ?? 30, 200));
+  const status = getSqliteSpikeStatus();
+
+  if (!status.exists) {
+    return {
+      latestSync: null,
+      previousSync: null,
+      windowStart: null,
+      windowEnd: null,
+      coverage: {
+        members: buildSnapshotCoverage(null, null),
+        callings: buildSnapshotCoverage(null, null),
+        emails: buildSnapshotCoverage(null, null),
+        phones: buildSnapshotCoverage(null, null)
+      },
+      comparisonWindows: {
+        members: { start: null, end: null },
+        callings: { start: null, end: null },
+        emails: { start: null, end: null },
+        phones: { start: null, end: null }
+      },
+      counts: {
+        membersChanged: 0,
+        membersAdded: 0,
+        membersRemoved: 0,
+        membersUpdated: 0,
+        callingsChanged: 0,
+        callingsAdded: 0,
+        callingsRemoved: 0,
+        callingsUpdated: 0,
+        organizationChanged: 0,
+        unitChanged: 0,
+        emailChanged: 0,
+        emailAdded: 0,
+        emailRemoved: 0,
+        emailUpdated: 0,
+        phoneChanged: 0,
+        phoneAdded: 0,
+        phoneRemoved: 0,
+        phoneUpdated: 0
+      },
+      members: [],
+      callings: [],
+      contacts: []
+    };
+  }
+
+  const db = openSqliteSpikeDb();
+  try {
+    const logs = loadLatestSqliteSuccessLogs(db, 10);
+    const latest = logs[0] ?? null;
+    const previous = logs[1] ?? null;
+
+    if (!latest?.completedAt) {
+      return {
+        latestSync: latest,
+        previousSync: previous,
+        windowStart: null,
+        windowEnd: null,
+        coverage: {
+          members: buildSnapshotCoverage(null, null),
+          callings: buildSnapshotCoverage(null, null),
+          emails: buildSnapshotCoverage(null, null),
+          phones: buildSnapshotCoverage(null, null)
+        },
+        comparisonWindows: {
+          members: { start: null, end: null },
+          callings: { start: null, end: null },
+          emails: { start: null, end: null },
+          phones: { start: null, end: null }
+        },
+        counts: {
+          membersChanged: 0,
+          membersAdded: 0,
+          membersRemoved: 0,
+          membersUpdated: 0,
+          callingsChanged: 0,
+          callingsAdded: 0,
+          callingsRemoved: 0,
+          callingsUpdated: 0,
+          organizationChanged: 0,
+          unitChanged: 0,
+          emailChanged: 0,
+          emailAdded: 0,
+          emailRemoved: 0,
+          emailUpdated: 0,
+          phoneChanged: 0,
+          phoneAdded: 0,
+          phoneRemoved: 0,
+          phoneUpdated: 0
+        },
+        members: [],
+        callings: [],
+        contacts: []
+      };
+    }
+
+    const windowEnd = latest.completedAt;
+    const windowStart = previous?.completedAt ?? null;
+
+    const latestMemberSnapshotLogId = latestSqliteSnapshotLog(db, "sync_member_snapshots");
+    const latestCallingSnapshotLogId = latestSqliteSnapshotLog(db, "sync_calling_snapshots");
+    const latestEmailSnapshotLogId = latestSqliteSnapshotLog(db, "sync_email_snapshots");
+    const latestPhoneSnapshotLogId = latestSqliteSnapshotLog(db, "sync_phone_snapshots");
+
+    const previousMemberSnapshotLogId = latestMemberSnapshotLogId ? previousSqliteSnapshotLog(db, "sync_member_snapshots", latestMemberSnapshotLogId) : null;
+    const previousCallingSnapshotLogId = latestCallingSnapshotLogId ? previousSqliteSnapshotLog(db, "sync_calling_snapshots", latestCallingSnapshotLogId) : null;
+    const previousEmailSnapshotLogId = latestEmailSnapshotLogId ? previousSqliteSnapshotLog(db, "sync_email_snapshots", latestEmailSnapshotLogId) : null;
+    const previousPhoneSnapshotLogId = latestPhoneSnapshotLogId ? previousSqliteSnapshotLog(db, "sync_phone_snapshots", latestPhoneSnapshotLogId) : null;
+
+    const memberCoverage = buildSnapshotCoverage(latestMemberSnapshotLogId, previousMemberSnapshotLogId);
+    const callingCoverage = buildSnapshotCoverage(latestCallingSnapshotLogId, previousCallingSnapshotLogId);
+    const emailCoverage = buildSnapshotCoverage(latestEmailSnapshotLogId, previousEmailSnapshotLogId);
+    const phoneCoverage = buildSnapshotCoverage(latestPhoneSnapshotLogId, previousPhoneSnapshotLogId);
+
+    const latestMemberSnapshotLog = latestMemberSnapshotLogId ? loadSqliteSnapshotLog(db, latestMemberSnapshotLogId) : null;
+    const previousMemberSnapshotLog = previousMemberSnapshotLogId ? loadSqliteSnapshotLog(db, previousMemberSnapshotLogId) : null;
+    const latestCallingSnapshotLog = latestCallingSnapshotLogId ? loadSqliteSnapshotLog(db, latestCallingSnapshotLogId) : null;
+    const previousCallingSnapshotLog = previousCallingSnapshotLogId ? loadSqliteSnapshotLog(db, previousCallingSnapshotLogId) : null;
+    const latestEmailSnapshotLog = latestEmailSnapshotLogId ? loadSqliteSnapshotLog(db, latestEmailSnapshotLogId) : null;
+    const previousEmailSnapshotLog = previousEmailSnapshotLogId ? loadSqliteSnapshotLog(db, previousEmailSnapshotLogId) : null;
+    const latestPhoneSnapshotLog = latestPhoneSnapshotLogId ? loadSqliteSnapshotLog(db, latestPhoneSnapshotLogId) : null;
+    const previousPhoneSnapshotLog = previousPhoneSnapshotLogId ? loadSqliteSnapshotLog(db, previousPhoneSnapshotLogId) : null;
+
+    const memberWindowEnd = latestMemberSnapshotLog?.completedAt ?? windowEnd;
+    const callingWindowEnd = latestCallingSnapshotLog?.completedAt ?? windowEnd;
+    const emailWindowEnd = latestEmailSnapshotLog?.completedAt ?? windowEnd;
+    const phoneWindowEnd = latestPhoneSnapshotLog?.completedAt ?? windowEnd;
+
+    const latestMemberSnapshots = latestMemberSnapshotLogId && previousMemberSnapshotLogId ? loadSqliteMemberSnapshots(db, latestMemberSnapshotLogId) : [];
+    const previousMemberSnapshots = previousMemberSnapshotLogId ? loadSqliteMemberSnapshots(db, previousMemberSnapshotLogId) : [];
+    const latestCallingSnapshots = latestCallingSnapshotLogId && previousCallingSnapshotLogId ? loadSqliteCallingSnapshots(db, latestCallingSnapshotLogId) : [];
+    const previousCallingSnapshots = previousCallingSnapshotLogId ? loadSqliteCallingSnapshots(db, previousCallingSnapshotLogId) : [];
+    const latestEmailSnapshots = latestEmailSnapshotLogId && previousEmailSnapshotLogId ? loadSqliteEmailSnapshots(db, latestEmailSnapshotLogId) : [];
+    const previousEmailSnapshots = previousEmailSnapshotLogId ? loadSqliteEmailSnapshots(db, previousEmailSnapshotLogId) : [];
+    const latestPhoneSnapshots = latestPhoneSnapshotLogId && previousPhoneSnapshotLogId ? loadSqlitePhoneSnapshots(db, latestPhoneSnapshotLogId) : [];
+    const previousPhoneSnapshots = previousPhoneSnapshotLogId ? loadSqlitePhoneSnapshots(db, previousPhoneSnapshotLogId) : [];
+
+    const memberChanges: SqliteSpikeSyncDiffReport["members"] = [];
+    let membersAdded = 0;
+    let membersRemoved = 0;
+    let membersUpdated = 0;
+
+    if (latestMemberSnapshotLogId && previousMemberSnapshotLogId) {
+      const previousById = new Map(previousMemberSnapshots.map((row) => [row.lcrMemberId, row]));
+
+      for (const row of latestMemberSnapshots) {
+        const previousRow = previousById.get(row.lcrMemberId);
+        if (!previousRow) {
+          membersAdded += 1;
+          memberChanges.push({
+            lcrMemberId: row.lcrMemberId,
+            fullName: row.fullName,
+            unitName: row.unitName ?? "Unknown",
+            moveInDate: row.moveInDate,
+            changeType: "Added",
+            changedFields: [],
+            updatedAt: memberWindowEnd
+          });
+          continue;
+        }
+
+        if (row.rowHash !== previousRow.rowHash) {
+          membersUpdated += 1;
+          memberChanges.push({
+            lcrMemberId: row.lcrMemberId,
+            fullName: row.fullName,
+            unitName: row.unitName ?? "Unknown",
+            moveInDate: row.moveInDate,
+            changeType: "Changed",
+            changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData, ["unitId", "householdId"]),
+            updatedAt: memberWindowEnd
+          });
+        }
+
+        previousById.delete(row.lcrMemberId);
+      }
+
+      for (const row of previousById.values()) {
+        membersRemoved += 1;
+        memberChanges.push({
+          lcrMemberId: row.lcrMemberId,
+          fullName: row.fullName,
+          unitName: row.unitName ?? "Unknown",
+          moveInDate: row.moveInDate,
+          changeType: "Removed",
+          changedFields: [],
+          updatedAt: memberWindowEnd
+        });
+      }
+    }
+
+    const callingChanges: SqliteSpikeSyncDiffReport["callings"] = [];
+    let callingsAdded = 0;
+    let callingsRemoved = 0;
+    let callingsUpdated = 0;
+
+    if (latestCallingSnapshotLogId && previousCallingSnapshotLogId) {
+      const previousById = new Map(previousCallingSnapshots.map((row) => [row.lcrCallingId, row]));
+
+      for (const row of latestCallingSnapshots) {
+        const previousRow = previousById.get(row.lcrCallingId);
+        if (!previousRow) {
+          callingsAdded += 1;
+          callingChanges.push({
+            lcrCallingId: row.lcrCallingId,
+            unitName: row.unitName ?? "Unknown",
+            callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
+            isCurrent: row.isCurrent,
+            sustainedOn: row.sustainedOn,
+            releasedOn: row.releasedOn,
+            changeType: "Added",
+            changedFields: [],
+            updatedAt: callingWindowEnd
+          });
+          continue;
+        }
+
+        if (row.rowHash !== previousRow.rowHash) {
+          callingsUpdated += 1;
+          callingChanges.push({
+            lcrCallingId: row.lcrCallingId,
+            unitName: row.unitName ?? previousRow.unitName ?? "Unknown",
+            callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
+            isCurrent: row.isCurrent,
+            sustainedOn: row.sustainedOn,
+            releasedOn: row.releasedOn,
+            changeType: previousRow.isCurrent && !row.isCurrent ? "Released" : "Updated",
+            changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData, ["unitNumber", "lcrMemberId", "lcrOrganizationId"]),
+            updatedAt: callingWindowEnd
+          });
+        }
+
+        previousById.delete(row.lcrCallingId);
+      }
+
+      for (const row of previousById.values()) {
+        callingsRemoved += 1;
+        callingChanges.push({
+          lcrCallingId: row.lcrCallingId,
+          unitName: row.unitName ?? "Unknown",
+          callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
+          isCurrent: row.isCurrent,
+          sustainedOn: row.sustainedOn,
+          releasedOn: row.releasedOn,
+          changeType: "Removed",
+          changedFields: [],
+          updatedAt: callingWindowEnd
+        });
+      }
+    }
+
+    const contactChanges: SqliteSpikeSyncDiffReport["contacts"] = [];
+    let emailAdded = 0;
+    let emailRemoved = 0;
+    let emailUpdated = 0;
+    let phoneAdded = 0;
+    let phoneRemoved = 0;
+    let phoneUpdated = 0;
+
+    const diffContacts = (
+      contactType: "Email" | "Phone",
+      currentRows: SqliteContactSnapshotRow[],
+      previousRows: SqliteContactSnapshotRow[]
+    ) => {
+      const previousByKey = new Map(previousRows.map((row) => [`${row.memberLcrMemberId}|${row.value}`, row]));
+
+      for (const row of currentRows) {
+        const key = `${row.memberLcrMemberId}|${row.value}`;
+        const previousRow = previousByKey.get(key);
+        if (!previousRow) {
+          if (contactType === "Email") {
+            emailAdded += 1;
+          } else {
+            phoneAdded += 1;
+          }
+          contactChanges.push({
+            contactType,
+            memberLcrMemberId: row.memberLcrMemberId,
+            fullName: row.fullName,
+            unitName: row.unitName ?? "Unknown",
+            value: row.value,
+            changeType: "Added",
+            changedFields: [],
+            updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
+          });
+          continue;
+        }
+
+        if (row.rowHash !== previousRow.rowHash) {
+          if (contactType === "Email") {
+            emailUpdated += 1;
+          } else {
+            phoneUpdated += 1;
+          }
+          contactChanges.push({
+            contactType,
+            memberLcrMemberId: row.memberLcrMemberId,
+            fullName: row.fullName,
+            unitName: row.unitName ?? "Unknown",
+            value: row.value,
+            changeType: "Changed",
+            changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData),
+            updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
+          });
+        }
+
+        previousByKey.delete(key);
+      }
+
+      for (const row of previousByKey.values()) {
+        if (contactType === "Email") {
+          emailRemoved += 1;
+        } else {
+          phoneRemoved += 1;
+        }
+        contactChanges.push({
+          contactType,
+          memberLcrMemberId: row.memberLcrMemberId,
+          fullName: row.fullName,
+          unitName: row.unitName ?? "Unknown",
+          value: row.value,
+          changeType: "Removed",
+          changedFields: [],
+          updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
+        });
+      }
+    };
+
+    if (latestEmailSnapshotLogId && previousEmailSnapshotLogId) {
+      diffContacts("Email", latestEmailSnapshots, previousEmailSnapshots);
+    }
+    if (latestPhoneSnapshotLogId && previousPhoneSnapshotLogId) {
+      diffContacts("Phone", latestPhoneSnapshots, previousPhoneSnapshots);
+    }
+
+    return {
+      latestSync: latest,
+      previousSync: previous,
+      windowStart,
+      windowEnd,
+      coverage: {
+        members: memberCoverage,
+        callings: callingCoverage,
+        emails: emailCoverage,
+        phones: phoneCoverage
+      },
+      comparisonWindows: {
+        members: { start: previousMemberSnapshotLog?.completedAt ?? null, end: latestMemberSnapshotLog?.completedAt ?? null },
+        callings: { start: previousCallingSnapshotLog?.completedAt ?? null, end: latestCallingSnapshotLog?.completedAt ?? null },
+        emails: { start: previousEmailSnapshotLog?.completedAt ?? null, end: latestEmailSnapshotLog?.completedAt ?? null },
+        phones: { start: previousPhoneSnapshotLog?.completedAt ?? null, end: latestPhoneSnapshotLog?.completedAt ?? null }
+      },
+      counts: {
+        membersChanged: membersAdded + membersRemoved + membersUpdated,
+        membersAdded,
+        membersRemoved,
+        membersUpdated,
+        callingsChanged: callingsAdded + callingsRemoved + callingsUpdated,
+        callingsAdded,
+        callingsRemoved,
+        callingsUpdated,
+        organizationChanged: 0,
+        unitChanged: 0,
+        emailChanged: emailAdded + emailRemoved + emailUpdated,
+        emailAdded,
+        emailRemoved,
+        emailUpdated,
+        phoneChanged: phoneAdded + phoneRemoved + phoneUpdated,
+        phoneAdded,
+        phoneRemoved,
+        phoneUpdated
+      },
+      members: memberChanges.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.fullName.localeCompare(right.fullName)).slice(0, safeLimit),
+      callings: callingChanges.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.callingTitle.localeCompare(right.callingTitle)).slice(0, safeLimit),
+      contacts: contactChanges.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.fullName.localeCompare(right.fullName)).slice(0, safeLimit)
+    };
+  } finally {
+    db.close();
+  }
+};
+
 export const loadSqliteSpikeStakeOverviewPageData = async () => {
   const status = getSqliteSpikeStatus();
   const fullReports = await loadSqliteSpikeFullReportsData();
   const dashboard = await loadSqliteSpikeDashboardData();
+  const syncDiff = await getSqliteSpikeSyncDiffReport({ limit: 30 });
   if (!status.exists || status.members === 0) {
     return {
       overview: { totalMembers: 0, currentCallings: 0, membersWithCurrentCalling: 0, membersWithoutCurrentCalling: 0, latestSync: null },
       turnover: [],
       converts: [],
-      syncDiff: null,
+      syncDiff,
       unitHealthRadar: [] as UnitHealthRadarRow[]
     };
   }
@@ -2100,7 +2749,7 @@ export const loadSqliteSpikeStakeOverviewPageData = async () => {
       overview,
       turnover: monthKeys.map((month) => ({ month, sustained: sustainedMap.get(month) ?? 0, released: releasedMap.get(month) ?? 0 })),
       converts: monthKeys.map((month) => ({ month, converts: convertMap.get(month) ?? 0 })),
-      syncDiff: null,
+      syncDiff,
       unitHealthRadar
     };
   } finally {

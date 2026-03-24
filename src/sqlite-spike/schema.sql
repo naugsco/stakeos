@@ -127,3 +127,72 @@ CREATE TABLE IF NOT EXISTS sync_logs (
   error_message TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS sync_member_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_log_id INTEGER NOT NULL,
+  lcr_member_id TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  unit_name TEXT,
+  move_in_date TEXT,
+  row_hash TEXT NOT NULL,
+  snapshot_data TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (sync_log_id, lcr_member_id),
+  FOREIGN KEY (sync_log_id) REFERENCES sync_logs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sync_calling_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_log_id INTEGER NOT NULL,
+  lcr_calling_id TEXT NOT NULL,
+  unit_name TEXT,
+  member_lcr_member_id TEXT,
+  member_name TEXT,
+  calling_title TEXT NOT NULL,
+  is_current INTEGER NOT NULL,
+  sustained_on TEXT,
+  released_on TEXT,
+  row_hash TEXT NOT NULL,
+  snapshot_data TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (sync_log_id, lcr_calling_id),
+  FOREIGN KEY (sync_log_id) REFERENCES sync_logs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sync_email_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_log_id INTEGER NOT NULL,
+  member_lcr_member_id TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  unit_name TEXT,
+  email TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
+  snapshot_data TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (sync_log_id, member_lcr_member_id, email),
+  FOREIGN KEY (sync_log_id) REFERENCES sync_logs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sync_phone_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sync_log_id INTEGER NOT NULL,
+  member_lcr_member_id TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  unit_name TEXT,
+  phone_number TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
+  snapshot_data TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (sync_log_id, member_lcr_member_id, phone_number),
+  FOREIGN KEY (sync_log_id) REFERENCES sync_logs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_member_snapshots_log ON sync_member_snapshots(sync_log_id);
+CREATE INDEX IF NOT EXISTS idx_sync_member_snapshots_member ON sync_member_snapshots(lcr_member_id);
+CREATE INDEX IF NOT EXISTS idx_sync_calling_snapshots_log ON sync_calling_snapshots(sync_log_id);
+CREATE INDEX IF NOT EXISTS idx_sync_calling_snapshots_calling ON sync_calling_snapshots(lcr_calling_id);
+CREATE INDEX IF NOT EXISTS idx_sync_email_snapshots_log ON sync_email_snapshots(sync_log_id);
+CREATE INDEX IF NOT EXISTS idx_sync_email_snapshots_member ON sync_email_snapshots(member_lcr_member_id);
+CREATE INDEX IF NOT EXISTS idx_sync_phone_snapshots_log ON sync_phone_snapshots(sync_log_id);
+CREATE INDEX IF NOT EXISTS idx_sync_phone_snapshots_member ON sync_phone_snapshots(member_lcr_member_id);

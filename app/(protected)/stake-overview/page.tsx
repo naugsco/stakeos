@@ -21,25 +21,23 @@ const syncCoverageHint = (status: string, readyLabel: string) => {
 export default async function StakeOverviewPage({ searchParams }: { searchParams?: { source?: string } }) {
   const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
   const data = await loadStakeOverviewPageDataBySource(source);
-  const contactCoverageReady =
-    source === "postgres" && data.syncDiff
-      ? data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready
-      : false;
-  const contactCoverageStatus =
-    source === "postgres" && data.syncDiff
-      ? data.syncDiff.coverage.emails.status === "not-seeded" && data.syncDiff.coverage.phones.status === "not-seeded"
-        ? "not-seeded"
-        : contactCoverageReady
-          ? "ready"
-          : "baseline-established"
-      : "not-seeded";
+  const contactCoverageReady = data.syncDiff
+    ? data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready
+    : false;
+  const contactCoverageStatus = data.syncDiff
+    ? data.syncDiff.coverage.emails.status === "not-seeded" && data.syncDiff.coverage.phones.status === "not-seeded"
+      ? "not-seeded"
+      : contactCoverageReady
+        ? "ready"
+        : "baseline-established"
+    : "not-seeded";
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Stake Overview</h1>
-          <p className="text-sm text-slate-600">{source === "sqlite" ? "SQLite-backed overview. Exact sync-diff snapshots are not ported yet." : "PostgreSQL-backed overview with exact sync-diff history."}</p>
+          <p className="text-sm text-slate-600">{source === "sqlite" ? "SQLite-backed overview with exact sync-diff snapshots." : "PostgreSQL-backed overview with exact sync-diff history."}</p>
         </div>
         <Link href={source === "sqlite" ? "/stake-overview?source=postgres" : "/stake-overview"} className="inline-flex w-fit rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 shadow-sm hover:bg-amber-50">
           {source === "sqlite" ? "Switch To PostgreSQL Overview" : "Switch To SQLite Overview"}
@@ -67,7 +65,7 @@ export default async function StakeOverviewPage({ searchParams }: { searchParams
         <UnitHealthRadarPanel rows={data.unitHealthRadar} />
       </section>
 
-      {source === "postgres" && data.syncDiff ? (
+      {data.syncDiff ? (
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Changes Since Last Sync</h2>
         <div className="grid gap-4 md:grid-cols-3">
@@ -244,11 +242,7 @@ export default async function StakeOverviewPage({ searchParams }: { searchParams
           </div>
         </div>
       </section>
-      ) : (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Exact sync-diff history is still PostgreSQL-only on this branch. SQLite overview currently supports member counts, turnover, convert growth, and unit health.
-        </section>
-      )}
+      ) : null}
     </div>
   );
 }
