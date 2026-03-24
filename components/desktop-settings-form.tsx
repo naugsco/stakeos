@@ -164,6 +164,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const [autoScrollLog, setAutoScrollLog] = useState(true);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const logRef = useRef<HTMLPreElement | null>(null);
+  const autoRedirectAfterSyncRef = useRef(false);
 
   const missingLabel = useMemo(
     () => snapshot.status.missing.map((field) => field.replaceAll("_", " ")).join(", "),
@@ -258,8 +259,16 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     void (async () => {
       const refreshed = await refreshSnapshot().catch(() => null);
       if (!cancelled && refreshed?.status.firstSyncCompleted) {
-        setMessage("First full sync completed. Continue to optional settings or open the dashboard.");
-        setWizardStep("optional");
+        if (autoRedirectAfterSyncRef.current) {
+          return;
+        }
+
+        autoRedirectAfterSyncRef.current = true;
+        setOpeningDashboard(true);
+        setMessage("First full sync completed. Opening the dashboard now.");
+        window.setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 1200);
       }
     })();
 
@@ -469,7 +478,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         setMessage("Run a successful full sync before continuing.");
         return;
       }
-      setWizardStep("optional");
+      setOpeningDashboard(true);
+      setMessage("First full sync completed. Opening the dashboard now.");
+      window.location.href = "/dashboard";
       return;
     }
 

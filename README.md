@@ -3,6 +3,7 @@
 StakeOS is a private local AI assistant system for stake leadership, built around LCR browser automation and a local leadership intelligence database.
 
 For a first-time public installation walkthrough, start with [StakeOS Installation Guide](./FIRST_TIME_SETUP.md).
+For desktop packaging and GitHub release workflow, use [StakeOS Desktop Release Guide](./DESKTOP_RELEASE.md).
 
 ## Stack
 
@@ -104,6 +105,22 @@ What it does:
 - starts a local desktop-only StakeOS server on port `3232`
 - opens StakeOS in an Electron app window instead of the browser
 
+### Desktop Release
+
+Validation build:
+
+```bash
+npm run desktop:pack
+```
+
+Release zip:
+
+```bash
+npm run desktop:release
+```
+
+Release artifacts are written to `release/`.
+
 ### Dashboard
 
 ```bash
@@ -179,6 +196,8 @@ npm run mcp:dev
 npm run mcp:build
 npm run mcp:start
 npm run desktop:start
+npm run desktop:pack
+npm run desktop:release
 ```
 
 ## Project Structure

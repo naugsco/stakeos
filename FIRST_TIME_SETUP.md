@@ -9,6 +9,8 @@ StakeOS runs locally on your machine. It uses:
 
 This guide is written for a first-time macOS setup.
 
+If you want to build the packaged desktop app after setup is working, use [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md).
+
 ## What You Will End Up With
 
 By the end of this guide, you will have:

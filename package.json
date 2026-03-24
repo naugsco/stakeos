@@ -11,8 +11,10 @@
     "build": "next build && npm run build:backend",
     "build:backend": "tsup src/mcp/server.ts src/scripts/runFullSync.ts src/scripts/runCallingSync.ts src/db/migrate.ts src/scripts/seedSyncSnapshots.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
     "desktop:start": "electron electron/main.cjs",
+    "desktop:clean": "rm -rf release",
     "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:dist": "npm run build && electron-builder",
+    "desktop:release": "npm run desktop:clean && npm run build && electron-builder --mac zip",
+    "desktop:dist": "npm run desktop:release",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -62,8 +64,10 @@
     "icon": "build/icon.icns",
     "asar": false,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "artifactName": "StakeOS-Desktop-${version}-${arch}.${ext}",
     "files": [
       "electron/**/*",
       ".next/**/*",
