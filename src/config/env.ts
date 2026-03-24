@@ -48,7 +48,7 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   LCR_DIRECTORY_URL: z.preprocess(
     emptyStringToUndefined,
-    z.string().url().default("https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/YOUR-REPORT-ID")
+    z.string().min(1).default("https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/YOUR-REPORT-ID")
   ),
   LCR_TIMEOUT_MS: z
     .string()

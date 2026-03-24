@@ -77,10 +77,33 @@ function getInitialDesktopRoute() {
 
   const lcrUrl = `${effectiveConfig.LCR_DIRECTORY_URL || ''}`.trim();
   const databaseUrl = `${effectiveConfig.DATABASE_URL || ''}`.trim();
+  const hasValidDatabaseUrl = (() => {
+    if (!databaseUrl) {
+      return false;
+    }
+
+    try {
+      const parsed = new URL(databaseUrl);
+      return parsed.protocol === 'postgres:' || parsed.protocol === 'postgresql:';
+    } catch {
+      return false;
+    }
+  })();
+  const hasValidLcrUrl = (() => {
+    if (!lcrUrl || lcrUrl.includes('YOUR-REPORT-ID')) {
+      return false;
+    }
+
+    try {
+      const parsed = new URL(lcrUrl);
+      return parsed.hostname === 'lcr.churchofjesuschrist.org' && /\/mlt\/report\//.test(parsed.pathname);
+    } catch {
+      return false;
+    }
+  })();
   const hasRequiredSettings =
-    Boolean(databaseUrl) &&
-    Boolean(lcrUrl) &&
-    !lcrUrl.includes('YOUR-REPORT-ID');
+    hasValidDatabaseUrl &&
+    hasValidLcrUrl;
 
   return hasRequiredSettings ? '/dashboard' : '/settings?setup=1';
 }

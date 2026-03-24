@@ -6,20 +6,20 @@ import { Pool } from "pg";
 import { z } from "zod";
 
 const desktopConfigSchema = z.object({
-  DATABASE_URL: z.string().min(1).optional(),
-  LCR_DIRECTORY_URL: z.string().min(1).optional(),
-  PLAYWRIGHT_USER_DATA_DIR: z.string().min(1).optional(),
-  PLAYWRIGHT_HEADLESS: z.string().min(1).optional(),
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z.string().min(1).optional(),
-  SMTP_SECURE: z.string().min(1).optional(),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASS: z.string().min(1).optional(),
-  SMTP_FROM: z.string().min(1).optional(),
-  STAKE_NAME: z.string().min(1).optional(),
-  UNIT_NUMBER: z.string().min(1).optional(),
-  STAKE_PRESIDENCY_EMAILS: z.string().min(1).optional(),
-  STAKE_COUNCIL_EMAILS: z.string().min(1).optional()
+  DATABASE_URL: z.string().optional(),
+  LCR_DIRECTORY_URL: z.string().optional(),
+  PLAYWRIGHT_USER_DATA_DIR: z.string().optional(),
+  PLAYWRIGHT_HEADLESS: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+  STAKE_NAME: z.string().optional(),
+  UNIT_NUMBER: z.string().optional(),
+  STAKE_PRESIDENCY_EMAILS: z.string().optional(),
+  STAKE_COUNCIL_EMAILS: z.string().optional()
 });
 
 export type DesktopConfig = z.infer<typeof desktopConfigSchema>;
@@ -90,7 +90,7 @@ export const loadProjectEnvConfig = (): DesktopConfig => {
 const normalizeInput = (config: DesktopConfig): DesktopConfig => {
   const normalizedEntries = Object.entries(config)
     .map(([key, value]) => [key, typeof value === "string" ? value.trim() : value] as const)
-    .filter(([, value]) => Boolean(value));
+    .filter(([, value]) => value !== undefined);
 
   return desktopConfigSchema.parse(Object.fromEntries(normalizedEntries));
 };
@@ -116,14 +116,48 @@ export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env)
   ...loadDesktopConfig()
 });
 
+const isValidDatabaseUrl = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return ["postgres:", "postgresql:"].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+};
+
+const isValidLcrUrl = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname === "lcr.churchofjesuschrist.org" && /\/mlt\/report\//.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+};
+
 const isMissingValue = (key: typeof REQUIRED_FIELDS[number], effectiveEnv: Record<string, string | undefined>) => {
   const value = effectiveEnv[key]?.trim();
   if (!value) {
     return true;
   }
 
-  if (key === "LCR_DIRECTORY_URL" && value.includes("YOUR-REPORT-ID")) {
-    return true;
+  if (key === "DATABASE_URL") {
+    return !isValidDatabaseUrl(value);
+  }
+
+  if (key === "LCR_DIRECTORY_URL") {
+    if (value.includes("YOUR-REPORT-ID")) {
+      return true;
+    }
+
+    return !isValidLcrUrl(value);
   }
 
   return false;
