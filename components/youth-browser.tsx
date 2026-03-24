@@ -130,8 +130,9 @@ export function YouthBrowser({
   missionEligible,
   missionYouthPipeline,
   seminaryInstituteOpportunity,
-  endowment
-}: YouthBrowserProps) {
+  endowment,
+  source = "postgres"
+}: YouthBrowserProps & { source?: "postgres" | "sqlite" }) {
   const [servingSortKey, setServingSortKey] = useState<
     "unitName" | "fullName" | "age" | "missionCountry" | "missionStatus"
   >("unitName");
@@ -418,7 +419,7 @@ export function YouthBrowser({
                 <tr key={`${row.lcrMemberId}-${index}`} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{row.unitName}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
+                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
                   </td>
                   <td className="px-4 py-3">{row.age ?? "-"}</td>
                   <td className="px-4 py-3">{row.gender ?? "-"}</td>
@@ -477,7 +478,7 @@ export function YouthBrowser({
                 <tr key={row.lcrMemberId} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{row.unitName}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
+                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
                   </td>
                   <td className="px-4 py-3">{row.age ?? "-"}</td>
                   <td className="px-4 py-3">{boolLabel(row.potentialFlag)}</td>

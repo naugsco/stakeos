@@ -40,7 +40,7 @@ const compareValues = (a: string | null, b: string | null, direction: SortDirect
   return direction === "asc" ? result : -result;
 };
 
-function CommitteeTable({ committee }: { committee: Committee }) {
+function CommitteeTable({ committee, source = "postgres" }: { committee: Committee; source?: "postgres" | "sqlite" }) {
   const [sortKey, setSortKey] = useState<SortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const mailtoHref = useMemo(() => {
@@ -140,7 +140,7 @@ function CommitteeTable({ committee }: { committee: Committee }) {
             {sortedMembers.map((member) => (
               <tr key={`${committee.key}-${member.lcrMemberId}-${member.callingTitle}`} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-900">
-                  <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
+                  <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} source={source} />
                 </td>
                 <td className="px-4 py-3">{member.unitName ?? "-"}</td>
                 <td className="px-4 py-3">{member.callingTitle}</td>
@@ -154,11 +154,11 @@ function CommitteeTable({ committee }: { committee: Committee }) {
   );
 }
 
-export function CommitteesBrowser({ committees }: { committees: Committee[] }) {
+export function CommitteesBrowser({ committees, source = "postgres" }: { committees: Committee[]; source?: "postgres" | "sqlite" }) {
   return (
     <div className="space-y-6">
       {committees.map((committee) => (
-        <CommitteeTable key={committee.key} committee={committee} />
+        <CommitteeTable key={committee.key} committee={committee} source={source} />
       ))}
     </div>
   );

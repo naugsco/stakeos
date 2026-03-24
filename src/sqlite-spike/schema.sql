@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS members (
   is_born_in_covenant INTEGER,
   is_divorced INTEGER,
   is_married INTEGER,
+  is_single INTEGER,
   marriage_date TEXT,
   marriage_status TEXT,
   is_attending_seminary INTEGER,

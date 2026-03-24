@@ -99,12 +99,12 @@ const persistMembers = (
       baptism_date, confirmation_date, endowment_date, endowment_status, temple_endowed,
       temple_recommend_status, temple_recommend_expiration_date, temple_recommend_type,
       mission_status, mission_language, mission_country, is_returned_missionary, is_accountable, is_born_in_covenant,
-      is_divorced, is_married, marriage_date, marriage_status,
+      is_divorced, is_married, is_single, marriage_date, marriage_status,
       is_attending_seminary, is_attending_institute, potential_institute_student, potential_seminary_student,
       has_ministering_brothers, has_ministering_sisters, ministering_brothers, ministering_sisters,
       spouse_name, head_of_house, household_position, sealing_to_parents, sealing_to_spouse,
       priesthood_type, priesthood_office, ordination_date, institute_status, seminary_status, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   for (const member of snapshot.members) {
@@ -151,6 +151,7 @@ const persistMembers = (
       boolToInt(member.isBornInCovenant),
       boolToInt(member.isDivorced),
       boolToInt(member.isMarried),
+      boolToInt(member.isSingle),
       member.marriageDate ?? null,
       member.marriageStatus ?? null,
       boolToInt(member.isAttendingSeminary),

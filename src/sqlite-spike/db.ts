@@ -55,6 +55,7 @@ export const ensureSqliteSpikeSchema = (db: Database.Database) => {
     { name: "is_born_in_covenant", type: "INTEGER" },
     { name: "is_divorced", type: "INTEGER" },
     { name: "is_married", type: "INTEGER" },
+    { name: "is_single", type: "INTEGER" },
     { name: "marriage_date", type: "TEXT" },
     { name: "marriage_status", type: "TEXT" },
     { name: "potential_institute_student", type: "INTEGER" },

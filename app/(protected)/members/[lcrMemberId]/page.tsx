@@ -16,7 +16,7 @@ interface MemberDetailPageProps {
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
 export default async function MemberDetailPage({ params, searchParams }: MemberDetailPageProps) {
-  const source = searchParams?.source === "sqlite" ? "sqlite" : "postgres";
+  const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
   const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, source);
   if (!member) {
     notFound();
@@ -26,7 +26,7 @@ export default async function MemberDetailPage({ params, searchParams }: MemberD
     <div className="space-y-6">
       <header className="space-y-2">
         <Link
-          href={source === "sqlite" ? "/members?source=sqlite" : "/members"}
+          href={source === "sqlite" ? "/members" : "/members?source=postgres"}
           className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
         >
           ← Back to Members

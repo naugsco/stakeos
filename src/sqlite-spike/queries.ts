@@ -1,7 +1,13 @@
 import { getSqliteSpikeStatus, openSqliteSpikeDb } from "@/src/sqlite-spike/db";
 import type {
+  CommitteeMemberRow,
+  CommitteeRoster,
   CovenantPathProgressionRow,
+  CurrentlyServingMissionaryRow,
+  EndowmentCandidateRow,
   MemberDetail,
+  MissionEligibleRow,
+  MissionYouthPipelineRow,
   RecentBaptismPathRow,
   RecentBaptismRow,
   RecommendExpirationRiskRow,
@@ -11,7 +17,10 @@ import type {
   NewReturningStrengtheningReport,
   PriesthoodProgressionReport,
   MinisteringGapReport,
-  HouseholdOutreachReport
+  HouseholdOutreachReport,
+  UnitHealthRadarRow,
+  YouthOrganizationTransitionRow,
+  YouthTransitionMilestoneRow
 } from "@/src/services/intelligenceService";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
 
@@ -58,6 +67,7 @@ interface SpikeMemberRow {
   isBornInCovenant?: number | null;
   isDivorced?: number | null;
   isMarried?: number | null;
+  isSingle?: number | null;
   marriageDate?: string | null;
   marriageStatus?: string | null;
   isAttendingSeminary: number | null;
@@ -263,6 +273,13 @@ const isMale = (value: string | null | undefined) => {
   const normalized = (value ?? "").trim().toLowerCase();
   return normalized === "m" || normalized === "male" || normalized === "man";
 };
+const isFemale = (value: string | null | undefined) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "f" || normalized === "female" || normalized === "woman";
+};
+const isUnmarried = (member: Pick<SpikeMemberRow, "isMarried" | "isSingle" | "marriageStatus">) =>
+  !toBool(member.isMarried) &&
+  (toBool(member.isSingle) || /^single$/i.test(member.marriageStatus ?? ""));
 const isYouthOrYsa = (row: Pick<SpikeMemberRow, "age" | "birthdate">) => {
   const programAge = youthProgramAge(row);
   const age = actualAge(row);
@@ -1609,6 +1626,457 @@ export const loadSqliteSpikeFullReportsData = async (): Promise<SqliteSpikeFullR
       householdOutreach,
       covenantPathProgression,
       recentBaptismPathCohort
+    };
+  } finally {
+    db.close();
+  }
+};
+
+
+const sqliteCommitteeRules: Array<{
+  key: string;
+  name: string;
+  handbookBasis: string;
+  handbookUrl: string;
+  patterns: RegExp[];
+}> = [
+  {
+    key: "stake-presidency-meeting",
+    name: "Stake Presidency Meeting",
+    handbookBasis: "General Handbook 29.3.1",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bstake clerk\b/i, /\bstake executive secretary\b/i]
+  },
+  {
+    key: "stake-council",
+    name: "Stake Council",
+    handbookBasis: "General Handbook 29.3.5",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bhigh council(or)?\b/i, /\bstake clerk\b/i, /\bstake executive secretary\b/i, /\bstake relief society president\b/i, /\bstake young women president\b/i, /\bstake primary president\b/i, /\bstake young men president\b/i, /\bstake sunday school president\b/i, /\bstake young single adult\b/i, /\bstake single adult\b/i]
+  },
+  {
+    key: "stake-adult-leadership-committee",
+    name: "Stake Adult Leadership Committee",
+    handbookBasis: "General Handbook 29.3.8",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bstake relief society (president|counselor|secretary)\b/i, /\bhigh council(or)?\b/i]
+  },
+  {
+    key: "stake-youth-leadership-committee",
+    name: "Stake Youth Leadership Committee",
+    handbookBasis: "General Handbook 29.3.9",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bstake young men (president|counselor|secretary)\b/i, /\bstake young women (president|counselor|secretary)\b/i]
+  },
+  {
+    key: "bishops-council",
+    name: "Bishops' Council",
+    handbookBasis: "General Handbook 29.3.10",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bbishop\b/i, /\bbranch president\b/i]
+  },
+  {
+    key: "high-council-meeting",
+    name: "High Council Meeting",
+    handbookBasis: "General Handbook 29.3.12",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/29-meetings-in-the-church?lang=eng",
+    patterns: [/\bstake president\b/i, /\bstake (?:presidency\s+)?(?:first|1st|second|2nd)\s+couns(?:e|ou)lor\b/i, /\bstake president(?:\s+(?:first|1st|second|2nd)\s+couns(?:e|ou)lor)\b/i, /\bhigh council(or)?\b/i, /\bstake clerk\b/i, /\bstake executive secretary\b/i]
+  },
+  {
+    key: "stake-single-adult-committee",
+    name: "Stake Single Adult Committee",
+    handbookBasis: "General Handbook 6.2.2.1",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/6-leadership-in-the-church?lang=eng",
+    patterns: [/\bstake single adult\b/i, /\bstake young single adult\b/i]
+  },
+  {
+    key: "stake-audit-committee",
+    name: "Stake Audit Committee",
+    handbookBasis: "General Handbook 6.2.1.3",
+    handbookUrl: "https://www.churchofjesuschrist.org/study/manual/general-handbook/6-leadership-in-the-church?lang=eng",
+    patterns: [/\bstake audit\b/i, /\baudit specialist\b/i]
+  }
+];
+
+const dedupeSqliteCommitteeMembers = (rows: CommitteeMemberRow[]) => {
+  const seen = new Set<string>();
+  const output: CommitteeMemberRow[] = [];
+  for (const row of rows) {
+    const key = `${row.lcrMemberId}:${cleanCallingTitle(row.callingTitle).toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push({ ...row, callingTitle: cleanCallingTitle(row.callingTitle) });
+  }
+  return output;
+};
+
+export const loadSqliteSpikeCallingsList = async () => {
+  const status = getSqliteSpikeStatus();
+  if (!status.exists || status.members === 0) return [];
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(`SELECT
+      c.title AS callingTitle,
+      c.organization_name AS organizationName,
+      c.lcr_member_id AS lcrMemberId,
+      COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
+      COALESCE(NULLIF(c.unit_name, ''), NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), 'Unknown') AS unitName,
+      c.sustained_on AS sustainedOn,
+      c.is_current AS isCurrent
+    FROM callings c
+    LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id
+    ORDER BY unitName, c.title`).all() as Array<{
+      callingTitle: string;
+      organizationName: string | null;
+      lcrMemberId: string | null;
+      fullName: string | null;
+      unitName: string;
+      sustainedOn: string | null;
+      isCurrent: number;
+    }>;
+
+    const byKey = new Map<string, {
+      callingTitle: string;
+      organizationName: string | null;
+      lcrMemberId: string | null;
+      fullName: string | null;
+      unitName: string;
+      isLeadership: boolean;
+      sustainedOn: string | null;
+      isCurrent: boolean;
+      rawTitle: string;
+    }>();
+
+    const noisePattern = /(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|\/\s*(yes|no))/i;
+    const score = (row: { rawTitle: string; sustainedOn: string | null }) => (noisePattern.test(row.rawTitle) ? 0 : 2) + (row.sustainedOn ? 1 : 0);
+
+    for (const row of rows) {
+      const cleanedTitle = cleanCallingTitle(row.callingTitle);
+      const key = `${row.lcrMemberId ?? 'vacant'}:${row.unitName}:${cleanedTitle.toLowerCase()}:${row.isCurrent}`;
+      const candidate = {
+        ...row,
+        callingTitle: cleanedTitle,
+        isLeadership: /(president|bishop|high councilor)/i.test(cleanedTitle) || /(stake presidency|bishopric|high council)/i.test(row.organizationName ?? ''),
+        isCurrent: row.isCurrent === 1,
+        rawTitle: row.callingTitle
+      };
+      const existing = byKey.get(key);
+      if (!existing || score(candidate) > score(existing)) byKey.set(key, candidate);
+    }
+
+    return Array.from(byKey.values()).map(({ rawTitle, ...row }) => row);
+  } finally {
+    db.close();
+  }
+};
+
+export const loadSqliteSpikeCommitteesPageData = async (): Promise<{ committees: CommitteeRoster[] }> => {
+  const callings = await loadSqliteSpikeCallingsList();
+  const members = (await loadSqliteSpikeMemberList()).reduce((acc, row) => { acc.set(row.lcrMemberId, row); return acc; }, new Map<string, SqliteSpikeMemberRow>());
+  const rosterRows: CommitteeMemberRow[] = callings
+    .filter((row) => row.isCurrent && row.lcrMemberId && row.fullName)
+    .map((row) => ({
+      lcrMemberId: row.lcrMemberId!,
+      fullName: row.fullName!,
+      unitName: row.unitName ?? null,
+      callingTitle: row.callingTitle,
+      sustainedOn: row.sustainedOn ?? null,
+      email: members.get(row.lcrMemberId!)?.email ?? null
+    }));
+
+  return {
+    committees: sqliteCommitteeRules.map((rule) => ({
+      key: rule.key,
+      name: rule.name,
+      handbookBasis: rule.handbookBasis,
+      handbookUrl: rule.handbookUrl,
+      members: dedupeSqliteCommitteeMembers(rosterRows.filter((row) => rule.patterns.some((pattern) => pattern.test(row.callingTitle))))
+    }))
+  };
+};
+
+export const loadSqliteSpikeYouthPageData = async () => {
+  const status = getSqliteSpikeStatus();
+  if (!status.exists || status.members === 0) {
+    return {
+      currentlyServingMissionaries: [] as CurrentlyServingMissionaryRow[],
+      missionEligible: [] as MissionEligibleRow[],
+      missionYouthPipeline: [] as MissionYouthPipelineRow[],
+      seminaryInstituteOpportunity: [] as SqliteSpikeFullReportsData["seminaryInstituteOpportunity"],
+      progression: [] as Array<{ ageBand: string; count: number }>,
+      organizationTransitions: [] as YouthOrganizationTransitionRow[],
+      transitionMilestones: [] as YouthTransitionMilestoneRow[],
+      endowment: [] as EndowmentCandidateRow[]
+    };
+  }
+
+  const [reports, members, currentCallings] = await Promise.all([
+    loadSqliteSpikeFullReportsData(),
+    (async () => {
+      const db = openSqliteSpikeDb();
+      try {
+        return db.prepare(`SELECT
+          lcr_member_id AS lcrMemberId,
+          unit_name AS unitName,
+          unit_abbreviation AS unitAbbreviation,
+          preferred_name AS preferredName,
+          first_name AS firstName,
+          last_name AS lastName,
+          gender,
+          age,
+          birthdate,
+          member_status AS memberStatus,
+          mission_status AS missionStatus,
+          mission_country AS missionCountry,
+          mission_language AS missionLanguage,
+          temple_recommend_status AS templeRecommendStatus,
+          temple_recommend_type AS templeRecommendType,
+          temple_endowed AS templeEndowed,
+          is_attending_seminary AS isAttendingSeminary,
+          is_attending_institute AS isAttendingInstitute,
+          is_returned_missionary AS isReturnedMissionary,
+          is_married AS isMarried,
+          is_single AS isSingle,
+          marriage_status AS marriageStatus,
+          primary_email AS primaryEmail,
+          primary_phone AS primaryPhone,
+          priesthood_office AS priesthoodOffice,
+          baptism_date AS baptismDate,
+          confirmation_date AS confirmationDate
+        FROM members`).all() as SpikeMemberRow[];
+      } finally { db.close(); }
+    })(),
+    (async () => {
+      const db = openSqliteSpikeDb();
+      try {
+        return db.prepare(`SELECT lcr_member_id AS lcrMemberId, title, sustained_on AS sustainedOn FROM callings WHERE is_current = 1`).all() as Array<{ lcrMemberId: string | null; title: string; sustainedOn: string | null }>;
+      } finally { db.close(); }
+    })()
+  ]);
+
+  const callingMap = new Map<string, { title: string; sustainedOn: string | null }>();
+  for (const row of currentCallings) {
+    if (!row.lcrMemberId) continue;
+    const existing = callingMap.get(row.lcrMemberId);
+    const cleaned = cleanCallingTitle(row.title);
+    if (!existing || (row.sustainedOn ?? '') > (existing.sustainedOn ?? '') || cleaned < existing.title) {
+      callingMap.set(row.lcrMemberId, { title: cleaned, sustainedOn: row.sustainedOn ?? null });
+    }
+  }
+
+  const missionEligible: MissionEligibleRow[] = members.filter((member) => {
+    const age = actualAge(member);
+    return age !== null && age >= 18 && age <= 25 && isActiveMember(member.memberStatus) && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
+  }).map((member) => ({
+    lcrMemberId: member.lcrMemberId ?? '',
+    fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
+    unitName: member.unitName ?? member.unitAbbreviation ?? null,
+    unitAbbreviation: member.unitAbbreviation ?? null,
+    gender: member.gender ?? null,
+    age: actualAge(member),
+    birthdate: member.birthdate ?? null,
+    missionStatus: member.missionStatus ?? null,
+    templeRecommendStatus: member.templeRecommendStatus ?? null,
+    isAttendingSeminary: member.isAttendingSeminary === undefined ? null : toBool(member.isAttendingSeminary),
+    isAttendingInstitute: member.isAttendingInstitute === undefined ? null : toBool(member.isAttendingInstitute),
+    email: member.primaryEmail ?? null,
+    phoneNumber: member.primaryPhone ?? null,
+    currentCalling: callingMap.get(member.lcrMemberId ?? '')?.title ?? null
+  })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
+
+  const currentlyServingMissionaries: CurrentlyServingMissionaryRow[] = members.filter((member) => {
+    return Boolean(String(member.missionStatus ?? '').trim()) || (Boolean(String(member.missionCountry ?? '').trim()) && !toBool(member.isReturnedMissionary));
+  }).map((member) => ({
+    lcrMemberId: member.lcrMemberId ?? '',
+    fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
+    unitName: member.unitName ?? member.unitAbbreviation ?? null,
+    gender: member.gender ?? null,
+    age: actualAge(member),
+    missionCountry: member.missionCountry ?? null,
+    missionStatus: member.missionStatus ?? null,
+    templeRecommendStatus: member.templeRecommendStatus ?? null,
+    email: member.primaryEmail ?? null,
+    phoneNumber: member.primaryPhone ?? null,
+    currentCalling: callingMap.get(member.lcrMemberId ?? '')?.title ?? null
+  })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
+
+  const missionYouthPipeline: MissionYouthPipelineRow[] = members.filter((member) => {
+    const age = actualAge(member);
+    return age !== null && age >= 17 && age <= 25 && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
+  }).map((member) => {
+    const hasActiveRecommend = isActiveTempleRecommendStatus(member.templeRecommendStatus);
+    const inReligiousClass = toBool(member.isAttendingSeminary) || toBool(member.isAttendingInstitute);
+    const ordinanceReady = toBool(member.templeEndowed);
+    const readinessScore = Number(hasActiveRecommend) + Number(inReligiousClass) + Number(ordinanceReady);
+    const readinessLevel: MissionYouthPipelineRow["readinessLevel"] = readinessScore >= 3 ? "Ready" : readinessScore === 2 ? "Progressing" : "Needs Focus";
+    return {
+      lcrMemberId: member.lcrMemberId ?? '',
+      unitName: unitLabel(member),
+      fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
+      age: actualAge(member),
+      gender: member.gender ?? null,
+      isAttendingSeminary: member.isAttendingSeminary === undefined ? null : toBool(member.isAttendingSeminary),
+      isAttendingInstitute: member.isAttendingInstitute === undefined ? null : toBool(member.isAttendingInstitute),
+      missionLanguage: member.missionLanguage ?? null,
+      missionCountry: member.missionCountry ?? null,
+      missionStatus: member.missionStatus ?? null,
+      templeRecommendStatus: member.templeRecommendStatus ?? null,
+      templeEndowed: member.templeEndowed === undefined ? null : toBool(member.templeEndowed),
+      currentCalling: callingMap.get(member.lcrMemberId ?? '')?.title ?? null,
+      readinessScore,
+      readinessLevel
+    };
+  }).sort((a,b)=>(b.readinessScore-a.readinessScore) || ((b.age ?? 0)-(a.age ?? 0)) || a.fullName.localeCompare(b.fullName));
+
+  const transitionMilestones: YouthTransitionMilestoneRow[] = [
+    { label: '8-11 Baptized & Confirmed', eligibleCount: members.filter(m => { const age=actualAge(m); return age !== null && age >=8 && age <=11; }).length, completedCount: members.filter(m => { const age=actualAge(m); return age !== null && age >=8 && age <=11 && Boolean(m.baptismDate) && Boolean(m.confirmationDate); }).length, completionPct: 0 },
+    { label: '12-17 Current Recommend', eligibleCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=17; }).length, completedCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=17 && (isActiveTempleRecommendStatus(m.templeRecommendStatus) || /limited/i.test(m.templeRecommendType ?? '')); }).length, completionPct: 0 },
+    { label: '12-13 Deacon (Men)', eligibleCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13 && isMale(m.gender); }).length, completedCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13 && isMale(m.gender) && /^(deacon|teacher|priest|elder|high priest)$/i.test(m.priesthoodOffice ?? ''); }).length, completionPct: 0 },
+    { label: '14-15 Teacher (Men)', eligibleCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15 && isMale(m.gender); }).length, completedCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15 && isMale(m.gender) && /^(teacher|priest|elder|high priest)$/i.test(m.priesthoodOffice ?? ''); }).length, completionPct: 0 },
+    { label: '16-17 Priest (Men)', eligibleCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17 && isMale(m.gender); }).length, completedCount: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17 && isMale(m.gender) && /^(priest|elder|high priest)$/i.test(m.priesthoodOffice ?? ''); }).length, completionPct: 0 },
+    { label: '18-25 Elder (Men)', eligibleCount: members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25 && isMale(m.gender); }).length, completedCount: members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25 && isMale(m.gender) && /^(elder|high priest)$/i.test(m.priesthoodOffice ?? ''); }).length, completionPct: 0 },
+    { label: '17-25 Mission Ready (Men)', eligibleCount: missionYouthPipeline.filter(m => isMale(m.gender)).length, completedCount: missionYouthPipeline.filter(m => isMale(m.gender) && m.readinessLevel === 'Ready').length, completionPct: 0 },
+    { label: '17-25 Mission Ready (Women)', eligibleCount: missionYouthPipeline.filter(m => isFemale(m.gender)).length, completedCount: missionYouthPipeline.filter(m => isFemale(m.gender) && m.readinessLevel === 'Ready').length, completionPct: 0 }
+  ].map((row) => ({ ...row, completionPct: row.eligibleCount > 0 ? Math.round((row.completedCount / row.eligibleCount) * 100) : 0 }));
+
+  const organizationTransitions: YouthOrganizationTransitionRow[] = [
+    ['Young Women 12-13', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13 && isFemale(m.gender); }).length],
+    ['Young Women 14-15', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15 && isFemale(m.gender); }).length],
+    ['Young Women 16-17', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17 && isFemale(m.gender); }).length],
+    ['Young Men 12-13', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13 && isMale(m.gender); }).length],
+    ['Young Men 14-15', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15 && isMale(m.gender); }).length],
+    ['Young Men 16-17', members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17 && isMale(m.gender); }).length],
+    ['Age 18 Transition', members.filter(m => actualAge(m) === 18).length],
+    ['YSA 18-25 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25 && isUnmarried(m); }).length],
+    ['YSA Women 18-25 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25 && isUnmarried(m) && isFemale(m.gender); }).length],
+    ['YSA Men 18-25 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25 && isUnmarried(m) && isMale(m.gender); }).length],
+    ['YSA 26-35 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=26 && age <=35 && isUnmarried(m); }).length],
+    ['YSA Women 26-35 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=26 && age <=35 && isUnmarried(m) && isFemale(m.gender); }).length],
+    ['YSA Men 26-35 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=26 && age <=35 && isUnmarried(m) && isMale(m.gender); }).length],
+    ['Single Adults 36-45 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=36 && age <=45 && isUnmarried(m); }).length],
+    ['Single Adult Women 36-45 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=36 && age <=45 && isUnmarried(m) && isFemale(m.gender); }).length],
+    ['Single Adult Men 36-45 (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=36 && age <=45 && isUnmarried(m) && isMale(m.gender); }).length],
+    ['Single Adults 46+ (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=46 && isUnmarried(m); }).length],
+    ['Single Adult Women 46+ (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=46 && isUnmarried(m) && isFemale(m.gender); }).length],
+    ['Single Adult Men 46+ (Unmarried)', members.filter(m => { const age=actualAge(m); return age !== null && age >=46 && isUnmarried(m) && isMale(m.gender); }).length]
+  ].map(([label, count]) => ({ label: label as string, count: count as number }));
+
+  const progression = [
+    { ageBand: '12-13', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=12 && age <=13; }).length },
+    { ageBand: '14-15', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=14 && age <=15; }).length },
+    { ageBand: '16-17', count: members.filter(m => { const age=youthProgramAge(m); return age !== null && age >=16 && age <=17; }).length },
+    { ageBand: '18-25', count: members.filter(m => { const age=actualAge(m); return age !== null && age >=18 && age <=25; }).length },
+    { ageBand: '26-35', count: members.filter(m => { const age=actualAge(m); return age !== null && age >=26 && age <=35; }).length }
+  ];
+
+  const endowment: EndowmentCandidateRow[] = members.filter((member) => {
+    const age = actualAge(member);
+    return age !== null && age >= 18 && !toBool(member.templeEndowed);
+  }).map((member) => ({
+    lcrMemberId: member.lcrMemberId ?? '',
+    fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
+    age: actualAge(member),
+    missionStatus: member.missionStatus ?? null,
+    templeEndowed: member.templeEndowed === undefined ? null : toBool(member.templeEndowed)
+  })).sort((a,b)=>(b.age ?? 0)-(a.age ?? 0) || a.fullName.localeCompare(b.fullName));
+
+  return {
+    currentlyServingMissionaries,
+    missionEligible,
+    missionYouthPipeline,
+    seminaryInstituteOpportunity: reports.seminaryInstituteOpportunity,
+    progression,
+    organizationTransitions,
+    transitionMilestones,
+    endowment
+  };
+};
+
+export const loadSqliteSpikeStakeOverviewPageData = async () => {
+  const status = getSqliteSpikeStatus();
+  const fullReports = await loadSqliteSpikeFullReportsData();
+  const dashboard = await loadSqliteSpikeDashboardData();
+  if (!status.exists || status.members === 0) {
+    return {
+      overview: { totalMembers: 0, currentCallings: 0, membersWithCurrentCalling: 0, membersWithoutCurrentCalling: 0, latestSync: null },
+      turnover: [],
+      converts: [],
+      syncDiff: null,
+      unitHealthRadar: [] as UnitHealthRadarRow[]
+    };
+  }
+  const db = openSqliteSpikeDb();
+  try {
+    const callings = db.prepare(`SELECT title, unit_name AS unitName, sustained_on AS sustainedOn, set_apart_on AS setApartOn, released_on AS releasedOn, is_current AS isCurrent, lcr_member_id AS lcrMemberId FROM callings`).all() as Array<{ title: string; unitName: string | null; sustainedOn: string | null; setApartOn: string | null; releasedOn: string | null; isCurrent: number; lcrMemberId: string | null }>;
+    const members = db.prepare(`SELECT lcr_member_id AS lcrMemberId, unit_name AS unitName, unit_abbreviation AS unitAbbreviation, temple_recommend_status AS templeRecommendStatus, is_convert AS isConvert, baptism_date AS baptismDate, move_in_date AS moveInDate, has_ministering_brothers AS hasMinisteringBrothers, has_ministering_sisters AS hasMinisteringSisters, age, birthdate, is_attending_seminary AS isAttendingSeminary, is_attending_institute AS isAttendingInstitute FROM members`).all() as SpikeMemberRow[];
+    const syncRow = db.prepare(`SELECT sync_type AS syncType, status, completed_at AS completedAt FROM sync_logs WHERE status = 'success' ORDER BY completed_at DESC LIMIT 1`).get() as { syncType: string; status: string; completedAt: string | null } | undefined;
+
+    const membersWithCurrentCalling = new Set(callings.filter(c => c.isCurrent === 1 && c.lcrMemberId).map(c => c.lcrMemberId!)).size;
+    const overview = {
+      totalMembers: members.length,
+      currentCallings: callings.filter(c => c.isCurrent === 1 && c.lcrMemberId).length,
+      membersWithCurrentCalling,
+      membersWithoutCurrentCalling: Math.max(0, members.length - membersWithCurrentCalling),
+      latestSync: syncRow ?? null
+    };
+
+    const monthKeys: string[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      monthKeys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    }
+    const sustainedMap = new Map(monthKeys.map(k => [k, 0]));
+    const releasedMap = new Map(monthKeys.map(k => [k, 0]));
+    const convertMap = new Map(monthKeys.map(k => [k, 0]));
+    for (const calling of callings) {
+      if (/(president|bishop|high councilor)/i.test(calling.title)) {
+        const sustainDate = calling.sustainedOn ?? calling.setApartOn;
+        if (sustainDate) {
+          const k = sustainDate.slice(0,7);
+          if (sustainedMap.has(k)) sustainedMap.set(k, (sustainedMap.get(k) ?? 0) + 1);
+        }
+        if (calling.releasedOn) {
+          const k = calling.releasedOn.slice(0,7);
+          if (releasedMap.has(k)) releasedMap.set(k, (releasedMap.get(k) ?? 0) + 1);
+        }
+      }
+    }
+    for (const member of members) {
+      if (toBool(member.isConvert)) {
+        const date = member.baptismDate ?? member.moveInDate;
+        if (date) {
+          const k = date.slice(0,7);
+          if (convertMap.has(k)) convertMap.set(k, (convertMap.get(k) ?? 0) + 1);
+        }
+      }
+    }
+
+    const unitHealthRadar: UnitHealthRadarRow[] = fullReports.unitHealth.map((row) => {
+      const unitMembers = members.filter((m) => unitLabel(m) === row.unitName);
+      const semEligible = unitMembers.filter((m) => { const a = youthProgramAge(m); return a !== null && a >= 14 && a <= 18; }).length;
+      const instEligible = unitMembers.filter((m) => { const a = actualAge(m); return a !== null && a >= 18 && a <= 35; }).length;
+      const activeRecommend = unitMembers.filter((m) => isActiveTempleRecommendStatus(m.templeRecommendStatus)).length;
+      const recentConvertCount = unitMembers.filter((m) => { const d = safeDate(m.baptismDate) ?? safeDate(m.moveInDate); return toBool(m.isConvert) && d && d >= daysAgoThreshold(365); }).length;
+      const ministeringCoverageCount = unitMembers.filter((m) => toBool(m.hasMinisteringBrothers) || toBool(m.hasMinisteringSisters)).length;
+      return {
+        unitName: row.unitName,
+        memberCount: row.memberCount,
+        seminaryParticipationPct: semEligible > 0 ? Math.round((row.seminaryAttending / semEligible) * 100) : 0,
+        instituteParticipationPct: instEligible > 0 ? Math.round((row.instituteAttending / instEligible) * 100) : 0,
+        activeRecommendPct: row.memberCount > 0 ? Math.round((activeRecommend / row.memberCount) * 100) : 0,
+        leadershipPer100: row.memberCount > 0 ? Math.round((row.leadershipCallings / row.memberCount) * 100) : 0,
+        recentConvertPct: row.memberCount > 0 ? Math.round((recentConvertCount / row.memberCount) * 100) : 0,
+        ministeringCoveragePct: row.memberCount > 0 ? Math.round((ministeringCoverageCount / row.memberCount) * 100) : 0
+      };
+    });
+
+    return {
+      overview,
+      turnover: monthKeys.map((month) => ({ month, sustained: sustainedMap.get(month) ?? 0, released: releasedMap.get(month) ?? 0 })),
+      converts: monthKeys.map((month) => ({ month, converts: convertMap.get(month) ?? 0 })),
+      syncDiff: null,
+      unitHealthRadar
     };
   } finally {
     db.close();

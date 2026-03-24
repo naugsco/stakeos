@@ -2,10 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { TransitionLaneChart } from "@/components/charts/transition-lane-chart";
 import { YouthBrowser } from "@/components/youth-browser";
-import { loadYouthPageData } from "@/lib/dashboardData";
+import Link from "next/link";
+import { loadYouthPageDataBySource } from "@/lib/dashboardData";
 
-export default async function YouthPage() {
-  const data = await loadYouthPageData();
+export default async function YouthPage({ searchParams }: { searchParams?: { source?: string } }) {
+  const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
+  const data = await loadYouthPageDataBySource(source);
   const milestoneMap = new Map(data.transitionMilestones.map((row) => [row.label, row]));
   const organizationMap = new Map(data.organizationTransitions.map((row) => [row.label, row]));
   const womenMissionReady = milestoneMap.get("17-25 Mission Ready (Women)")?.completedCount ?? 0;
@@ -85,7 +87,15 @@ export default async function YouthPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Youth</h1>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Youth</h1>
+          <p className="text-sm text-slate-600">{source === "sqlite" ? "SQLite-backed youth and young-adult view." : "PostgreSQL-backed youth and young-adult view."}</p>
+        </div>
+        <Link href={source === "sqlite" ? "/youth?source=postgres" : "/youth"} className="inline-flex w-fit rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 shadow-sm hover:bg-amber-50">
+          {source === "sqlite" ? "Switch To PostgreSQL Youth" : "Switch To SQLite Youth"}
+        </Link>
+      </header>
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Youth Transitions</h2>
@@ -115,6 +125,7 @@ export default async function YouthPage() {
         missionYouthPipeline={data.missionYouthPipeline}
         seminaryInstituteOpportunity={data.seminaryInstituteOpportunity}
         endowment={data.endowment}
+        source={source}
       />
     </div>
   );

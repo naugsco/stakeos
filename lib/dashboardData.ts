@@ -42,11 +42,15 @@ import {
 } from "@/src/services/intelligenceService";
 import { getSyncDiffReport } from "@/src/services/advancedMcpService";
 import {
+  loadSqliteSpikeCallingsList,
+  loadSqliteSpikeCommitteesPageData,
   loadSqliteSpikeDashboardData,
   loadSqliteSpikeFullReportsData,
   loadSqliteSpikeMemberDetail,
   loadSqliteSpikeMemberList,
-  loadSqliteSpikeReportsShellData
+  loadSqliteSpikeReportsShellData,
+  loadSqliteSpikeStakeOverviewPageData,
+  loadSqliteSpikeYouthPageData
 } from "@/src/sqlite-spike/queries";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
 
@@ -152,10 +156,14 @@ export const loadMemberDetailPageDataBySource = async (lcrMemberId: string, sour
 export const loadCallingsPageData = async () => ({
   callings: await getCallingsList()
 });
+export const loadCallingsPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? { callings: await loadSqliteSpikeCallingsList() } : loadCallingsPageData();
 
 export const loadCommitteesPageData = async () => ({
   committees: await getCommitteeRosters()
 });
+export const loadCommitteesPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeCommitteesPageData() : loadCommitteesPageData();
 
 export const loadReportsPageData = async () => {
   const [
@@ -254,6 +262,8 @@ export const loadYouthPageData = async () => ({
   transitionMilestones: await getYouthTransitionMilestones(),
   endowment: await endowmentCandidates()
 });
+export const loadYouthPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeYouthPageData() : loadYouthPageData();
 
 export const loadStakeOverviewPageData = async () => {
   const [overview, turnover, converts, syncDiff, unitHealthRadar] = await Promise.all([
@@ -266,3 +276,5 @@ export const loadStakeOverviewPageData = async () => {
 
   return { overview, turnover, converts, syncDiff, unitHealthRadar };
 };
+export const loadStakeOverviewPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeStakeOverviewPageData() : loadStakeOverviewPageData();

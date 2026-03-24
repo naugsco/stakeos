@@ -11,7 +11,7 @@ export default async function ReportsPage({
 }: {
   searchParams?: { source?: string };
 }) {
-  const source = searchParams?.source === "sqlite" ? "sqlite" : "postgres";
+  const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
   const shellData = await loadReportsPageShellDataBySource(source);
   const isSqlite = source === "sqlite";
   const overview = shellData.overview;
@@ -29,10 +29,10 @@ export default async function ReportsPage({
           </p>
         </div>
         <Link
-          href={isSqlite ? "/reports" : "/reports?source=sqlite"}
+          href={isSqlite ? "/reports?source=postgres" : "/reports"}
           className="inline-flex w-fit rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900 shadow-sm hover:bg-amber-50"
         >
-          {isSqlite ? "Switch To PostgreSQL Reports" : "Open SQLite Reports"}
+          {isSqlite ? "Switch To PostgreSQL Reports" : "Switch To SQLite Reports"}
         </Link>
       </header>
 

@@ -53,7 +53,7 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
-export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
+export function CallingsBrowser({ callings, source = "postgres" }: { callings: CallingRow[]; source?: "postgres" | "sqlite" }) {
   const [callingFilter, setCallingFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
   const [leadershipOnly, setLeadershipOnly] = useState(false);
@@ -235,7 +235,7 @@ export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
                   <td className="px-4 py-3">{calling.isLeadership ? "Yes" : "No"}</td>
                   <td className="px-4 py-3 text-slate-700">
                     {calling.fullName && calling.lcrMemberId ? (
-                      <Link href={`/members/${encodeURIComponent(calling.lcrMemberId)}`} className="hover:underline">
+                      <Link href={source === "sqlite" ? `/members/${encodeURIComponent(calling.lcrMemberId)}?source=sqlite` : `/members/${encodeURIComponent(calling.lcrMemberId)}`} className="hover:underline">
                         {calling.fullName}
                       </Link>
                     ) : (
