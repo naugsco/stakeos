@@ -1,20 +1,28 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { BarMetricsChart } from "@/components/charts/bar-metrics-chart";
 import { ComparisonBarMetricsChart } from "@/components/charts/comparison-bar-metrics-chart";
 import { DashboardOverviewCards } from "@/components/dashboard-overview-cards";
 import { LineTrendChart } from "@/components/charts/line-trend-chart";
 import { MinisteringCoverageUnitChart } from "@/components/charts/ministering-coverage-unit-chart";
 import { SyncControlPanel } from "@/components/sync-control-panel";
-import { loadDashboardData } from "@/lib/dashboardData";
+import { loadDashboardDataBySource } from "@/lib/dashboardData";
 
 export default async function DashboardPage({
   searchParams
 }: {
-  searchParams?: { unit?: string };
+  searchParams?: { unit?: string; source?: string };
 }) {
+  const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
   const selectedUnit = searchParams?.unit?.trim() ? searchParams.unit.trim() : null;
-  const data = await loadDashboardData(selectedUnit);
+  const data = await loadDashboardDataBySource(source, selectedUnit);
+  const switchHref =
+    source === "sqlite"
+      ? selectedUnit
+        ? `/dashboard?source=postgres&unit=${encodeURIComponent(selectedUnit)}`
+        : "/dashboard?source=postgres"
+      : "/dashboard";
   const recommendMap = data.templeRecommendHealth.statusCounts.reduce<Record<string, number>>((acc, row) => {
     acc[row.label] = row.value;
     return acc;
@@ -40,6 +48,22 @@ export default async function DashboardPage({
           Operational snapshot from local StakeOS intelligence database.
           {data.selectedUnit ? ` Scoped to ${data.selectedUnit}.` : " Scoped to the entire stake."}
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+            {source === "sqlite" ? "SQLite Default View" : "PostgreSQL View"}
+          </span>
+          <Link
+            href={switchHref}
+            className="text-sm font-medium text-teal-700 underline decoration-teal-300 underline-offset-4"
+          >
+            {source === "sqlite" ? "Switch To PostgreSQL Dashboard" : "Return To SQLite Dashboard"}
+          </Link>
+        </div>
+        {source === "sqlite" ? (
+          <p className="mt-2 text-xs text-slate-500">
+            SQLite is the default dashboard data source on this branch. Unit-scoped dashboard filtering is still PostgreSQL-only for now.
+          </p>
+        ) : null}
       </header>
 
       <DashboardOverviewCards

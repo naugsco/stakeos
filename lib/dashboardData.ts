@@ -145,6 +145,58 @@ export const loadDashboardData = async (unit?: string | null) => {
   };
 };
 
+export const loadDashboardDataBySource = async (source: DashboardDataSource, unit?: string | null) => {
+  if (source === "postgres") {
+    return loadDashboardData(unit);
+  }
+
+  const [dashboard, fullReports, youth, stakeOverview] = await Promise.all([
+    loadSqliteSpikeDashboardData(),
+    loadSqliteSpikeFullReportsData(),
+    loadSqliteSpikeYouthPageData(),
+    loadSqliteSpikeStakeOverviewPageData()
+  ]);
+
+  const missionSummary = ["Ready", "Progressing", "Needs Focus"].map((label) => ({
+    label,
+    value: youth.missionYouthPipeline.filter((row) => row.readinessLevel === label).length
+  }));
+
+  return {
+    availableUnits: [] as string[],
+    selectedUnit: null as string | null,
+    overview: {
+      totalMembers: stakeOverview.overview.totalMembers,
+      currentCallings: stakeOverview.overview.currentCallings,
+      latestSync: stakeOverview.overview.latestSync
+    },
+    daysSinceLastSync: dashboard.status.latestSyncCompletedAt
+      ? Math.max(
+          0,
+          Math.floor(
+            (Date.now() - new Date(dashboard.status.latestSyncCompletedAt).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        )
+      : null,
+    turnover: stakeOverview.turnover,
+    youth: youth.progression,
+    templeRecommendHealth: fullReports.templeRecommendHealth,
+    seminaryInstituteByUnit: fullReports.seminaryInstituteByUnit,
+    missionReadiness: {
+      summary: missionSummary,
+      members: youth.missionYouthPipeline
+    },
+    missionGenderBreakdown: getMissionGenderBreakdown(youth.missionYouthPipeline),
+    newReturningStrengthening: fullReports.newReturningStrengthening,
+    priesthoodProgression: fullReports.priesthoodProgression,
+    recentBaptisms: fullReports.recentBaptisms,
+    recommendExpirationRisk: fullReports.recommendExpirationRisk,
+    ministeringCoverageByUnit: dashboard.ministeringCoverageByUnit,
+    householdOutreach: fullReports.householdOutreach
+  };
+};
+
 export const loadMembersPageData = async () => getMemberList();
 export const loadMembersPageDataBySource = async (source: DashboardDataSource) =>
   source === "sqlite" ? loadSqliteSpikeMemberList() : getMemberList();
