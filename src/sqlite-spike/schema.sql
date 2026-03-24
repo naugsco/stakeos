@@ -7,10 +7,29 @@ CREATE TABLE IF NOT EXISTS units (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS households (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lcr_household_id TEXT NOT NULL UNIQUE,
+  unit_number TEXT NOT NULL,
+  household_name TEXT NOT NULL,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_households_unit_number ON households(unit_number);
+
 CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   lcr_member_id TEXT NOT NULL UNIQUE,
   unit_id INTEGER,
+  household_id INTEGER,
+  lcr_household_id TEXT,
   unit_number TEXT NOT NULL,
   unit_name TEXT,
   unit_abbreviation TEXT,
@@ -70,7 +89,8 @@ CREATE TABLE IF NOT EXISTS members (
   institute_status TEXT,
   seminary_status TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
+  FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL,
+  FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_members_unit_id ON members(unit_id);
@@ -83,7 +103,12 @@ CREATE TABLE IF NOT EXISTS callings (
   unit_number TEXT NOT NULL,
   unit_name TEXT,
   lcr_member_id TEXT,
+  lcr_organization_id TEXT,
+  organization_name TEXT,
   title TEXT NOT NULL,
+  sustained_on TEXT,
+  set_apart_on TEXT,
+  released_on TEXT,
   is_current INTEGER NOT NULL,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

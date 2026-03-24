@@ -4,15 +4,20 @@ interface MemberNameLinkProps {
   lcrMemberId: string | null;
   fullName: string;
   className?: string;
+  source?: "postgres" | "sqlite";
 }
 
-export function MemberNameLink({ lcrMemberId, fullName, className }: MemberNameLinkProps) {
+export function MemberNameLink({ lcrMemberId, fullName, className, source = "postgres" }: MemberNameLinkProps) {
   if (!lcrMemberId) {
     return <span className={className}>{fullName}</span>;
   }
 
+  const href = source === "sqlite"
+    ? `/members/${encodeURIComponent(lcrMemberId)}?source=sqlite`
+    : `/members/${encodeURIComponent(lcrMemberId)}`;
+
   return (
-    <Link href={`/members/${encodeURIComponent(lcrMemberId)}`} className={className ?? "hover:underline"}>
+    <Link href={href} className={className ?? "hover:underline"}>
       {fullName}
     </Link>
   );

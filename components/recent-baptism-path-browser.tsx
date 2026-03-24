@@ -48,7 +48,13 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
-export function RecentBaptismPathBrowser({ rows }: { rows: RecentBaptismPathRow[] }) {
+export function RecentBaptismPathBrowser({
+  rows,
+  source = "postgres"
+}: {
+  rows: RecentBaptismPathRow[];
+  source?: "postgres" | "sqlite";
+}) {
   const [sortKey, setSortKey] = useState<
     "baptismDate" | "unitName" | "fullName" | "templeRecommendStatus" | "hasCurrentCalling" | "ministeringAssigned" | "assignedAsMinisterLabel"
   >("baptismDate");
@@ -135,7 +141,7 @@ export function RecentBaptismPathBrowser({ rows }: { rows: RecentBaptismPathRow[
                 <td className="px-4 py-3">{row.baptismDate ?? "-"}</td>
                 <td className="px-4 py-3">{row.unitName}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">
-                  <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
+                  <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
                 </td>
                 <td className="px-4 py-3">{row.templeRecommendStatus ?? "-"}</td>
                 <td className="px-4 py-3">{row.hasCurrentCalling ? row.currentCalling ?? "Yes" : "No"}</td>

@@ -32,6 +32,8 @@ export const ensureSqliteSpikeSchema = (db: Database.Database) => {
   const columns = db.prepare("PRAGMA table_info(members)").all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map((column) => column.name));
   const missingColumns: Array<{ name: string; type: string }> = [
+    { name: "household_id", type: "INTEGER" },
+    { name: "lcr_household_id", type: "TEXT" },
     { name: "primary_email", type: "TEXT" },
     { name: "primary_phone", type: "TEXT" },
     { name: "address_line1", type: "TEXT" },
@@ -76,6 +78,25 @@ export const ensureSqliteSpikeSchema = (db: Database.Database) => {
       db.exec(`ALTER TABLE members ADD COLUMN ${column.name} ${column.type}`);
     }
   }
+
+  const callingColumns = db.prepare("PRAGMA table_info(callings)").all() as Array<{ name: string }>;
+  const callingColumnNames = new Set(callingColumns.map((column) => column.name));
+  const missingCallingColumns: Array<{ name: string; type: string }> = [
+    { name: "lcr_organization_id", type: "TEXT" },
+    { name: "organization_name", type: "TEXT" },
+    { name: "sustained_on", type: "TEXT" },
+    { name: "set_apart_on", type: "TEXT" },
+    { name: "released_on", type: "TEXT" }
+  ];
+
+  for (const column of missingCallingColumns) {
+    if (!callingColumnNames.has(column.name)) {
+      db.exec(`ALTER TABLE callings ADD COLUMN ${column.name} ${column.type}`);
+    }
+  }
+
+  db.exec("CREATE INDEX IF NOT EXISTS idx_members_household_id ON members(household_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_households_unit_number ON households(unit_number)");
 };
 
 export const getSqliteSpikeStatus = () => {

@@ -43,6 +43,7 @@ import {
 import { getSyncDiffReport } from "@/src/services/advancedMcpService";
 import {
   loadSqliteSpikeDashboardData,
+  loadSqliteSpikeFullReportsData,
   loadSqliteSpikeMemberDetail,
   loadSqliteSpikeMemberList,
   loadSqliteSpikeReportsShellData
@@ -213,6 +214,9 @@ export const loadReportsPageData = async () => {
   };
 };
 
+export const loadReportsPageDataBySource = async (source: DashboardDataSource) =>
+  source === "sqlite" ? loadSqliteSpikeFullReportsData() : loadReportsPageData();
+
 export const loadReportsPageShellData = async () => ({
   overview: await getReportsOverview()
 });
@@ -226,12 +230,18 @@ export const loadReportsPageShellDataBySource = async (source: DashboardDataSour
           templeRecommendHealth: data.templeRecommendHealth,
           recentBaptisms: data.recentBaptisms,
           recommendExpirationRisk: data.recommendExpirationRisk
+        },
+        sqliteDetails: {
+          templeRecommendAttentionMembers: data.templeRecommendAttentionMembers,
+          recentBaptismMembers: data.recentBaptismMembers,
+          recommendExpirationMembers: data.recommendExpirationMembers
         }
       })))()
     : {
         source,
         overview: await getReportsOverview(),
-        sqliteSummaries: null
+        sqliteSummaries: null,
+        sqliteDetails: null
       };
 
 export const loadYouthPageData = async () => ({
