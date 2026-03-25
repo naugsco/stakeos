@@ -2,7 +2,8 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadMemberDetailPageData } from "@/lib/dashboardData";
+import { EmailListInline, PhoneListInline } from "@/components/contact-links";
+import { loadMemberDetailPageDataBySource } from "@/lib/dashboardData";
 
 interface MemberDetailPageProps {
   params: {
@@ -13,7 +14,7 @@ interface MemberDetailPageProps {
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
 export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
-  const member = await loadMemberDetailPageData(params.lcrMemberId);
+  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, "sqlite");
   if (!member) {
     notFound();
   }
@@ -21,7 +22,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <Link href="/members" className="text-sm text-slate-600 hover:text-slate-900 hover:underline">
+        <Link
+          href="/members"
+          className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
+        >
           ← Back to Members
         </Link>
         <h1 className="text-2xl font-semibold text-slate-900">{member.fullName}</h1>
@@ -71,10 +75,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                 .join(", ") || "-"}
             </p>
             <p>
-              <span className="text-slate-500">Emails:</span> {member.emails.join(", ") || "-"}
+              <span className="text-slate-500">Emails:</span> <EmailListInline emails={member.emails} />
             </p>
             <p>
-              <span className="text-slate-500">Phones:</span> {member.phoneNumbers.join(", ") || "-"}
+              <span className="text-slate-500">Phones:</span> <PhoneListInline phones={member.phoneNumbers} />
             </p>
           </div>
         </article>
@@ -195,7 +199,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               {member.householdMembers.map((person) => (
                 <tr key={person.lcrMemberId} className="hover:bg-slate-50">
                   <td className="px-3 py-2">
-                    <Link href={`/members/${encodeURIComponent(person.lcrMemberId)}`} className="font-medium text-slate-900 hover:underline">
+                    <Link
+                      href={`/members/${encodeURIComponent(person.lcrMemberId)}`}
+                      className="font-medium text-slate-900 hover:underline"
+                    >
                       {person.fullName}
                     </Link>
                   </td>

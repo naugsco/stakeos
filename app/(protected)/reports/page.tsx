@@ -1,34 +1,42 @@
 export const dynamic = "force-dynamic";
 
-import { ReportsClient } from "@/components/reports-client";
+import { ReportsContent } from "@/components/reports-content";
 import { StatCard } from "@/components/stat-card";
-import { loadReportsPageShellData } from "@/lib/dashboardData";
+import { loadReportsPageDataBySource, loadReportsPageShellDataBySource } from "@/lib/dashboardData";
 
-export default async function ReportsPage() {
-  const data = await loadReportsPageShellData();
+export default async function ReportsPage({
+  searchParams
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  void searchParams;
+  const shellData = await loadReportsPageShellDataBySource("sqlite");
+  const overview = shellData.overview;
+  const reportsData = await loadReportsPageDataBySource("sqlite");
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="text-sm text-slate-600">
-          Drill-down lists and operational tables behind the dashboard metrics. Charts live on Dashboard; this page is
-          for sorting, scanning, and follow-up.
-        </p>
+        <div>
+          <h1 className="text-2xl font-semibold">Reports</h1>
+          <p className="text-sm text-slate-600">
+            Drill-down lists and operational tables behind the dashboard metrics. Charts live on Dashboard; this page is for sorting, scanning, and follow-up.
+          </p>
+        </div>
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Members" value={Number.parseInt(data.overview.totalMembers, 10)} />
-        <StatCard label="Units Represented" value={Number.parseInt(data.overview.unitsRepresented, 10)} />
-        <StatCard label="Leadership Callings" value={Number.parseInt(data.overview.leadershipCallings, 10)} />
-        <StatCard label="Mission Eligible (18-25)" value={Number.parseInt(data.overview.missionEligible, 10)} />
-        <StatCard label="Seminary Attending" value={Number.parseInt(data.overview.seminaryAttending, 10)} />
-        <StatCard label="Institute Attending" value={Number.parseInt(data.overview.instituteAttending, 10)} />
-        <StatCard label="Temple Recommend Active" value={Number.parseInt(data.overview.activeTempleRecommend, 10)} />
-        <StatCard label="Converts (12 months)" value={Number.parseInt(data.overview.convertsLast12Months, 10)} />
+        <StatCard label="Total Members" value={Number(overview.totalMembers)} />
+        <StatCard label="Units Represented" value={Number(overview.unitsRepresented)} />
+        <StatCard label="Leadership Callings" value={Number(overview.leadershipCallings)} />
+        <StatCard label="Mission Eligible (18-25)" value={Number(overview.missionEligible)} />
+        <StatCard label="Seminary Attending" value={Number(overview.seminaryAttending)} />
+        <StatCard label="Institute Attending" value={Number(overview.instituteAttending)} />
+        <StatCard label="Temple Recommend Active" value={Number(overview.activeTempleRecommend)} />
+        <StatCard label="Converts (12 months)" value={Number(overview.convertsLast12Months)} />
       </section>
 
-      <ReportsClient />
+      <ReportsContent data={reportsData} />
     </div>
   );
 }

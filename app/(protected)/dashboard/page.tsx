@@ -2,11 +2,11 @@ export const dynamic = "force-dynamic";
 
 import { BarMetricsChart } from "@/components/charts/bar-metrics-chart";
 import { ComparisonBarMetricsChart } from "@/components/charts/comparison-bar-metrics-chart";
+import { DashboardOverviewCards } from "@/components/dashboard-overview-cards";
 import { LineTrendChart } from "@/components/charts/line-trend-chart";
 import { MinisteringCoverageUnitChart } from "@/components/charts/ministering-coverage-unit-chart";
 import { SyncControlPanel } from "@/components/sync-control-panel";
-import { StatCard } from "@/components/stat-card";
-import { loadDashboardData } from "@/lib/dashboardData";
+import { loadDashboardDataBySource } from "@/lib/dashboardData";
 
 export default async function DashboardPage({
   searchParams
@@ -14,7 +14,7 @@ export default async function DashboardPage({
   searchParams?: { unit?: string };
 }) {
   const selectedUnit = searchParams?.unit?.trim() ? searchParams.unit.trim() : null;
-  const data = await loadDashboardData(selectedUnit);
+  const data = await loadDashboardDataBySource("sqlite", selectedUnit);
   const recommendMap = data.templeRecommendHealth.statusCounts.reduce<Record<string, number>>((acc, row) => {
     acc[row.label] = row.value;
     return acc;
@@ -42,20 +42,17 @@ export default async function DashboardPage({
         </p>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total Members" value={data.overview.totalMembers} />
-        <StatCard label="Current Callings" value={data.overview.currentCallings} />
-        <StatCard label="Recommend Active" value={recommendMap.Active ?? 0} />
-        <StatCard
-          label="Recommend Recovered (1y+)"
-          value={data.newReturningStrengthening.summary.find((row) => row.label === "Recommend Recovered (1y+)")?.value ?? 0}
-        />
-        <StatCard
-          label="Mission Ready"
-          value={data.missionReadiness.summary.find((row) => row.label === "Ready")?.value ?? 0}
-          hint={`Men ${data.missionGenderBreakdown.menReady} · Women ${data.missionGenderBreakdown.womenReady}`}
-        />
-      </section>
+      <DashboardOverviewCards
+        overview={{
+          totalMembers: data.overview.totalMembers,
+          currentCallings: data.overview.currentCallings,
+          recommendActive: recommendMap.Active ?? 0,
+          missionReady: data.missionReadiness.summary.find((row) => row.label === "Ready")?.value ?? 0,
+          recentBaptismsThisYear: data.recentBaptisms.summary.find((row) => row.label === "This Year")?.value ?? 0
+        }}
+        recommendRecovered={data.newReturningStrengthening.summary.find((row) => row.label === "Recommend Recovered (1y+)")?.value ?? 0}
+        missionReadyHint={`Men ${data.missionGenderBreakdown.menReady} · Women ${data.missionGenderBreakdown.womenReady}`}
+      />
 
       <SyncControlPanel
         daysSinceLastSync={data.daysSinceLastSync}

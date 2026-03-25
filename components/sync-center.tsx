@@ -32,6 +32,21 @@ type SyncLogPayload = {
 const cardClassName =
   "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 
+const formatSyncType = (value: string) => {
+  switch (value) {
+    case "sqlite_spike_full_sync":
+    case "nightly_full_directory_sync":
+      return "Full Directory Sync";
+    case "sqlite_spike_calling_sync":
+    case "hourly_calling_sync":
+      return "Calling Sync";
+    case "sqlite_spike_baseline_seed":
+      return "Baseline Seed";
+    default:
+      return value;
+  }
+};
+
 export function SyncCenter() {
   const [status, setStatus] = useState<SyncStatusPayload | null>(null);
   const [log, setLog] = useState<SyncLogPayload | null>(null);
@@ -83,9 +98,8 @@ export function SyncCenter() {
     setMessage(null);
 
     try {
-      const response = await fetch(kind === "full" ? "/api/sync/full" : "/api/sync/callings", {
-        method: "POST"
-      });
+      const endpoint = kind === "full" ? "/api/sync/full" : "/api/sync/callings";
+      const response = await fetch(endpoint, { method: "POST" });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -186,8 +200,7 @@ export function SyncCenter() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Desktop Operations</p>
         <h1 className="mt-3 font-serif text-4xl text-slate-900">Sync Center</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Run LCR sync jobs from the desktop app and monitor progress without leaving StakeOS. Full sync refreshes the
-          entire directory. Calling sync updates callings only.
+          Run LCR sync jobs from the desktop app and monitor progress without leaving StakeOS. Full sync refreshes the local directory store and reseeds exact snapshot diffs. Calling sync updates callings only.
         </p>
         {message ? (
           <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>
@@ -235,7 +248,11 @@ export function SyncCenter() {
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active Sync</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
-                  {status?.activeJob ? (status.activeJob.kind === "full" ? "Full Directory" : "Calling Only") : "None"}
+                  {status?.activeJob
+                    ? status.activeJob.kind === "full"
+                      ? "Full Directory"
+                      : "Calling Only"
+                    : "None"}
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
@@ -263,7 +280,7 @@ export function SyncCenter() {
             <h2 className="font-serif text-2xl text-slate-900">Latest Completed Sync</h2>
             {status?.latest ? (
               <div className="mt-6 space-y-2 text-sm text-slate-700">
-                <div><span className="font-semibold text-slate-900">Type:</span> {status.latest.syncType}</div>
+                <div><span className="font-semibold text-slate-900">Type:</span> {formatSyncType(status.latest.syncType)}</div>
                 <div><span className="font-semibold text-slate-900">Status:</span> {status.latest.status}</div>
                 <div><span className="font-semibold text-slate-900">Started:</span> {new Date(status.latest.startedAt).toLocaleString()}</div>
                 <div><span className="font-semibold text-slate-900">Completed:</span> {status.latest.completedAt ? new Date(status.latest.completedAt).toLocaleString() : "—"}</div>

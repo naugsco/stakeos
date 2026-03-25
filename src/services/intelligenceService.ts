@@ -2863,7 +2863,8 @@ export const getReportsOverview = async () => {
       (
         SELECT COUNT(*)::text
         FROM current_callings_dedup c
-        WHERE c.title ~* '(president|bishop|high councilor)'
+        WHERE c.member_id IS NOT NULL
+          AND c.title ~* '(president|bishop|high councilor)'
       ) AS "leadershipCallings",
       (
         SELECT COUNT(*)::text
@@ -5053,7 +5054,7 @@ export const getDashboardUnits = async () => {
 
 export const getStakeOverview = async (unit?: string | null) => {
   const unitScope = normalizeUnitScope(unit);
-  const [members, callings, vacancies, latestSync] = await Promise.all([
+  const [members, callings, memberCallingCoverage, latestSync] = await Promise.all([
     query<{ count: string }>(
       `
       SELECT COUNT(*)::text AS count
@@ -5068,17 +5069,31 @@ export const getStakeOverview = async (unit?: string | null) => {
       SELECT COUNT(*)::text AS count
       FROM current_callings_dedup c
       LEFT JOIN units u ON c.unit_id = u.id
-      WHERE ($1::text IS NULL OR COALESCE(NULLIF(u.name, ''), 'Unknown') = $1)
+      WHERE c.member_id IS NOT NULL
+        AND ($1::text IS NULL OR COALESCE(NULLIF(u.name, ''), 'Unknown') = $1)
       `,
       [unitScope]
     ),
-    query<{ count: string }>(
+    query<{ withCurrentCalling: string; withoutCurrentCalling: string }>(
       `
-      SELECT COUNT(*)::text AS count
-      FROM current_callings_dedup c
-      LEFT JOIN units u ON c.unit_id = u.id
-      WHERE member_id IS NULL
-        AND ($1::text IS NULL OR COALESCE(NULLIF(u.name, ''), 'Unknown') = $1)
+      SELECT
+        COUNT(*) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM current_callings_dedup c
+            WHERE c.member_id = m.id
+          )
+        )::text AS "withCurrentCalling",
+        COUNT(*) FILTER (
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM current_callings_dedup c
+            WHERE c.member_id = m.id
+          )
+        )::text AS "withoutCurrentCalling"
+      FROM members m
+      LEFT JOIN units u ON m.unit_id = u.id
+      WHERE ($1::text IS NULL OR COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') = $1)
       `,
       [unitScope]
     ),
@@ -5104,7 +5119,8 @@ export const getStakeOverview = async (unit?: string | null) => {
   return {
     totalMembers: Number.parseInt(members.rows[0]?.count ?? "0", 10),
     currentCallings: Number.parseInt(callings.rows[0]?.count ?? "0", 10),
-    openCallings: Number.parseInt(vacancies.rows[0]?.count ?? "0", 10),
+    membersWithCurrentCalling: Number.parseInt(memberCallingCoverage.rows[0]?.withCurrentCalling ?? "0", 10),
+    membersWithoutCurrentCalling: Number.parseInt(memberCallingCoverage.rows[0]?.withoutCurrentCalling ?? "0", 10),
     latestSync: latestSync.rows[0] ?? null
   };
 };

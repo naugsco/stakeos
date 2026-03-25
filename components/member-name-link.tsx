@@ -11,8 +11,10 @@ export function MemberNameLink({ lcrMemberId, fullName, className }: MemberNameL
     return <span className={className}>{fullName}</span>;
   }
 
+  const href = `/members/${encodeURIComponent(lcrMemberId)}`;
+
   return (
-    <Link href={`/members/${encodeURIComponent(lcrMemberId)}`} className={className ?? "hover:underline"}>
+    <Link href={href} className={className ?? "hover:underline"}>
       {fullName}
     </Link>
   );

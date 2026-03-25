@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { LineTrendChart } from "@/components/charts/line-trend-chart";
 import { StatCard } from "@/components/stat-card";
 import { UnitHealthRadarPanel } from "@/components/unit-health-radar-panel";
-import { loadStakeOverviewPageData } from "@/lib/dashboardData";
+import { loadStakeOverviewPageDataBySource } from "@/lib/dashboardData";
 
 const formatChangedFields = (changedFields: string[]) => (changedFields.length > 0 ? changedFields.join(", ") : "-");
 
@@ -17,25 +17,33 @@ const syncCoverageHint = (status: string, readyLabel: string) => {
   return "No snapshot baseline yet. Run the baseline seed or the next sync.";
 };
 
-export default async function StakeOverviewPage() {
-  const data = await loadStakeOverviewPageData();
-  const contactCoverageReady =
-    data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready;
-  const contactCoverageStatus =
-    data.syncDiff.coverage.emails.status === "not-seeded" && data.syncDiff.coverage.phones.status === "not-seeded"
+export default async function StakeOverviewPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
+  void searchParams;
+  const data = await loadStakeOverviewPageDataBySource("sqlite");
+  const contactCoverageReady = data.syncDiff
+    ? data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready
+    : false;
+  const contactCoverageStatus = data.syncDiff
+    ? data.syncDiff.coverage.emails.status === "not-seeded" && data.syncDiff.coverage.phones.status === "not-seeded"
       ? "not-seeded"
       : contactCoverageReady
         ? "ready"
-        : "baseline-established";
+        : "baseline-established"
+    : "not-seeded";
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Stake Overview</h1>
+      <div>
+        <div>
+          <h1 className="text-2xl font-semibold">Stake Overview</h1>
+          <p className="text-sm text-slate-600">Trend and change tracking across leadership, converts, unit health, and sync-to-sync movement.</p>
+        </div>
+      </div>
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard label="Total Members" value={data.overview.totalMembers} />
-        <StatCard label="Active Callings" value={data.overview.currentCallings} />
-        <StatCard label="Open Callings" value={data.overview.openCallings} />
+        <StatCard label="Members With A Current Calling" value={data.overview.membersWithCurrentCalling} />
+        <StatCard label="Members Without A Current Calling" value={data.overview.membersWithoutCurrentCalling} />
       </section>
 
       <section>
@@ -53,6 +61,7 @@ export default async function StakeOverviewPage() {
         <UnitHealthRadarPanel rows={data.unitHealthRadar} />
       </section>
 
+      {data.syncDiff ? (
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Changes Since Last Sync</h2>
         <div className="grid gap-4 md:grid-cols-3">
@@ -229,6 +238,7 @@ export default async function StakeOverviewPage() {
           </div>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

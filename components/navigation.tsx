@@ -18,7 +18,7 @@ export function Navigation() {
     <nav className="sticky top-0 z-20 border-b border-amber-900/10 bg-[#fffaf0]/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <Link className="text-xl font-semibold text-slate-900" href="/dashboard">
-          StakeOS Leadership
+          StakeOS
         </Link>
         <div className="flex flex-wrap gap-2 text-sm font-medium">
           {links.map((link) => (

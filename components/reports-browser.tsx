@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { ContactMethodsInline } from "@/components/contact-links";
 import { MemberNameLink } from "@/components/member-name-link";
 
 type SortDirection = "asc" | "desc";
@@ -224,6 +225,7 @@ type CovenantPathProgressionRow = {
 };
 
 interface ReportsBrowserProps {
+  source?: "postgres" | "sqlite";
   unitHealth: UnitHealthRow[];
   leadershipTenure: LeadershipTenureRow[];
   recentMoveIns: RecentMoveInRow[];
@@ -264,6 +266,7 @@ interface ReportsBrowserProps {
 }
 
 export function ReportsBrowser({
+  source = "sqlite",
   unitHealth,
   leadershipTenure,
   recentMoveIns,
@@ -828,7 +831,7 @@ export function ReportsBrowser({
                       <td className="px-4 py-3 font-medium text-slate-900">
                         <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
-                      <td className="px-4 py-3">{row.phoneNumber ?? row.email ?? "-"}</td>
+                      <td className="px-4 py-3"><ContactMethodsInline phone={row.phoneNumber} email={row.email} /></td>
                     </tr>
                   ))}
                 </tbody>
