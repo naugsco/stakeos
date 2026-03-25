@@ -49,10 +49,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     started: true,
-    message:
-      source === "sqlite"
-        ? "SQLite full directory sync started. Complete LCR login in the Playwright browser if prompted."
-        : "Full directory sync started. Complete LCR login in the Playwright browser if prompted.",
+    message: "Full directory sync started. Complete LCR login in the Playwright browser if prompted.",
     job: state
   });
 }

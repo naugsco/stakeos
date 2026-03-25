@@ -205,14 +205,14 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   }, []);
 
   const loadSyncStatus = useCallback(async () => {
-    const response = await fetch("/api/sync/status?source=sqlite", { cache: "no-store" });
+    const response = await fetch("/api/sync/status", { cache: "no-store" });
     const payload = (await response.json()) as SyncStatusPayload;
     setSyncStatus(payload);
     return payload;
   }, []);
 
   const loadSyncLog = useCallback(async () => {
-    const response = await fetch("/api/sync/log?source=sqlite&lines=100", { cache: "no-store" });
+    const response = await fetch("/api/sync/log?lines=100", { cache: "no-store" });
     const payload = (await response.json()) as SyncLogPayload;
     setSyncLog(payload);
     return payload;
@@ -424,7 +424,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     setMessage(null);
 
     try {
-      const response = await fetch("/api/sync/full?source=sqlite", { method: "POST" });
+      const response = await fetch("/api/sync/full", { method: "POST" });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.message || "Unable to start the first full sync.");
@@ -861,7 +861,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             <div className="mt-1 font-semibold">{snapshot.status.requiredComplete && !restartRequired ? "Ready" : "Needs attention"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.database.ok)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">SQLite Store</div>
+            <div className="text-xs font-semibold uppercase tracking-wide">Local Data Store</div>
             <div className="mt-1 font-semibold">{snapshot.status.database.ok ? "Ready" : "Needs setup"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.schemaReady)}`}>
@@ -875,7 +875,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         </div>
         <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Config file:</span> {snapshot.configPath}</div>
-          <div className="mt-1"><span className="font-semibold text-slate-900">SQLite store:</span> {snapshot.status.database.message}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">Local store:</span> {snapshot.status.database.message}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">First successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
           {!snapshot.status.requiredComplete ? <div className="mt-1"><span className="font-semibold text-slate-900">Missing required values:</span> {missingLabel}</div> : null}
           {restartRequired ? <div className="mt-1"><span className="font-semibold text-slate-900">Restart required:</span> The running app has not applied the current desktop config yet.</div> : null}

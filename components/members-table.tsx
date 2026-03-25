@@ -67,11 +67,9 @@ const compareValues = (
 };
 
 export function MembersTable({
-  members,
-  source = "postgres"
+  members
 }: {
   members: MemberRow[];
-  source?: "postgres" | "sqlite";
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -137,11 +135,7 @@ export function MembersTable({
             <tr key={member.lcrMemberId} className="hover:bg-slate-50">
               <td className="px-4 py-3 font-medium text-slate-900">
                 <Link
-                  href={
-                    source === "sqlite"
-                      ? `/members/${encodeURIComponent(member.lcrMemberId)}?source=sqlite`
-                      : `/members/${encodeURIComponent(member.lcrMemberId)}`
-                  }
+                  href={`/members/${encodeURIComponent(member.lcrMemberId)}`}
                   className="hover:underline"
                 >
                   {member.fullName}

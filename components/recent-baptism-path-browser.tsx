@@ -141,7 +141,7 @@ export function RecentBaptismPathBrowser({
                 <td className="px-4 py-3">{row.baptismDate ?? "-"}</td>
                 <td className="px-4 py-3">{row.unitName}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">
-                  <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                  <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                 </td>
                 <td className="px-4 py-3">{row.templeRecommendStatus ?? "-"}</td>
                 <td className="px-4 py-3">{row.hasCurrentCalling ? row.currentCalling ?? "Yes" : "No"}</td>

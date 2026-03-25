@@ -34,7 +34,7 @@ const run = async () => {
   const targetLogs = getLatestSuccessfulSqliteSyncs(2);
 
   if (targetLogs.length === 0) {
-    console.log("No successful SQLite full sync logs found. Run sqlite:spike:sync first.");
+    console.log("No successful SQLite full sync logs found. Run sqlite:sync first.");
     return;
   }
 
@@ -51,6 +51,6 @@ const run = async () => {
 };
 
 run().catch((error) => {
-  console.error("Failed to seed SQLite spike snapshots.", error);
+  console.error("Failed to seed SQLite snapshots.", error);
   process.exit(1);
 });

@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -60,7 +60,15 @@ const getSqliteSpikeDbPath = () => {
     return path.resolve(configured);
   }
 
-  return path.resolve(getDesktopConfigDir(), "sqlite-spike", "stakeos-spike.db");
+  const defaultPath = path.resolve(getDesktopConfigDir(), "stakeos.db");
+  const legacyPath = path.resolve(getDesktopConfigDir(), "sqlite-spike", "stakeos-spike.db");
+
+  if (!existsSync(defaultPath) && existsSync(legacyPath)) {
+    mkdirSync(path.dirname(defaultPath), { recursive: true });
+    renameSync(legacyPath, defaultPath);
+  }
+
+  return defaultPath;
 };
 
 const openSqliteConfigDb = () => {
@@ -245,9 +253,9 @@ const validateLcrUrl = (rawUrl?: string): DiagnosticCheck => {
 
 const validateSqliteStore = (): DiagnosticCheck => ({
   key: "sqlite_store",
-  label: "SQLite Store Path",
+  label: "Local Data Store Path",
   status: "info",
-  summary: "StakeOS Desktop stores SQLite data in the local application-support folder.",
+  summary: "StakeOS Desktop stores local data in the application-support folder.",
   detail: getSqliteSpikeDbPath()
 });
 
@@ -319,10 +327,10 @@ const inspectDatabase = async (): Promise<DatabaseInspection> => {
   if (!existsSync(dbPath)) {
     return {
       ok: false,
-      message: "SQLite directory store has not been initialized yet.",
+      message: "Local directory store has not been initialized yet.",
       exists: false,
       schemaReady: false,
-      schemaMessage: "Run the first SQLite sync to create the local store.",
+      schemaMessage: "Run the first full sync to create the local store.",
       firstSyncCompleted: false,
       latestSuccessfulSyncAt: null,
       latestSuccessfulSyncType: null
@@ -372,7 +380,7 @@ const inspectDatabase = async (): Promise<DatabaseInspection> => {
       message: "Connected",
       exists: true,
       schemaReady,
-      schemaMessage: schemaReady ? "SQLite schema is present." : "SQLite schema has not been initialized yet.",
+      schemaMessage: schemaReady ? "Local data schema is present." : "Local data schema has not been initialized yet.",
       firstSyncCompleted,
       latestSuccessfulSyncAt,
       latestSuccessfulSyncType
@@ -380,10 +388,10 @@ const inspectDatabase = async (): Promise<DatabaseInspection> => {
   } catch (error) {
     return {
       ok: false,
-      message: error instanceof Error ? error.message : "Unable to inspect the SQLite store.",
+      message: error instanceof Error ? error.message : "Unable to inspect the local data store.",
       exists: true,
       schemaReady: false,
-      schemaMessage: "StakeOS cannot inspect the SQLite schema right now.",
+      schemaMessage: "StakeOS cannot inspect the local data schema right now.",
       firstSyncCompleted: false,
       latestSuccessfulSyncAt: null,
       latestSuccessfulSyncType: null
@@ -402,37 +410,37 @@ export const getDesktopConfigSnapshot = async () => {
     validateSqliteStore(),
     {
       key: "database",
-      label: "SQLite Directory Store",
+      label: "Local Directory Store",
       status: database.ok ? "pass" : "fail",
-      summary: database.ok ? "SQLite store is available." : "SQLite store is not ready yet.",
+      summary: database.ok ? "Local store is available." : "Local store is not ready yet.",
       detail: database.message,
-      action: database.ok ? undefined : "Run the first SQLite sync to initialize the local store."
+      action: database.ok ? undefined : "Run the first full sync to initialize the local store."
     } satisfies DiagnosticCheck,
     {
       key: "schema",
-      label: "SQLite Schema",
+      label: "Local Data Schema",
       status: !database.ok ? "info" : database.schemaReady ? "pass" : "fail",
       summary: !database.ok
-        ? "Schema check is waiting for the SQLite store to exist."
+        ? "Schema check is waiting for the local store to exist."
         : database.schemaReady
-          ? "SQLite schema is ready."
-          : "SQLite schema has not been initialized yet.",
+          ? "Local data schema is ready."
+          : "Local data schema has not been initialized yet.",
       detail: database.schemaMessage,
-      action: !database.ok || database.schemaReady ? undefined : "Run the first SQLite sync to initialize the schema."
+      action: !database.ok || database.schemaReady ? undefined : "Run the first full sync to initialize the schema."
     } satisfies DiagnosticCheck,
     validateLcrUrl(effectiveEnv.LCR_DIRECTORY_URL),
     ...(await validatePlaywright(effectiveEnv)),
     {
       key: "first_sync",
-      label: "First SQLite Full Sync",
+      label: "First Full Sync",
       status: !database.ok || !database.schemaReady ? "info" : database.firstSyncCompleted ? "pass" : "warn",
       summary: !database.ok || !database.schemaReady
-        ? "First sync check is waiting for the SQLite store and schema to be ready."
+        ? "First sync check is waiting for the local store and schema to be ready."
         : database.firstSyncCompleted
-          ? "A successful SQLite full directory sync is already recorded."
-          : "StakeOS still needs its first successful SQLite full directory sync.",
+          ? "A successful full directory sync is already recorded."
+          : "StakeOS still needs its first successful full directory sync.",
       detail: database.latestSuccessfulSyncAt
-        ? `Last successful SQLite full sync: ${database.latestSuccessfulSyncAt}`
+        ? `Last successful full sync: ${database.latestSuccessfulSyncAt}`
         : "Run a full sync after setup so the dashboard and MCP have local data to use."
     } satisfies DiagnosticCheck
   ];

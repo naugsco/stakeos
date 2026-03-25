@@ -9,16 +9,12 @@ interface MemberDetailPageProps {
   params: {
     lcrMemberId: string;
   };
-  searchParams?: {
-    source?: string;
-  };
 }
 
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
-export default async function MemberDetailPage({ params, searchParams }: MemberDetailPageProps) {
-  const source = searchParams?.source === "postgres" ? "postgres" : "sqlite";
-  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, source);
+export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
+  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, "sqlite");
   if (!member) {
     notFound();
   }
@@ -27,7 +23,7 @@ export default async function MemberDetailPage({ params, searchParams }: MemberD
     <div className="space-y-6">
       <header className="space-y-2">
         <Link
-          href={source === "sqlite" ? "/members" : "/members?source=postgres"}
+          href="/members"
           className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
         >
           ← Back to Members
@@ -204,11 +200,7 @@ export default async function MemberDetailPage({ params, searchParams }: MemberD
                 <tr key={person.lcrMemberId} className="hover:bg-slate-50">
                   <td className="px-3 py-2">
                     <Link
-                      href={
-                        source === "sqlite"
-                          ? `/members/${encodeURIComponent(person.lcrMemberId)}?source=sqlite`
-                          : `/members/${encodeURIComponent(person.lcrMemberId)}`
-                      }
+                      href={`/members/${encodeURIComponent(person.lcrMemberId)}`}
                       className="font-medium text-slate-900 hover:underline"
                     >
                       {person.fullName}

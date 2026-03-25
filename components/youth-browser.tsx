@@ -115,9 +115,8 @@ export function YouthBrowser({
   missionEligible,
   missionYouthPipeline,
   seminaryInstituteOpportunity,
-  endowment,
-  source = "postgres"
-}: YouthBrowserProps & { source?: "postgres" | "sqlite" }) {
+  endowment
+}: YouthBrowserProps) {
   const [missionSortKey, setMissionSortKey] = useState<
     "unitName" | "fullName" | "age" | "gender" | "missionStatus" | "currentCalling"
   >("age");
@@ -326,7 +325,7 @@ export function YouthBrowser({
                 <tr key={`${row.lcrMemberId}-${index}`} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{row.unitName}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                   </td>
                   <td className="px-4 py-3">{row.age ?? "-"}</td>
                   <td className="px-4 py-3">{row.gender ?? "-"}</td>
@@ -385,7 +384,7 @@ export function YouthBrowser({
                 <tr key={row.lcrMemberId} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{row.unitName}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">
-                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                    <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                   </td>
                   <td className="px-4 py-3">{row.age ?? "-"}</td>
                   <td className="px-4 py-3">{boolLabel(row.potentialFlag)}</td>
@@ -441,7 +440,7 @@ export function YouthBrowser({
                   <tr key={member.lcrMemberId} className="hover:bg-slate-50">
                     <td className="px-3 py-2">{member.unitName ?? "-"}</td>
                     <td className="px-3 py-2 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} source={source} />
+                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
                     </td>
                     <td className="px-3 py-2">{member.age ?? "-"}</td>
                     <td className="px-3 py-2">{member.gender ?? "-"}</td>
@@ -489,7 +488,7 @@ export function YouthBrowser({
                 {sortedEndowment.map((member) => (
                   <tr key={member.lcrMemberId} className="hover:bg-slate-50">
                     <td className="px-3 py-2 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} source={source} />
+                      <MemberNameLink lcrMemberId={member.lcrMemberId} fullName={member.fullName} />
                     </td>
                     <td className="px-3 py-2">{member.age ?? "-"}</td>
                     <td className="px-3 py-2">{member.missionStatus ?? "-"}</td>

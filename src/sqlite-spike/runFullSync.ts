@@ -6,11 +6,11 @@ const main = async () => {
   const scraper = new LcrScraper();
   const snapshot = await scraper.scrapeDirectory();
   const result = await persistSqliteSpikeSnapshot("sqlite_spike_full_sync", snapshot);
-  console.log(`SQLite spike sync completed. Records processed: ${result.recordsProcessed}`);
-  console.log(`SQLite spike database: ${getSqliteSpikeDbPath()}`);
+  console.log(`SQLite sync completed. Records processed: ${result.recordsProcessed}`);
+  console.log(`SQLite database: ${getSqliteSpikeDbPath()}`);
 };
 
 main().catch((error) => {
-  console.error("SQLite spike full sync failed", error);
+  console.error("SQLite full sync failed", error);
   process.exit(1);
 });

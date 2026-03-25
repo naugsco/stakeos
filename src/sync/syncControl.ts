@@ -24,10 +24,10 @@ const getStateFilePath = (source: SyncDataSource) => path.join(runDir, `sync-sta
 const getCommandForKind = (kind: SyncJobKind, source: SyncDataSource) => {
   if (source === "sqlite") {
     if (kind === "full") {
-      return "npm run sqlite:spike:init && npm run sqlite:spike:sync && npm run sqlite:spike:seed-baseline";
+      return "npm run sqlite:init && npm run sqlite:sync && npm run sqlite:seed-baseline";
     }
 
-    return "npm run sqlite:spike:init && npm run sqlite:spike:callings";
+    return "npm run sqlite:init && npm run sqlite:callings";
   }
 
   if (kind === "full") {

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     started: true,
-    message: source === "sqlite" ? "SQLite calling sync started." : "Calling sync started.",
+    message: "Calling sync started.",
     job: state
   });
 }

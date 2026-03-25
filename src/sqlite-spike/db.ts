@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +7,17 @@ import { env } from "@/src/config/env";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const schemaPath = resolve(moduleDir, "schema.sql");
+const legacyDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "sqlite-spike", "stakeos-spike.db");
+const defaultDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "stakeos.db");
+
+const resolveDefaultDbPath = () => {
+  if (!existsSync(defaultDbPath) && existsSync(legacyDbPath)) {
+    mkdirSync(dirname(defaultDbPath), { recursive: true });
+    renameSync(legacyDbPath, defaultDbPath);
+  }
+
+  return defaultDbPath;
+};
 
 export const getSqliteSpikeDbPath = () => {
   const configured = env.SQLITE_SPIKE_DB_PATH?.trim();
@@ -14,7 +25,7 @@ export const getSqliteSpikeDbPath = () => {
     return resolve(configured);
   }
 
-  return resolve(homedir(), "Library", "Application Support", "StakeOS", "sqlite-spike", "stakeos-spike.db");
+  return resolveDefaultDbPath();
 };
 
 export const openSqliteSpikeDb = () => {

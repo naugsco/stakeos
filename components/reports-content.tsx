@@ -22,13 +22,11 @@ interface ReportsContentData {
 }
 
 export function ReportsContent({
-  data,
-  source = "postgres"
+  data
 }: {
   data: ReportsContentData;
-  source?: "postgres" | "sqlite";
 }) {
-  const recentBaptismHref = source === "sqlite" ? "/reports?source=sqlite#recent-baptism-path-list" : "/reports#recent-baptism-path-list";
+  const recentBaptismHref = "/reports#recent-baptism-path-list";
 
   return (
     <>
@@ -50,11 +48,11 @@ export function ReportsContent({
 
         <RecentBaptismUnitHeatmap rows={data.recentBaptismPathCohort} />
 
-        <RecentBaptismPathBrowser rows={data.recentBaptismPathCohort} source={source} />
+        <RecentBaptismPathBrowser rows={data.recentBaptismPathCohort} source="sqlite" />
       </section>
 
       <ReportsBrowser
-        source={source}
+        source="sqlite"
         unitHealth={data.unitHealth}
         leadershipTenure={data.leadershipTenure}
         recentMoveIns={data.recentMoveIns}

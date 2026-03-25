@@ -266,7 +266,7 @@ interface ReportsBrowserProps {
 }
 
 export function ReportsBrowser({
-  source = "postgres",
+  source = "sqlite",
   unitHealth,
   leadershipTenure,
   recentMoveIns,
@@ -501,7 +501,7 @@ export function ReportsBrowser({
                       <td className="px-4 py-3">{row.daysUntilExpiration ?? "-"}</td>
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.templeRecommendStatus ?? "-"}</td>
                     </tr>
@@ -548,7 +548,7 @@ export function ReportsBrowser({
                       <tr key={row.lcrMemberId} className="hover:bg-slate-50">
                         <td className="px-4 py-3">{row.unitName}</td>
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                          <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                         </td>
                         <td className="px-4 py-3">{row.age ?? "-"}</td>
                         <td className="px-4 py-3">{row.templeRecommendStatus ?? "-"}</td>
@@ -600,7 +600,7 @@ export function ReportsBrowser({
                       <tr key={`${row.lcrMemberId}-${row.reactivatedAt}`} className="hover:bg-slate-50">
                         <td className="px-4 py-3">{row.unitName}</td>
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                          <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                         </td>
                         <td className="px-4 py-3">{row.inactiveDays}</td>
                         <td className="px-4 py-3">{row.reactivatedAt}</td>
@@ -664,7 +664,7 @@ export function ReportsBrowser({
                     <td className="px-4 py-3">{row.overallFocus}</td>
                     <td className="px-4 py-3">{row.unitName}</td>
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                      <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                     </td>
                     <td className="px-4 py-3">{row.age ?? "-"}</td>
                     <td className="px-4 py-3">
@@ -772,7 +772,7 @@ export function ReportsBrowser({
                   <tr key={`${row.lcrMemberId}-${row.track}`} className="hover:bg-slate-50">
                     <td className="px-4 py-3">{row.unitName}</td>
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                      <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                     </td>
                     <td className="px-4 py-3">{row.age ?? "-"}</td>
                     <td className="px-4 py-3">{boolLabel(row.potentialFlag)}</td>
@@ -829,7 +829,7 @@ export function ReportsBrowser({
                       <td className="px-4 py-3">{row.moveInDate ?? "-"}</td>
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3"><ContactMethodsInline phone={row.phoneNumber} email={row.email} /></td>
                     </tr>
@@ -884,7 +884,7 @@ export function ReportsBrowser({
                       <td className="px-4 py-3">{row.gapCategory}</td>
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.age ?? "-"}</td>
                       <td className="px-4 py-3">{boolLabel(row.hasMinisteringBrothers)}</td>
@@ -1050,7 +1050,7 @@ export function ReportsBrowser({
                     <tr key={`${row.fullName}-${index}`} className="hover:bg-slate-50">
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.callingTitle}</td>
                       <td className="px-4 py-3">{row.yearsInCalling}</td>
@@ -1098,7 +1098,7 @@ export function ReportsBrowser({
                       <td className="px-4 py-3">{row.baptismDate ?? "-"}</td>
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.age ?? "-"}</td>
                     </tr>
@@ -1160,7 +1160,7 @@ export function ReportsBrowser({
                     <tr key={`${row.lcrMemberId}-${row.focusCategory}`} className="hover:bg-slate-50">
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.focusCategory}</td>
                       <td className="px-4 py-3">{row.focusDate ?? "-"}</td>
@@ -1213,7 +1213,7 @@ export function ReportsBrowser({
                     <tr key={`${row.lcrMemberId}-${row.recommendedNextOffice}`} className="hover:bg-slate-50">
                       <td className="px-4 py-3">{row.unitName}</td>
                       <td className="px-4 py-3 font-medium text-slate-900">
-                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} source={source} />
+                        <MemberNameLink lcrMemberId={row.lcrMemberId} fullName={row.fullName} />
                       </td>
                       <td className="px-4 py-3">{row.age ?? "-"}</td>
                       <td className="px-4 py-3">{row.currentOffice ?? "-"}</td>
