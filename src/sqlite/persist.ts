@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import { ensureSqliteSpikeSchema, openSqliteSpikeDb } from "@/src/sqlite-spike/db";
+import { ensureSqliteSpikeSchema, openSqliteSpikeDb } from "@/src/sqlite/db";
 import type { CallingRecord, DirectorySnapshot, MemberRecord } from "@/src/types/directory";
 
 interface PersistResult {

@@ -48,11 +48,10 @@ export function ReportsContent({
 
         <RecentBaptismUnitHeatmap rows={data.recentBaptismPathCohort} />
 
-        <RecentBaptismPathBrowser rows={data.recentBaptismPathCohort} source="sqlite" />
+        <RecentBaptismPathBrowser rows={data.recentBaptismPathCohort} />
       </section>
 
       <ReportsBrowser
-        source="sqlite"
         unitHealth={data.unitHealth}
         leadershipTenure={data.leadershipTenure}
         recentMoveIns={data.recentMoveIns}

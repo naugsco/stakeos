@@ -14,7 +14,7 @@ interface MemberDetailPageProps {
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
 export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
-  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId, "sqlite");
+  const member = await loadMemberDetailPageDataBySource(params.lcrMemberId);
   if (!member) {
     notFound();
   }

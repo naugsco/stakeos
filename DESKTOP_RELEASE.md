@@ -9,7 +9,7 @@ For a short maintainer publish checklist, use [GITHUB_RELEASE_CHECKLIST.md](./GI
 StakeOS Desktop is currently packaged for macOS through Electron.
 
 Important constraints:
-- the desktop app still depends on local PostgreSQL
+- the desktop app uses an embedded local SQLite database
 - the user still needs a valid LCR custom report URL
 - the user still logs in to LCR manually through the Playwright browser session
 - if Apple signing/notarization credentials are not present, the release will still build with ad-hoc signing and skip notarization automatically
@@ -150,9 +150,7 @@ If you are publishing unsigned macOS builds, also tell users:
 - or use `System Settings > Privacy & Security > Open Anyway`
 
 The receiving user still needs:
-- PostgreSQL installed and running
-- a local `stakeos` database
-- a valid `DATABASE_URL`
+- the SQLite database is created automatically on first sync
 - their own LCR custom report URL
 - Playwright Chromium installed if they are running from source
 
@@ -183,7 +181,6 @@ A practical GitHub workflow is:
 These are not done yet:
 - automated signing identity discovery guidance inside the app
 - notarization verification UI inside the repo tooling
-- automatic PostgreSQL installation
 - automatic Playwright/Chromium installation inside the packaged app
 
 Those are the next packaging-quality steps after this release baseline.

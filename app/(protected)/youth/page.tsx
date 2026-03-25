@@ -4,9 +4,8 @@ import { TransitionLaneChart } from "@/components/charts/transition-lane-chart";
 import { YouthBrowser } from "@/components/youth-browser";
 import { loadYouthPageDataBySource } from "@/lib/dashboardData";
 
-export default async function YouthPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  void searchParams;
-  const data = await loadYouthPageDataBySource("sqlite");
+export default async function YouthPage() {
+  const data = await loadYouthPageDataBySource();
   const milestoneMap = new Map(data.transitionMilestones.map((row) => [row.label, row]));
   const organizationMap = new Map(data.organizationTransitions.map((row) => [row.label, row]));
   const womenMissionReady = milestoneMap.get("17-25 Mission Ready (Women)")?.completedCount ?? 0;

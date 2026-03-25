@@ -3,9 +3,8 @@ export const dynamic = "force-dynamic";
 import { CommitteesBrowser } from "@/components/committees-browser";
 import { loadCommitteesPageDataBySource } from "@/lib/dashboardData";
 
-export default async function CommitteesPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  void searchParams;
-  const { committees } = await loadCommitteesPageDataBySource("sqlite");
+export default async function CommitteesPage() {
+  const { committees } = await loadCommitteesPageDataBySource();
 
   return (
     <div className="space-y-6">

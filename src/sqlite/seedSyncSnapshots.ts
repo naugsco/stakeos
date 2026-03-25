@@ -1,5 +1,5 @@
-import { openSqliteSpikeDb, ensureSqliteSpikeSchema } from "@/src/sqlite-spike/db";
-import { seedSqliteSpikeSnapshotsForSyncLog } from "@/src/sqlite-spike/persist";
+import { openSqliteSpikeDb, ensureSqliteSpikeSchema } from "@/src/sqlite/db";
+import { seedSqliteSpikeSnapshotsForSyncLog } from "@/src/sqlite/persist";
 
 type SyncLogRow = {
   id: number;

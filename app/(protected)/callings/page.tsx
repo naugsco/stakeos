@@ -3,9 +3,8 @@ export const dynamic = "force-dynamic";
 import { CallingsBrowser } from "@/components/callings-browser";
 import { loadCallingsPageDataBySource } from "@/lib/dashboardData";
 
-export default async function CallingsPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  void searchParams;
-  const { callings } = await loadCallingsPageDataBySource("sqlite");
+export default async function CallingsPage() {
+  const { callings } = await loadCallingsPageDataBySource();
 
   return (
     <div className="space-y-6">

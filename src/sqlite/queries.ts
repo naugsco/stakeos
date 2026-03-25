@@ -1,4 +1,4 @@
-import { getSqliteSpikeStatus, openSqliteSpikeDb } from "@/src/sqlite-spike/db";
+import { getSqliteSpikeStatus, openSqliteSpikeDb } from "@/src/sqlite/db";
 import type {
   CommitteeMemberRow,
   CommitteeRoster,

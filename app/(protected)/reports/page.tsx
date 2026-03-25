@@ -4,15 +4,10 @@ import { ReportsContent } from "@/components/reports-content";
 import { StatCard } from "@/components/stat-card";
 import { loadReportsPageDataBySource, loadReportsPageShellDataBySource } from "@/lib/dashboardData";
 
-export default async function ReportsPage({
-  searchParams
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  void searchParams;
-  const shellData = await loadReportsPageShellDataBySource("sqlite");
+export default async function ReportsPage() {
+  const shellData = await loadReportsPageShellDataBySource();
   const overview = shellData.overview;
-  const reportsData = await loadReportsPageDataBySource("sqlite");
+  const reportsData = await loadReportsPageDataBySource();
 
   return (
     <div className="space-y-6">

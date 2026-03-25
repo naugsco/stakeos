@@ -10,7 +10,7 @@ For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GIT
 
 - Node.js + TypeScript
 - Playwright (LCR browser automation)
-- PostgreSQL
+- SQLite (better-sqlite3)
 - Next.js + Tailwind + Recharts (dashboard)
 - MCP server for Claude Desktop
 - Nodemailer email delivery
@@ -24,11 +24,10 @@ For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GIT
 - Manual full directory sync + manual calling sync.
 
 2. Leadership Intelligence Database
-- PostgreSQL schema for leadership/member intelligence.
-- Tables: `members`, `households`, `callings`, `units`, `organizations`, `priesthood`, `emails`, `phone_numbers`, `meeting_assignments`, `sync_logs`.
+- SQLite database for leadership/member intelligence.
 
 3. MCP Server for Claude
-- Local MCP tools powered only by PostgreSQL data.
+- Local MCP tools powered by local data.
 - Tools:
   - `get_calling_members`
   - `get_spouse`
@@ -72,26 +71,25 @@ cp .env.example .env
 ```
 
 Update `.env` values:
-- `DATABASE_URL`
 - `SMTP_*` values (for email tools)
 - `STAKE_*` metadata and report recipients
 
-### 3. Create schema
+### 3. Initialize database
 
 ```bash
-npm run db:migrate
+npm run sqlite:init
 ```
 
 ### 4. First sync (manual login)
 
 ```bash
-npm run sync:full
+npm run sqlite:sync
 ```
 
 What happens:
 - Playwright opens Chromium.
 - You manually log in to LCR.
-- StakeOS navigates to `LCR_DIRECTORY_URL` (defaults to your custom report URL), waits for report rows to fully load, then stores normalized records in PostgreSQL.
+- StakeOS navigates to `LCR_DIRECTORY_URL` (defaults to your custom report URL), waits for report rows to fully load, then stores normalized records in local SQLite.
 
 ## Running StakeOS
 
@@ -200,9 +198,8 @@ Then restart Claude Desktop.
 ```bash
 npm run typecheck
 npm run lint
-npm run sync:full
-npm run sync:callings
-npm run mcp:dev
+npm run sqlite:sync
+npm run sqlite:callings
 npm run mcp:build
 npm run mcp:start
 npm run desktop:start
@@ -213,7 +210,8 @@ npm run desktop:release
 ## Project Structure
 
 - `src/sync/*` - Playwright sync engine + normalization + persistence
-- `src/db/*` - PostgreSQL schema and migration
+- `src/db/pool.ts` - PostgreSQL connection (MCP server, transitional)
+- `src/sqlite/*` - SQLite database, schema, sync, and queries
 - `src/services/*` - intelligence, reports, email, WhatsApp data services
 - `src/mcp/server.ts` - MCP server/tool definitions
 - `app/*` + `components/*` - Next.js dashboard UI

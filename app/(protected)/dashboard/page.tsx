@@ -14,7 +14,7 @@ export default async function DashboardPage({
   searchParams?: { unit?: string };
 }) {
   const selectedUnit = searchParams?.unit?.trim() ? searchParams.unit.trim() : null;
-  const data = await loadDashboardDataBySource("sqlite", selectedUnit);
+  const data = await loadDashboardDataBySource(selectedUnit);
   const recommendMap = data.templeRecommendHealth.statusCounts.reduce<Record<string, number>>((acc, row) => {
     acc[row.label] = row.value;
     return acc;

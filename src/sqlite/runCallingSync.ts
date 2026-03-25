@@ -1,6 +1,6 @@
 import { LcrScraper } from "@/src/sync/lcrScraper";
-import { getSqliteSpikeDbPath } from "@/src/sqlite-spike/db";
-import { persistSqliteSpikeCallingsSnapshot } from "@/src/sqlite-spike/persist";
+import { getSqliteSpikeDbPath } from "@/src/sqlite/db";
+import { persistSqliteSpikeCallingsSnapshot } from "@/src/sqlite/persist";
 
 const main = async () => {
   const scraper = new LcrScraper();

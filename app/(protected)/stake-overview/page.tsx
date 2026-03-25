@@ -17,9 +17,8 @@ const syncCoverageHint = (status: string, readyLabel: string) => {
   return "No snapshot baseline yet. Run the baseline seed or the next sync.";
 };
 
-export default async function StakeOverviewPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
-  void searchParams;
-  const data = await loadStakeOverviewPageDataBySource("sqlite");
+export default async function StakeOverviewPage() {
+  const data = await loadStakeOverviewPageDataBySource();
   const contactCoverageReady = data.syncDiff
     ? data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready
     : false;

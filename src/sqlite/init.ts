@@ -1,4 +1,4 @@
-import { ensureSqliteSpikeSchema, getSqliteSpikeDbPath, openSqliteSpikeDb } from "@/src/sqlite-spike/db";
+import { ensureSqliteSpikeSchema, getSqliteSpikeDbPath, openSqliteSpikeDb } from "@/src/sqlite/db";
 
 const main = async () => {
   const db = openSqliteSpikeDb();

@@ -3,13 +3,8 @@ export const dynamic = "force-dynamic";
 import { MembersTable } from "@/components/members-table";
 import { loadMembersPageDataBySource } from "@/lib/dashboardData";
 
-export default async function MembersPage({
-  searchParams
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  void searchParams;
-  const members = await loadMembersPageDataBySource("sqlite");
+export default async function MembersPage() {
+  const members = await loadMembersPageDataBySource();
 
   return (
     <div className="space-y-4">

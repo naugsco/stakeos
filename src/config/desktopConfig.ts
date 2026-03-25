@@ -8,7 +8,7 @@ import { z } from "zod";
 
 const desktopConfigSchema = z.object({
   DATABASE_URL: z.string().optional(),
-  SQLITE_SPIKE_DB_PATH: z.string().optional(),
+  SQLITE_DB_PATH: z.string().optional(),
   LCR_DIRECTORY_URL: z.string().optional(),
   PLAYWRIGHT_USER_DATA_DIR: z.string().optional(),
   PLAYWRIGHT_HEADLESS: z.string().optional(),
@@ -54,8 +54,8 @@ const getDesktopConfigDir = () => {
   }
 };
 
-const getSqliteSpikeDbPath = () => {
-  const configured = loadDesktopConfig().SQLITE_SPIKE_DB_PATH?.trim();
+const getSqliteDbPath = () => {
+  const configured = loadDesktopConfig().SQLITE_DB_PATH?.trim();
   if (configured) {
     return path.resolve(configured);
   }
@@ -72,7 +72,7 @@ const getSqliteSpikeDbPath = () => {
 };
 
 const openSqliteConfigDb = () => {
-  const dbPath = getSqliteSpikeDbPath();
+  const dbPath = getSqliteDbPath();
   mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
@@ -256,7 +256,7 @@ const validateSqliteStore = (): DiagnosticCheck => ({
   label: "Local Data Store Path",
   status: "info",
   summary: "StakeOS Desktop stores local data in the application-support folder.",
-  detail: getSqliteSpikeDbPath()
+  detail: getSqliteDbPath()
 });
 
 const validatePlaywright = async (effectiveEnv: Record<string, string | undefined>): Promise<DiagnosticCheck[]> => {
@@ -322,7 +322,7 @@ type DatabaseInspection = {
 };
 
 const inspectDatabase = async (): Promise<DatabaseInspection> => {
-  const dbPath = getSqliteSpikeDbPath();
+  const dbPath = getSqliteDbPath();
 
   if (!existsSync(dbPath)) {
     return {

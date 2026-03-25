@@ -41,7 +41,7 @@ const emptyStringToUndefined = (value: unknown) => {
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.preprocess(emptyStringToUndefined, z.string().min(1).default("postgresql://localhost:5432/stakeos")),
-  SQLITE_SPIKE_DB_PATH: z.string().optional(),
+  SQLITE_DB_PATH: z.string().optional(),
   PLAYWRIGHT_USER_DATA_DIR: z.string().default(".playwright/profile"),
   PLAYWRIGHT_HEADLESS: z
     .string()

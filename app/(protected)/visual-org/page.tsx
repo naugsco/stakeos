@@ -1,14 +1,9 @@
 import { VisualOrgBrowser } from "@/components/visual-org/visual-org-browser";
-import { loadSqliteSpikeAvailableUnits } from "@/src/sqlite-spike/queries";
+import { loadSqliteSpikeAvailableUnits } from "@/src/sqlite/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function VisualOrgPage({
-  searchParams
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  void searchParams;
+export default async function VisualOrgPage() {
   const availableUnits = await loadSqliteSpikeAvailableUnits();
 
   return (

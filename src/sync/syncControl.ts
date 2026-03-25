@@ -3,10 +3,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import path from "node:path";
 
 export type SyncJobKind = "full" | "callings";
-export type SyncDataSource = "postgres" | "sqlite";
 
 export type SyncLaunchState = {
-  source: SyncDataSource;
   kind: SyncJobKind;
   pid: number;
   logFile: string;
@@ -19,27 +17,19 @@ const runDir = path.join(projectRoot, ".run");
 const shell = process.platform === "win32" ? "cmd.exe" : "zsh";
 const isWindows = process.platform === "win32";
 
-const getStateFilePath = (source: SyncDataSource) => path.join(runDir, `sync-state-${source}.json`);
+const stateFilePath = path.join(runDir, "sync-state.json");
 
-const getCommandForKind = (kind: SyncJobKind, source: SyncDataSource) => {
-  if (source === "sqlite") {
-    if (kind === "full") {
-      return "npm run sqlite:init && npm run sqlite:sync && npm run sqlite:seed-baseline";
-    }
-
-    return "npm run sqlite:init && npm run sqlite:callings";
-  }
-
+const getCommandForKind = (kind: SyncJobKind) => {
   if (kind === "full") {
-    return "npm run db:migrate && npm run sync:full";
+    return "npm run sqlite:init && npm run sqlite:sync && npm run sqlite:seed-baseline";
   }
 
-  return "npm run sync:callings";
+  return "npm run sqlite:init && npm run sqlite:callings";
 };
 
-const getLogFileName = (kind: SyncJobKind, source: SyncDataSource) => {
+const getLogFileName = (kind: SyncJobKind) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `web-${source}-${kind}-sync-${timestamp}.log`;
+  return `web-sqlite-${kind}-sync-${timestamp}.log`;
 };
 
 const ensureRunDir = () => {
@@ -62,8 +52,7 @@ const isRunDirPath = (filePath: string) => {
 
 export const isSyncLogPathSafe = (filePath: string) => isRunDirPath(filePath);
 
-export const readSyncLaunchState = (source: SyncDataSource): SyncLaunchState | null => {
-  const stateFilePath = getStateFilePath(source);
+export const readSyncLaunchState = (): SyncLaunchState | null => {
   if (!existsSync(stateFilePath)) {
     return null;
   }
@@ -77,36 +66,34 @@ export const readSyncLaunchState = (source: SyncDataSource): SyncLaunchState | n
 
 export const writeSyncLaunchState = (state: SyncLaunchState) => {
   ensureRunDir();
-  const stateFilePath = getStateFilePath(state.source);
   writeFileSync(stateFilePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 };
 
-export const clearSyncLaunchState = (source: SyncDataSource) => {
-  const stateFilePath = getStateFilePath(source);
+export const clearSyncLaunchState = () => {
   if (existsSync(stateFilePath)) {
     unlinkSync(stateFilePath);
   }
 };
 
-export const getActiveSyncLaunchState = (source: SyncDataSource) => {
-  const state = readSyncLaunchState(source);
+export const getActiveSyncLaunchState = () => {
+  const state = readSyncLaunchState();
   if (!state) {
     return null;
   }
 
   if (!isPidRunning(state.pid)) {
-    clearSyncLaunchState(source);
+    clearSyncLaunchState();
     return null;
   }
 
   return state;
 };
 
-export const launchSyncJob = (kind: SyncJobKind, source: SyncDataSource) => {
+export const launchSyncJob = (kind: SyncJobKind) => {
   ensureRunDir();
 
-  const logFile = path.join(runDir, getLogFileName(kind, source));
-  const syncCommand = getCommandForKind(kind, source);
+  const logFile = path.join(runDir, getLogFileName(kind));
+  const syncCommand = getCommandForKind(kind);
   const shellCommand = isWindows
     ? `cd /d "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`
     : `cd "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`;
@@ -118,7 +105,6 @@ export const launchSyncJob = (kind: SyncJobKind, source: SyncDataSource) => {
   });
 
   const state: SyncLaunchState = {
-    source,
     kind,
     pid: child.pid ?? -1,
     logFile,
@@ -130,13 +116,13 @@ export const launchSyncJob = (kind: SyncJobKind, source: SyncDataSource) => {
   return state;
 };
 
-export const getLatestSyncLogFile = (source: SyncDataSource) => {
+export const getLatestSyncLogFile = () => {
   if (!existsSync(runDir)) {
     return null;
   }
 
   const logFiles = readdirSync(runDir)
-    .filter((fileName) => new RegExp(`^web-${source}-(full|callings)-sync-.*\\.log$`).test(fileName))
+    .filter((fileName) => /^web-sqlite-(full|callings)-sync-.*\.log$/.test(fileName))
     .map((fileName) => path.join(runDir, fileName));
 
   if (logFiles.length === 0) {
@@ -156,13 +142,13 @@ const getFileTime = (filePath: string) => {
   }
 };
 
-export const resolveSyncLogFile = (source: SyncDataSource) => {
-  const active = getActiveSyncLaunchState(source);
+export const resolveSyncLogFile = () => {
+  const active = getActiveSyncLaunchState();
   if (active?.logFile) {
     return active.logFile;
   }
 
-  return getLatestSyncLogFile(source);
+  return getLatestSyncLogFile();
 };
 
 export const tailSyncLog = (filePath: string, maxLines = 120) => {

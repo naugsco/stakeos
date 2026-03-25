@@ -6,9 +6,8 @@ export const dynamic = "force-dynamic";
 
 export function GET(request: NextRequest) {
   const linesParam = request.nextUrl.searchParams.get("lines");
-  const source = request.nextUrl.searchParams.get("source") === "sqlite" ? "sqlite" : "postgres";
   const maxLines = Number.isFinite(Number(linesParam)) ? Math.min(Math.max(Number(linesParam), 20), 400) : 160;
-  const logFile = resolveSyncLogFile(source);
+  const logFile = resolveSyncLogFile();
 
   if (!logFile) {
     return NextResponse.json({

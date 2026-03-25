@@ -225,7 +225,6 @@ type CovenantPathProgressionRow = {
 };
 
 interface ReportsBrowserProps {
-  source?: "postgres" | "sqlite";
   unitHealth: UnitHealthRow[];
   leadershipTenure: LeadershipTenureRow[];
   recentMoveIns: RecentMoveInRow[];
@@ -266,7 +265,6 @@ interface ReportsBrowserProps {
 }
 
 export function ReportsBrowser({
-  source = "sqlite",
   unitHealth,
   leadershipTenure,
   recentMoveIns,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadSqliteSpikeVisualOrgData } from "@/src/sqlite-spike/queries";
+import { loadSqliteSpikeVisualOrgData } from "@/src/sqlite/queries";
 
 export const runtime = "nodejs";
 

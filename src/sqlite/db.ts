@@ -20,7 +20,7 @@ const resolveDefaultDbPath = () => {
 };
 
 export const getSqliteSpikeDbPath = () => {
-  const configured = env.SQLITE_SPIKE_DB_PATH?.trim();
+  const configured = env.SQLITE_DB_PATH?.trim();
   if (configured) {
     return resolve(configured);
   }
