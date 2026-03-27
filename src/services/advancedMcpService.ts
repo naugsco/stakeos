@@ -2,7 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { env } from "@/src/config/env";
-import { query } from "@/src/db/pool";
+import { openSqliteSpikeDb } from "@/src/sqlite/db";
+import { getSqliteSpikeSyncDiffReport } from "@/src/sqlite/queries";
 import { ensureMailer } from "@/src/email/mailer";
 import {
   getCallingMembers,
@@ -18,7 +19,7 @@ import {
   getVacancies
 } from "@/src/services/intelligenceService";
 
-const fullNameExpr = `TRIM(CONCAT(m.first_name, ' ', m.last_name))`;
+const fullNameExpr = `TRIM(m.first_name || ' ' || m.last_name)`;
 const cohortsFilePath = path.join(process.cwd(), ".run", "saved-cohorts.json");
 const approvalGatesFilePath = path.join(process.cwd(), ".run", "approval-gates.json");
 
@@ -190,34 +191,30 @@ const parseBool = (value: unknown): boolean | undefined => {
 export const peopleContactQuery = async (input: PeopleContactQueryInput = {}): Promise<PeopleContactQueryRow[]> => {
   const conditions: string[] = ["1=1"];
   const params: unknown[] = [];
-  const addParam = (value: unknown) => {
-    params.push(value);
-    return `$${params.length}`;
-  };
 
   if (input.unit?.trim()) {
-    const p = addParam(`%${input.unit.trim()}%`);
-    conditions.push(`COALESCE(NULLIF(m.unit_name, ''), u.name, '') ILIKE ${p}`);
+    params.push(`%${input.unit.trim()}%`);
+    conditions.push(`COALESCE(NULLIF(m.unit_name, ''), u.name, '') LIKE ?`);
   }
   if (typeof input.ageMin === "number") {
-    const p = addParam(input.ageMin);
-    conditions.push(`COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) >= ${p}`);
+    params.push(input.ageMin);
+    conditions.push(`m.age >= ?`);
   }
   if (typeof input.ageMax === "number") {
-    const p = addParam(input.ageMax);
-    conditions.push(`COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) <= ${p}`);
+    params.push(input.ageMax);
+    conditions.push(`m.age <= ?`);
   }
   if (input.gender?.trim()) {
-    const p = addParam(`%${input.gender.trim()}%`);
-    conditions.push(`COALESCE(m.gender, '') ILIKE ${p}`);
+    params.push(`%${input.gender.trim()}%`);
+    conditions.push(`COALESCE(m.gender, '') LIKE ?`);
   }
   if (input.calling?.trim()) {
-    const p = addParam(`%${input.calling.trim()}%`);
-    conditions.push(`COALESCE(c.title, '') ILIKE ${p}`);
+    params.push(`%${input.calling.trim()}%`);
+    conditions.push(`COALESCE(c.title, '') LIKE ?`);
   }
   if (input.organization?.trim()) {
-    const p = addParam(`%${input.organization.trim()}%`);
-    conditions.push(`COALESCE(o.name, '') ILIKE ${p}`);
+    params.push(`%${input.organization.trim()}%`);
+    conditions.push(`COALESCE(c.organization_name, '') LIKE ?`);
   }
 
   const hasPhone = parseBool(input.hasPhone);
@@ -228,51 +225,52 @@ export const peopleContactQuery = async (input: PeopleContactQueryInput = {}): P
   const institute = parseBool(input.isAttendingInstitute);
 
   if (hasPhone === true) {
-    conditions.push("p.phone_number IS NOT NULL");
+    conditions.push("m.primary_phone IS NOT NULL AND m.primary_phone != ''");
   } else if (hasPhone === false) {
-    conditions.push("p.phone_number IS NULL");
+    conditions.push("(m.primary_phone IS NULL OR m.primary_phone = '')");
   }
 
   if (hasEmail === true) {
-    conditions.push("e.email IS NOT NULL");
+    conditions.push("m.primary_email IS NOT NULL AND m.primary_email != ''");
   } else if (hasEmail === false) {
-    conditions.push("e.email IS NULL");
+    conditions.push("(m.primary_email IS NULL OR m.primary_email = '')");
   }
 
   if (typeof isConvert === "boolean") {
-    const p = addParam(isConvert);
-    conditions.push(`COALESCE(m.is_convert, false) = ${p}`);
+    params.push(isConvert ? 1 : 0);
+    conditions.push(`COALESCE(m.is_convert, 0) = ?`);
   }
 
   if (typeof isReturnedMissionary === "boolean") {
-    const p = addParam(isReturnedMissionary);
-    conditions.push(`COALESCE(m.is_returned_missionary, false) = ${p}`);
+    params.push(isReturnedMissionary ? 1 : 0);
+    conditions.push(`COALESCE(m.is_returned_missionary, 0) = ?`);
   }
 
   if (typeof seminary === "boolean") {
-    const p = addParam(seminary);
-    conditions.push(`COALESCE(m.is_attending_seminary, false) = ${p}`);
+    params.push(seminary ? 1 : 0);
+    conditions.push(`COALESCE(m.is_attending_seminary, 0) = ?`);
   }
 
   if (typeof institute === "boolean") {
-    const p = addParam(institute);
-    conditions.push(`COALESCE(m.is_attending_institute, false) = ${p}`);
+    params.push(institute ? 1 : 0);
+    conditions.push(`COALESCE(m.is_attending_institute, 0) = ?`);
   }
 
   if (input.templeRecommendStatus?.trim()) {
-    const p = addParam(`%${input.templeRecommendStatus.trim()}%`);
-    conditions.push(`COALESCE(m.temple_recommend_status, '') ILIKE ${p}`);
+    params.push(`%${input.templeRecommendStatus.trim()}%`);
+    conditions.push(`COALESCE(m.temple_recommend_status, '') LIKE ?`);
   }
 
   if (input.search?.trim()) {
-    const p = addParam(`%${input.search.trim()}%`);
+    const searchParam = `%${input.search.trim()}%`;
+    params.push(searchParam, searchParam, searchParam, searchParam, searchParam);
     conditions.push(
       `(` +
-        `${fullNameExpr} ILIKE ${p} ` +
-        `OR COALESCE(c.title, '') ILIKE ${p} ` +
-        `OR COALESCE(o.name, '') ILIKE ${p} ` +
-        `OR COALESCE(e.email, '') ILIKE ${p} ` +
-        `OR COALESCE(p.phone_number, '') ILIKE ${p}` +
+        `${fullNameExpr} LIKE ? ` +
+        `OR COALESCE(c.title, '') LIKE ? ` +
+        `OR COALESCE(c.organization_name, '') LIKE ? ` +
+        `OR COALESCE(m.primary_email, '') LIKE ? ` +
+        `OR COALESCE(m.primary_phone, '') LIKE ?` +
         `)`
     );
   }
@@ -282,71 +280,64 @@ export const peopleContactQuery = async (input: PeopleContactQueryInput = {}): P
   const sortBy = input.sortBy ?? "unit";
   const orderBy =
     sortBy === "age"
-      ? `COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) ${sqlDirection} NULLS LAST, COALESCE(NULLIF(m.unit_name, ''), u.name, 'Unknown') ASC, m.last_name ASC, m.first_name ASC`
+      ? `CASE WHEN m.age IS NULL THEN 1 ELSE 0 END, m.age ${sqlDirection}, COALESCE(NULLIF(m.unit_name, ''), u.name, 'Unknown') ASC, m.last_name ASC, m.first_name ASC`
       : sortBy === "name"
         ? `m.last_name ${sqlDirection}, m.first_name ${sqlDirection}`
         : sortBy === "calling"
           ? `COALESCE(c.title, '') ${sqlDirection}, COALESCE(NULLIF(m.unit_name, ''), u.name, 'Unknown') ASC, m.last_name ASC, m.first_name ASC`
-          : `COALESCE(NULLIF(m.unit_name, ''), u.name, 'Unknown') ${sqlDirection}, COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) DESC NULLS LAST, m.last_name ASC, m.first_name ASC`;
+          : `COALESCE(NULLIF(m.unit_name, ''), u.name, 'Unknown') ${sqlDirection}, CASE WHEN m.age IS NULL THEN 1 ELSE 0 END, m.age DESC, m.last_name ASC, m.first_name ASC`;
 
   const safeLimit = Math.max(1, Math.min(input.limit ?? 500, 5000));
 
-  const result = await query<PeopleContactQueryRow>(
-    `
-    SELECT
-      m.lcr_member_id AS "lcrMemberId",
-      ${fullNameExpr} AS "fullName",
-      COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-      COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) AS age,
-      m.gender,
-      p.phone_number AS "phoneNumber",
-      e.email,
-      c.title AS "currentCalling",
-      o.name AS "organizationName",
-      m.mission_status AS "missionStatus",
-      m.temple_recommend_status AS "templeRecommendStatus",
-      m.is_attending_seminary AS "isAttendingSeminary",
-      m.is_attending_institute AS "isAttendingInstitute",
-      m.is_convert AS "isConvert",
-      m.is_returned_missionary AS "isReturnedMissionary",
-      m.move_in_date::text AS "moveInDate"
-    FROM members m
-    LEFT JOIN units u ON m.unit_id = u.id
-    LEFT JOIN LATERAL (
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(
+      `
       SELECT
-        cc.title,
-        cc.organization_id
-      FROM current_callings_dedup cc
-      WHERE cc.member_id = m.id
-      ORDER BY cc.sustained_on DESC NULLS LAST, cc.updated_at DESC
-      LIMIT 1
-    ) c ON TRUE
-    LEFT JOIN organizations o ON c.organization_id = o.id
-    LEFT JOIN LATERAL (
-      SELECT email
-      FROM emails
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) e ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT phone_number
-      FROM phone_numbers
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) p ON TRUE
-    WHERE ${conditions.join("\n      AND ")}
-    ORDER BY ${orderBy}
-    LIMIT ${safeLimit}
-    `,
-    params
-  );
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName,
+        m.age,
+        m.gender,
+        m.primary_phone AS phoneNumber,
+        m.primary_email AS email,
+        c.title AS currentCalling,
+        c.organization_name AS organizationName,
+        m.mission_status AS missionStatus,
+        m.temple_recommend_status AS templeRecommendStatus,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute,
+        m.is_convert AS isConvert,
+        m.is_returned_missionary AS isReturnedMissionary,
+        m.move_in_date AS moveInDate
+      FROM members m
+      LEFT JOIN units u ON m.unit_id = u.id
+      LEFT JOIN (
+        SELECT
+          c2.lcr_member_id,
+          c2.title,
+          c2.organization_name,
+          ROW_NUMBER() OVER (PARTITION BY c2.lcr_member_id ORDER BY c2.sustained_on DESC, c2.updated_at DESC) AS rn
+        FROM callings c2
+        WHERE c2.released_on IS NULL AND c2.is_current = 1
+      ) c ON c.lcr_member_id = m.lcr_member_id AND c.rn = 1
+      WHERE ${conditions.join("\n        AND ")}
+      ORDER BY ${orderBy}
+      LIMIT ?
+      `
+    ).all(...params, safeLimit) as PeopleContactQueryRow[];
 
-  return result.rows.map((row) => ({
-    ...row,
-    currentCalling: cleanCallingTitle(row.currentCalling)
-  }));
+    return rows.map((row) => ({
+      ...row,
+      isAttendingSeminary: row.isAttendingSeminary == null ? null : Boolean(row.isAttendingSeminary),
+      isAttendingInstitute: row.isAttendingInstitute == null ? null : Boolean(row.isAttendingInstitute),
+      isConvert: row.isConvert == null ? null : Boolean(row.isConvert),
+      isReturnedMissionary: row.isReturnedMissionary == null ? null : Boolean(row.isReturnedMissionary),
+      currentCalling: cleanCallingTitle(row.currentCalling)
+    }));
+  } finally {
+    db.close();
+  }
 };
 
 export const createSavedCohort = async (input: {
@@ -498,74 +489,82 @@ export const resolveMember = async (input: {
   const searchLike = `%${queryText}%`;
   const safeLimit = Math.max(1, Math.min(input.limit ?? 25, 200));
 
-  const result = await query<{
-    lcrMemberId: string;
-    fullName: string;
-    unitName: string;
-    age: number | null;
-    gender: string | null;
-    phoneNumber: string | null;
-    email: string | null;
-    householdName: string | null;
-    score: number;
-  }>(
-    `
-    SELECT
-      m.lcr_member_id AS "lcrMemberId",
-      ${fullNameExpr} AS "fullName",
-      COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-      COALESCE(m.age, EXTRACT(YEAR FROM AGE(NOW(), m.birthdate))::int) AS age,
-      m.gender,
-      p.phone_number AS "phoneNumber",
-      e.email,
-      h.household_name AS "householdName",
-      (
-        CASE
-          WHEN m.lcr_member_id = $1 THEN 120
-          WHEN LOWER(${fullNameExpr}) = LOWER($1) THEN 100
-          WHEN LOWER(${fullNameExpr}) LIKE LOWER($2) THEN 60
-          ELSE 0
-        END
-        + CASE WHEN COALESCE(p.phone_number, '') ILIKE $2 THEN 30 ELSE 0 END
-        + CASE WHEN COALESCE(e.email, '') ILIKE $2 THEN 30 ELSE 0 END
-        + CASE WHEN $3::text IS NOT NULL AND COALESCE(NULLIF(m.unit_name, ''), u.name, '') ILIKE $3 THEN 10 ELSE 0 END
-      )::int AS score
-    FROM members m
-    LEFT JOIN units u ON m.unit_id = u.id
-    LEFT JOIN households h ON m.household_id = h.id
-    LEFT JOIN LATERAL (
-      SELECT email
-      FROM emails
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) e ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT phone_number
-      FROM phone_numbers
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) p ON TRUE
-    WHERE (
-      m.lcr_member_id = $1
-      OR ${fullNameExpr} ILIKE $2
-      OR COALESCE(e.email, '') ILIKE $2
-      OR COALESCE(p.phone_number, '') ILIKE $2
-    )
-      AND ($3::text IS NULL OR COALESCE(NULLIF(m.unit_name, ''), u.name, '') ILIKE $3)
-    ORDER BY score DESC, "fullName" ASC
-    LIMIT ${safeLimit}
-    `,
-    [queryText, searchLike, unitFilter]
-  );
+  const db = openSqliteSpikeDb();
+  try {
+    const unitCondition = unitFilter !== null
+      ? `AND COALESCE(NULLIF(m.unit_name, ''), u.name, '') LIKE ?`
+      : ``;
+    const unitScoreClause = unitFilter !== null
+      ? `+ CASE WHEN COALESCE(NULLIF(m.unit_name, ''), u.name, '') LIKE ? THEN 10 ELSE 0 END`
+      : ``;
 
-  return {
-    query: queryText,
-    unit: input.unit ?? null,
-    count: result.rows.length,
-    candidates: result.rows
-  };
+    const sqlParams: unknown[] = [queryText, queryText, searchLike, searchLike, searchLike, searchLike];
+    if (unitFilter !== null) {
+      sqlParams.push(unitFilter);
+    }
+    // score params
+    sqlParams.push(queryText, queryText, searchLike, searchLike, searchLike);
+    if (unitFilter !== null) {
+      sqlParams.push(unitFilter);
+    }
+    sqlParams.push(safeLimit);
+
+    const rows = db.prepare(
+      `
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName,
+        m.age,
+        m.gender,
+        m.primary_phone AS phoneNumber,
+        m.primary_email AS email,
+        h.household_name AS householdName,
+        (
+          CASE
+            WHEN m.lcr_member_id = ? THEN 120
+            WHEN LOWER(${fullNameExpr}) = LOWER(?) THEN 100
+            WHEN LOWER(${fullNameExpr}) LIKE LOWER(?) THEN 60
+            ELSE 0
+          END
+          + CASE WHEN COALESCE(m.primary_phone, '') LIKE ? THEN 30 ELSE 0 END
+          + CASE WHEN COALESCE(m.primary_email, '') LIKE ? THEN 30 ELSE 0 END
+          ${unitScoreClause}
+        ) AS score
+      FROM members m
+      LEFT JOIN units u ON m.unit_id = u.id
+      LEFT JOIN households h ON m.household_id = h.id
+      WHERE (
+        m.lcr_member_id = ?
+        OR ${fullNameExpr} LIKE ?
+        OR COALESCE(m.primary_email, '') LIKE ?
+        OR COALESCE(m.primary_phone, '') LIKE ?
+      )
+        ${unitCondition}
+      ORDER BY score DESC, fullName ASC
+      LIMIT ?
+      `
+    ).all(...sqlParams) as Array<{
+      lcrMemberId: string;
+      fullName: string;
+      unitName: string;
+      age: number | null;
+      gender: string | null;
+      phoneNumber: string | null;
+      email: string | null;
+      householdName: string | null;
+      score: number;
+    }>;
+
+    return {
+      query: queryText,
+      unit: input.unit ?? null,
+      count: rows.length,
+      candidates: rows
+    };
+  } finally {
+    db.close();
+  }
 };
 
 export const queryPlanner = async (input: {
@@ -662,11 +661,11 @@ export const explainQuery = async (input: {
 
   const args = input.arguments ?? {};
   const tableByTool: Record<string, string[]> = {
-    people_contact_query: ["members", "units", "current_callings_dedup", "organizations", "emails", "phone_numbers"],
-    mission_eligible_contact_list: ["members", "units", "current_callings_dedup", "emails", "phone_numbers"],
-    sync_diff_report: ["sync_logs", "members", "callings", "organizations", "units", "emails", "phone_numbers"],
-    leadership_contact_list: ["current_callings_dedup", "members", "organizations", "emails", "phone_numbers"],
-    resolve_member: ["members", "units", "households", "emails", "phone_numbers"]
+    people_contact_query: ["members", "units", "callings"],
+    mission_eligible_contact_list: ["members", "units", "callings"],
+    sync_diff_report: ["sync_logs", "sync_member_snapshots", "sync_calling_snapshots", "sync_email_snapshots", "sync_phone_snapshots"],
+    leadership_contact_list: ["callings", "members"],
+    resolve_member: ["members", "units", "households"]
   };
 
   const expectedColumnsByTool: Record<string, string[]> = {
@@ -709,7 +708,7 @@ export const explainQuery = async (input: {
     people_contact_query: [
       "Supports multi-filter search with contact joins in one call.",
       "Sort and limit are applied server-side.",
-      "Name/calling values are matched with ILIKE contains logic."
+      "Name/calling values are matched with LIKE contains logic."
     ],
     mission_eligible_contact_list: [
       "Age filter defaults to 18-25 if not provided.",
@@ -743,99 +742,108 @@ export const getLeadershipGapAlerts = async (options: { tenureYears?: number; li
   const tenureYears = Math.max(1, Math.min(options.tenureYears ?? 4, 20));
   const limit = Math.max(1, Math.min(options.limit ?? 50, 500));
 
-  const [vacancies, tenureRows, leaderContacts, duplicateLeaders, expiringRecommends, newMemberFollowUp] = await Promise.all([
-    getVacancies(),
-    getLeadershipTenureReport(),
-    getLeadershipContactList({ includeSpouses: false, limit: 2000 }),
-    query<{
+  const db = openSqliteSpikeDb();
+  try {
+    const [vacancies, tenureRows, leaderContacts, newMemberFollowUp] = await Promise.all([
+      getVacancies(),
+      getLeadershipTenureReport(),
+      getLeadershipContactList({ includeSpouses: false, limit: 2000 }),
+      getNewMemberContactList({ includeConverts: true, includeMoveIns: true, monthsBack: 6, limit: 1000 })
+    ]);
+
+    const duplicateLeaderRows = db.prepare(
+      `
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName,
+        CAST(COUNT(*) AS TEXT) AS leadershipCallingCount,
+        GROUP_CONCAT(c.title, ' | ') AS callings
+      FROM callings c
+      JOIN members m ON c.lcr_member_id = m.lcr_member_id
+      LEFT JOIN units u ON m.unit_id = u.id
+      WHERE c.released_on IS NULL AND c.is_current = 1
+        AND (LOWER(c.title) LIKE '%president%' OR LOWER(c.title) LIKE '%bishop%' OR LOWER(c.title) LIKE '%high councilor%')
+      GROUP BY m.lcr_member_id, ${fullNameExpr}, COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown')
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC, fullName
+      LIMIT ?
+      `
+    ).all(limit) as Array<{
       lcrMemberId: string;
       fullName: string;
       unitName: string;
       leadershipCallingCount: string;
       callings: string;
-    }>(
+    }>;
+
+    const expiringRecommendRows = db.prepare(
       `
       SELECT
-        m.lcr_member_id AS "lcrMemberId",
-        ${fullNameExpr} AS "fullName",
-        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-        COUNT(*)::text AS "leadershipCallingCount",
-        STRING_AGG(c.title, ' | ' ORDER BY c.title) AS callings
-      FROM current_callings_dedup c
-      JOIN members m ON c.member_id = m.id
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName,
+        m.temple_recommend_status AS templeRecommendStatus,
+        c.title AS callingTitle
+      FROM callings c
+      JOIN members m ON c.lcr_member_id = m.lcr_member_id
       LEFT JOIN units u ON m.unit_id = u.id
-      WHERE c.title ~* '(president|bishop|high councilor)'
-      GROUP BY m.lcr_member_id, ${fullNameExpr}, COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown')
-      HAVING COUNT(*) > 1
-      ORDER BY COUNT(*) DESC, "fullName"
-      LIMIT ${limit}
+      WHERE c.released_on IS NULL AND c.is_current = 1
+        AND (LOWER(c.title) LIKE '%president%' OR LOWER(c.title) LIKE '%bishop%' OR LOWER(c.title) LIKE '%high councilor%')
+        AND (COALESCE(m.temple_recommend_status, '') NOT LIKE 'Active%' AND COALESCE(m.temple_recommend_status, '') NOT LIKE 'active%')
+      ORDER BY unitName, fullName
+      LIMIT ?
       `
-    ),
-    query<{
+    ).all(limit) as Array<{
       lcrMemberId: string;
       fullName: string;
       unitName: string;
       templeRecommendStatus: string | null;
       callingTitle: string;
-    }>(
-      `
-      SELECT
-        m.lcr_member_id AS "lcrMemberId",
-        ${fullNameExpr} AS "fullName",
-        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-        m.temple_recommend_status AS "templeRecommendStatus",
-        c.title AS "callingTitle"
-      FROM current_callings_dedup c
-      JOIN members m ON c.member_id = m.id
-      LEFT JOIN units u ON m.unit_id = u.id
-      WHERE c.title ~* '(president|bishop|high councilor)'
-        AND COALESCE(m.temple_recommend_status, '') !~* '^active'
-      ORDER BY "unitName", "fullName"
-      LIMIT ${limit}
-      `
-    ),
-    getNewMemberContactList({ includeConverts: true, includeMoveIns: true, monthsBack: 6, limit: 1000 })
-  ]);
+    }>;
 
-  const leadershipVacancies = vacancies
-    .filter((row) => /(president|bishop|high councilor)/i.test(row.callingTitle))
-    .slice(0, limit);
+    const leadershipVacancies = vacancies
+      .filter((row) => /(president|bishop|high councilor)/i.test(row.callingTitle))
+      .slice(0, limit);
 
-  const overTenure = tenureRows.filter((row) => row.yearsInCalling >= tenureYears).slice(0, limit);
-  const noContactLeaders = leaderContacts
-    .filter((row) => !row.email && !row.phoneNumber)
-    .slice(0, limit);
+    const overTenure = tenureRows.filter((row) => row.yearsInCalling >= tenureYears).slice(0, limit);
+    const noContactLeaders = leaderContacts
+      .filter((row) => !row.email && !row.phoneNumber)
+      .slice(0, limit);
 
-  const unassignedNewMembers = newMemberFollowUp
-    .filter((row) => !row.ministeringAssigned)
-    .slice(0, limit);
+    const unassignedNewMembers = newMemberFollowUp
+      .filter((row) => !row.ministeringAssigned)
+      .slice(0, limit);
 
-  return {
-    generatedAt: new Date().toISOString(),
-    thresholds: { tenureYears, limit },
-    summary: {
-      leadershipVacancyCount: leadershipVacancies.length,
-      overTenureCount: overTenure.length,
-      noContactLeaderCount: noContactLeaders.length,
-      duplicateLeadershipAssignments: duplicateLeaders.rows.length,
-      leadershipRecommendAttention: expiringRecommends.rows.length,
-      unassignedNewMembers: unassignedNewMembers.length
-    },
-    details: {
-      leadershipVacancies,
-      overTenure,
-      noContactLeaders,
-      duplicateLeaders: duplicateLeaders.rows.map((row) => ({
-        ...row,
-        leadershipCallingCount: Number.parseInt(row.leadershipCallingCount, 10)
-      })),
-      recommendAttention: expiringRecommends.rows.map((row) => ({
-        ...row,
-        callingTitle: cleanCallingTitle(row.callingTitle)
-      })),
-      unassignedNewMembers
-    }
-  };
+    return {
+      generatedAt: new Date().toISOString(),
+      thresholds: { tenureYears, limit },
+      summary: {
+        leadershipVacancyCount: leadershipVacancies.length,
+        overTenureCount: overTenure.length,
+        noContactLeaderCount: noContactLeaders.length,
+        duplicateLeadershipAssignments: duplicateLeaderRows.length,
+        leadershipRecommendAttention: expiringRecommendRows.length,
+        unassignedNewMembers: unassignedNewMembers.length
+      },
+      details: {
+        leadershipVacancies,
+        overTenure,
+        noContactLeaders,
+        duplicateLeaders: duplicateLeaderRows.map((row) => ({
+          ...row,
+          leadershipCallingCount: Number.parseInt(row.leadershipCallingCount, 10)
+        })),
+        recommendAttention: expiringRecommendRows.map((row) => ({
+          ...row,
+          callingTitle: cleanCallingTitle(row.callingTitle)
+        })),
+        unassignedNewMembers
+      }
+    };
+  } finally {
+    db.close();
+  }
 };
 
 type SnapshotLogRow = {
@@ -876,587 +884,8 @@ type ContactSnapshotRow = {
   snapshotData: Record<string, unknown>;
 };
 
-const buildSnapshotCoverage = (latestSnapshotLogId: number | null, previousSnapshotLogId: number | null) => ({
-  latestSnapshotLogId,
-  previousSnapshotLogId,
-  ready: Boolean(latestSnapshotLogId && previousSnapshotLogId),
-  status: latestSnapshotLogId
-    ? previousSnapshotLogId
-      ? "ready"
-      : "baseline-established"
-    : "not-seeded"
-});
-
-const humanizeField = (value: string) =>
-  value
-    .replace(/_/g, " ")
-    .replace(/\b[a-z]/g, (match) => match.toUpperCase());
-
-const diffSnapshotFields = (
-  current: Record<string, unknown>,
-  previous: Record<string, unknown>,
-  ignoredKeys: string[] = []
-) => {
-  const ignored = new Set(ignoredKeys);
-  const keys = Array.from(new Set([...Object.keys(current), ...Object.keys(previous)]));
-
-  return keys
-    .filter((key) => !ignored.has(key))
-    .filter((key) => JSON.stringify(current[key] ?? null) !== JSON.stringify(previous[key] ?? null))
-    .map(humanizeField);
-};
-
-const getLatestSuccessLogs = async (limit: number) =>
-  query<SnapshotLogRow>(
-    `
-    SELECT
-      id,
-      sync_type AS "syncType",
-      started_at::text AS "startedAt",
-      completed_at::text AS "completedAt"
-    FROM sync_logs
-    WHERE status = 'success'
-    ORDER BY completed_at DESC NULLS LAST, started_at DESC
-    LIMIT $1
-    `,
-    [limit]
-  );
-
-const loadSnapshotLog = async (syncLogId: number) => {
-  const result = await query<SnapshotLogRow>(
-    `
-    SELECT
-      id,
-      sync_type AS "syncType",
-      started_at::text AS "startedAt",
-      completed_at::text AS "completedAt"
-    FROM sync_logs
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [syncLogId]
-  );
-
-  return result.rows[0] ?? null;
-};
-
-const latestSnapshotLog = async (tableName: string) => {
-  const result = await query<{ syncLogId: number }>(
-    `
-    SELECT t.sync_log_id AS "syncLogId"
-    FROM ${tableName} t
-    JOIN sync_logs s ON s.id = t.sync_log_id
-    WHERE s.status = 'success'
-      AND s.completed_at IS NOT NULL
-    GROUP BY t.sync_log_id
-    ORDER BY MAX(s.completed_at) DESC, t.sync_log_id DESC
-    LIMIT 1
-    `
-  );
-
-  return result.rows[0]?.syncLogId ?? null;
-};
-
-const previousSnapshotLog = async (tableName: string, latestSyncId: number) => {
-  const result = await query<{ syncLogId: number }>(
-    `
-    SELECT DISTINCT t.sync_log_id AS "syncLogId"
-    FROM ${tableName} t
-    JOIN sync_logs s ON s.id = t.sync_log_id
-    WHERE s.status = 'success'
-      AND t.sync_log_id < $1
-    ORDER BY t.sync_log_id DESC
-    LIMIT 1
-    `,
-    [latestSyncId]
-  );
-
-  return result.rows[0]?.syncLogId ?? null;
-};
-
-const loadMemberSnapshots = async (syncLogId: number) =>
-  query<MemberSnapshotRow>(
-    `
-    SELECT
-      lcr_member_id AS "lcrMemberId",
-      full_name AS "fullName",
-      unit_name AS "unitName",
-      move_in_date::text AS "moveInDate",
-      row_hash AS "rowHash",
-      snapshot_data AS "snapshotData"
-    FROM sync_member_snapshots
-    WHERE sync_log_id = $1
-    `,
-    [syncLogId]
-  );
-
-const loadCallingSnapshots = async (syncLogId: number) =>
-  query<CallingSnapshotRow>(
-    `
-    SELECT
-      lcr_calling_id AS "lcrCallingId",
-      unit_name AS "unitName",
-      member_lcr_member_id AS "memberLcrMemberId",
-      member_name AS "memberName",
-      calling_title AS "callingTitle",
-      is_current AS "isCurrent",
-      sustained_on::text AS "sustainedOn",
-      released_on::text AS "releasedOn",
-      row_hash AS "rowHash",
-      snapshot_data AS "snapshotData"
-    FROM sync_calling_snapshots
-    WHERE sync_log_id = $1
-    `,
-    [syncLogId]
-  );
-
-const loadEmailSnapshots = async (syncLogId: number) =>
-  query<ContactSnapshotRow>(
-    `
-    SELECT
-      member_lcr_member_id AS "memberLcrMemberId",
-      full_name AS "fullName",
-      unit_name AS "unitName",
-      email AS value,
-      row_hash AS "rowHash",
-      snapshot_data AS "snapshotData"
-    FROM sync_email_snapshots
-    WHERE sync_log_id = $1
-    `,
-    [syncLogId]
-  );
-
-const loadPhoneSnapshots = async (syncLogId: number) =>
-  query<ContactSnapshotRow>(
-    `
-    SELECT
-      member_lcr_member_id AS "memberLcrMemberId",
-      full_name AS "fullName",
-      unit_name AS "unitName",
-      phone_number AS value,
-      row_hash AS "rowHash",
-      snapshot_data AS "snapshotData"
-    FROM sync_phone_snapshots
-    WHERE sync_log_id = $1
-    `,
-    [syncLogId]
-  );
-
 export const getSyncDiffReport = async (options: { limit?: number } = {}) => {
-  const safeLimit = Math.max(1, Math.min(options.limit ?? 30, 200));
-  const logs = await getLatestSuccessLogs(10);
-
-  const latest = logs.rows[0] ?? null;
-  const previous = logs.rows[1] ?? null;
-  if (!latest?.completedAt) {
-    return {
-      latestSync: latest,
-      previousSync: previous,
-      windowStart: null,
-      windowEnd: null,
-      coverage: {
-        members: buildSnapshotCoverage(null, null),
-        callings: buildSnapshotCoverage(null, null),
-        emails: buildSnapshotCoverage(null, null),
-        phones: buildSnapshotCoverage(null, null)
-      },
-      comparisonWindows: {
-        members: { start: null, end: null },
-        callings: { start: null, end: null },
-        emails: { start: null, end: null },
-        phones: { start: null, end: null }
-      },
-      counts: {
-        membersChanged: 0,
-        membersAdded: 0,
-        membersRemoved: 0,
-        membersUpdated: 0,
-        callingsChanged: 0,
-        callingsAdded: 0,
-        callingsRemoved: 0,
-        callingsUpdated: 0,
-        organizationChanged: 0,
-        unitChanged: 0,
-        emailChanged: 0,
-        emailAdded: 0,
-        emailRemoved: 0,
-        emailUpdated: 0,
-        phoneChanged: 0,
-        phoneAdded: 0,
-        phoneRemoved: 0,
-        phoneUpdated: 0
-      },
-      members: [],
-      callings: [],
-      contacts: []
-    };
-  }
-
-  const windowEnd = latest.completedAt;
-  const windowStart = previous?.completedAt ?? null;
-
-  const [
-    latestMemberSnapshotLogId,
-    latestCallingSnapshotLogId,
-    latestEmailSnapshotLogId,
-    latestPhoneSnapshotLogId
-  ] = await Promise.all([
-    latestSnapshotLog("sync_member_snapshots"),
-    latestSnapshotLog("sync_calling_snapshots"),
-    latestSnapshotLog("sync_email_snapshots"),
-    latestSnapshotLog("sync_phone_snapshots")
-  ]);
-
-  const [
-    previousMemberSnapshotLogId,
-    previousCallingSnapshotLogId,
-    previousEmailSnapshotLogId,
-    previousPhoneSnapshotLogId
-  ] = await Promise.all([
-    latestMemberSnapshotLogId ? previousSnapshotLog("sync_member_snapshots", latestMemberSnapshotLogId) : Promise.resolve(null),
-    latestCallingSnapshotLogId ? previousSnapshotLog("sync_calling_snapshots", latestCallingSnapshotLogId) : Promise.resolve(null),
-    latestEmailSnapshotLogId ? previousSnapshotLog("sync_email_snapshots", latestEmailSnapshotLogId) : Promise.resolve(null),
-    latestPhoneSnapshotLogId ? previousSnapshotLog("sync_phone_snapshots", latestPhoneSnapshotLogId) : Promise.resolve(null)
-  ]);
-
-  const emptyMembers = { rows: [] as MemberSnapshotRow[] };
-  const emptyCallings = { rows: [] as CallingSnapshotRow[] };
-  const emptyContacts = { rows: [] as ContactSnapshotRow[] };
-
-  const memberCoverage = buildSnapshotCoverage(latestMemberSnapshotLogId, previousMemberSnapshotLogId);
-  const callingCoverage = buildSnapshotCoverage(latestCallingSnapshotLogId, previousCallingSnapshotLogId);
-  const emailCoverage = buildSnapshotCoverage(latestEmailSnapshotLogId, previousEmailSnapshotLogId);
-  const phoneCoverage = buildSnapshotCoverage(latestPhoneSnapshotLogId, previousPhoneSnapshotLogId);
-
-  const [
-    latestMemberSnapshotLog,
-    previousMemberSnapshotLog,
-    latestCallingSnapshotLog,
-    previousCallingSnapshotLog,
-    latestEmailSnapshotLog,
-    previousEmailSnapshotLog,
-    latestPhoneSnapshotLog,
-    previousPhoneSnapshotLog
-  ] = await Promise.all([
-    latestMemberSnapshotLogId ? loadSnapshotLog(latestMemberSnapshotLogId) : Promise.resolve(null),
-    previousMemberSnapshotLogId ? loadSnapshotLog(previousMemberSnapshotLogId) : Promise.resolve(null),
-    latestCallingSnapshotLogId ? loadSnapshotLog(latestCallingSnapshotLogId) : Promise.resolve(null),
-    previousCallingSnapshotLogId ? loadSnapshotLog(previousCallingSnapshotLogId) : Promise.resolve(null),
-    latestEmailSnapshotLogId ? loadSnapshotLog(latestEmailSnapshotLogId) : Promise.resolve(null),
-    previousEmailSnapshotLogId ? loadSnapshotLog(previousEmailSnapshotLogId) : Promise.resolve(null),
-    latestPhoneSnapshotLogId ? loadSnapshotLog(latestPhoneSnapshotLogId) : Promise.resolve(null),
-    previousPhoneSnapshotLogId ? loadSnapshotLog(previousPhoneSnapshotLogId) : Promise.resolve(null)
-  ]);
-
-  const memberWindowEnd = latestMemberSnapshotLog?.completedAt ?? windowEnd;
-  const callingWindowEnd = latestCallingSnapshotLog?.completedAt ?? windowEnd;
-  const emailWindowEnd = latestEmailSnapshotLog?.completedAt ?? windowEnd;
-  const phoneWindowEnd = latestPhoneSnapshotLog?.completedAt ?? windowEnd;
-
-  const [
-    latestMemberSnapshots,
-    previousMemberSnapshots,
-    latestCallingSnapshots,
-    previousCallingSnapshots,
-    latestEmailSnapshots,
-    previousEmailSnapshots,
-    latestPhoneSnapshots,
-    previousPhoneSnapshots
-  ] = await Promise.all([
-    latestMemberSnapshotLogId && previousMemberSnapshotLogId ? loadMemberSnapshots(latestMemberSnapshotLogId) : Promise.resolve(emptyMembers),
-    previousMemberSnapshotLogId ? loadMemberSnapshots(previousMemberSnapshotLogId) : Promise.resolve(emptyMembers),
-    latestCallingSnapshotLogId && previousCallingSnapshotLogId ? loadCallingSnapshots(latestCallingSnapshotLogId) : Promise.resolve(emptyCallings),
-    previousCallingSnapshotLogId ? loadCallingSnapshots(previousCallingSnapshotLogId) : Promise.resolve(emptyCallings),
-    latestEmailSnapshotLogId && previousEmailSnapshotLogId ? loadEmailSnapshots(latestEmailSnapshotLogId) : Promise.resolve(emptyContacts),
-    previousEmailSnapshotLogId ? loadEmailSnapshots(previousEmailSnapshotLogId) : Promise.resolve(emptyContacts),
-    latestPhoneSnapshotLogId && previousPhoneSnapshotLogId ? loadPhoneSnapshots(latestPhoneSnapshotLogId) : Promise.resolve(emptyContacts),
-    previousPhoneSnapshotLogId ? loadPhoneSnapshots(previousPhoneSnapshotLogId) : Promise.resolve(emptyContacts)
-  ]);
-
-  const memberChanges: Array<{
-    lcrMemberId: string;
-    fullName: string;
-    unitName: string;
-    moveInDate: string | null;
-    changeType: "Added" | "Removed" | "Changed";
-    changedFields: string[];
-    updatedAt: string;
-  }> = [];
-  let membersAdded = 0;
-  let membersRemoved = 0;
-  let membersUpdated = 0;
-
-  if (latestMemberSnapshotLogId && previousMemberSnapshotLogId) {
-    const previousById = new Map(previousMemberSnapshots.rows.map((row) => [row.lcrMemberId, row]));
-
-    for (const row of latestMemberSnapshots.rows) {
-      const previousRow = previousById.get(row.lcrMemberId);
-      if (!previousRow) {
-        membersAdded += 1;
-        memberChanges.push({
-          lcrMemberId: row.lcrMemberId,
-          fullName: row.fullName,
-          unitName: row.unitName ?? "Unknown",
-          moveInDate: row.moveInDate,
-          changeType: "Added",
-          changedFields: [],
-          updatedAt: memberWindowEnd
-        });
-        continue;
-      }
-
-      if (row.rowHash !== previousRow.rowHash) {
-        membersUpdated += 1;
-        memberChanges.push({
-          lcrMemberId: row.lcrMemberId,
-          fullName: row.fullName,
-          unitName: row.unitName ?? "Unknown",
-          moveInDate: row.moveInDate,
-          changeType: "Changed",
-          changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData, ["unit_id", "household_id"]),
-          updatedAt: memberWindowEnd
-        });
-      }
-
-      previousById.delete(row.lcrMemberId);
-    }
-
-    for (const row of previousById.values()) {
-      membersRemoved += 1;
-      memberChanges.push({
-        lcrMemberId: row.lcrMemberId,
-        fullName: row.fullName,
-        unitName: row.unitName ?? "Unknown",
-        moveInDate: row.moveInDate,
-        changeType: "Removed",
-        changedFields: [],
-        updatedAt: memberWindowEnd
-      });
-    }
-  }
-
-  const callingChanges: Array<{
-    lcrCallingId: string;
-    unitName: string;
-    callingTitle: string;
-    isCurrent: boolean;
-    sustainedOn: string | null;
-    releasedOn: string | null;
-    changeType: "Added" | "Released" | "Removed" | "Updated";
-    changedFields: string[];
-    updatedAt: string;
-  }> = [];
-  let callingsAdded = 0;
-  let callingsRemoved = 0;
-  let callingsUpdated = 0;
-
-  if (latestCallingSnapshotLogId && previousCallingSnapshotLogId) {
-    const previousById = new Map(previousCallingSnapshots.rows.map((row) => [row.lcrCallingId, row]));
-
-    for (const row of latestCallingSnapshots.rows) {
-      const previousRow = previousById.get(row.lcrCallingId);
-      if (!previousRow) {
-        callingsAdded += 1;
-        callingChanges.push({
-          lcrCallingId: row.lcrCallingId,
-          unitName: row.unitName ?? "Unknown",
-          callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
-          isCurrent: row.isCurrent,
-          sustainedOn: row.sustainedOn,
-          releasedOn: row.releasedOn,
-          changeType: "Added",
-          changedFields: [],
-          updatedAt: callingWindowEnd
-        });
-        continue;
-      }
-
-      if (row.rowHash !== previousRow.rowHash) {
-        callingsUpdated += 1;
-        callingChanges.push({
-          lcrCallingId: row.lcrCallingId,
-          unitName: row.unitName ?? previousRow.unitName ?? "Unknown",
-          callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
-          isCurrent: row.isCurrent,
-          sustainedOn: row.sustainedOn,
-          releasedOn: row.releasedOn,
-          changeType: previousRow.isCurrent && !row.isCurrent ? "Released" : "Updated",
-          changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData, ["unit_id", "member_id", "organization_id"]),
-          updatedAt: callingWindowEnd
-        });
-      }
-
-      previousById.delete(row.lcrCallingId);
-    }
-
-    for (const row of previousById.values()) {
-      callingsRemoved += 1;
-      callingChanges.push({
-        lcrCallingId: row.lcrCallingId,
-        unitName: row.unitName ?? "Unknown",
-        callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle,
-        isCurrent: row.isCurrent,
-        sustainedOn: row.sustainedOn,
-        releasedOn: row.releasedOn,
-        changeType: "Removed",
-        changedFields: [],
-        updatedAt: callingWindowEnd
-      });
-    }
-  }
-
-  const contactChanges: Array<{
-    contactType: "Email" | "Phone";
-    memberLcrMemberId: string;
-    fullName: string;
-    unitName: string;
-    value: string;
-    changeType: "Added" | "Removed" | "Changed";
-    changedFields: string[];
-    updatedAt: string;
-  }> = [];
-  let emailAdded = 0;
-  let emailRemoved = 0;
-  let emailUpdated = 0;
-  let phoneAdded = 0;
-  let phoneRemoved = 0;
-  let phoneUpdated = 0;
-
-  const diffContacts = (
-    contactType: "Email" | "Phone",
-    currentRows: ContactSnapshotRow[],
-    previousRows: ContactSnapshotRow[]
-  ) => {
-    const previousByKey = new Map(previousRows.map((row) => [`${row.memberLcrMemberId}|${row.value}`, row]));
-
-    for (const row of currentRows) {
-      const key = `${row.memberLcrMemberId}|${row.value}`;
-      const previousRow = previousByKey.get(key);
-      if (!previousRow) {
-        if (contactType === "Email") {
-          emailAdded += 1;
-        } else {
-          phoneAdded += 1;
-        }
-        contactChanges.push({
-          contactType,
-          memberLcrMemberId: row.memberLcrMemberId,
-          fullName: row.fullName,
-          unitName: row.unitName ?? "Unknown",
-          value: row.value,
-          changeType: "Added",
-          changedFields: [],
-          updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
-        });
-        continue;
-      }
-
-      if (row.rowHash !== previousRow.rowHash) {
-        if (contactType === "Email") {
-          emailUpdated += 1;
-        } else {
-          phoneUpdated += 1;
-        }
-        contactChanges.push({
-          contactType,
-          memberLcrMemberId: row.memberLcrMemberId,
-          fullName: row.fullName,
-          unitName: row.unitName ?? "Unknown",
-          value: row.value,
-          changeType: "Changed",
-          changedFields: diffSnapshotFields(row.snapshotData, previousRow.snapshotData),
-          updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
-        });
-      }
-
-      previousByKey.delete(key);
-    }
-
-    for (const row of previousByKey.values()) {
-      if (contactType === "Email") {
-        emailRemoved += 1;
-      } else {
-        phoneRemoved += 1;
-      }
-      contactChanges.push({
-        contactType,
-        memberLcrMemberId: row.memberLcrMemberId,
-        fullName: row.fullName,
-        unitName: row.unitName ?? "Unknown",
-        value: row.value,
-        changeType: "Removed",
-        changedFields: [],
-        updatedAt: contactType === "Email" ? emailWindowEnd : phoneWindowEnd
-      });
-    }
-  };
-
-  if (latestEmailSnapshotLogId && previousEmailSnapshotLogId) {
-    diffContacts("Email", latestEmailSnapshots.rows, previousEmailSnapshots.rows);
-  }
-  if (latestPhoneSnapshotLogId && previousPhoneSnapshotLogId) {
-    diffContacts("Phone", latestPhoneSnapshots.rows, previousPhoneSnapshots.rows);
-  }
-
-  return {
-    latestSync: latest,
-    previousSync: previous,
-    windowStart,
-    windowEnd,
-    coverage: {
-      members: memberCoverage,
-      callings: callingCoverage,
-      emails: emailCoverage,
-      phones: phoneCoverage
-    },
-    comparisonWindows: {
-      members: {
-        start: previousMemberSnapshotLog?.completedAt ?? null,
-        end: latestMemberSnapshotLog?.completedAt ?? null
-      },
-      callings: {
-        start: previousCallingSnapshotLog?.completedAt ?? null,
-        end: latestCallingSnapshotLog?.completedAt ?? null
-      },
-      emails: {
-        start: previousEmailSnapshotLog?.completedAt ?? null,
-        end: latestEmailSnapshotLog?.completedAt ?? null
-      },
-      phones: {
-        start: previousPhoneSnapshotLog?.completedAt ?? null,
-        end: latestPhoneSnapshotLog?.completedAt ?? null
-      }
-    },
-    counts: {
-      membersChanged: membersAdded + membersRemoved + membersUpdated,
-      membersAdded,
-      membersRemoved,
-      membersUpdated,
-      callingsChanged: callingsAdded + callingsRemoved + callingsUpdated,
-      callingsAdded,
-      callingsRemoved,
-      callingsUpdated,
-      organizationChanged: 0,
-      unitChanged: 0,
-      emailChanged: emailAdded + emailRemoved + emailUpdated,
-      emailAdded,
-      emailRemoved,
-      emailUpdated,
-      phoneChanged: phoneAdded + phoneRemoved + phoneUpdated,
-      phoneAdded,
-      phoneRemoved,
-      phoneUpdated
-    },
-    members: memberChanges
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.fullName.localeCompare(right.fullName))
-      .slice(0, safeLimit),
-    callings: callingChanges
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.callingTitle.localeCompare(right.callingTitle))
-      .slice(0, safeLimit),
-    contacts: contactChanges
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.fullName.localeCompare(right.fullName))
-      .slice(0, safeLimit)
-  };
+  return getSqliteSpikeSyncDiffReport(options);
 };
 
 export const generateActionPacket = async (meetingType: string) => {
@@ -1562,36 +991,27 @@ const resolveSpouseRecipients = async (lcrMemberIds: string[]) => {
     return { emails: [], phones: [] };
   }
 
-  const result = await query<{ email: string | null; phoneNumber: string | null }>(
-    `
-    SELECT DISTINCT
-      e.email,
-      p.phone_number AS "phoneNumber"
-    FROM members m
-    JOIN members sm ON sm.household_id = m.household_id AND sm.id <> m.id
-    LEFT JOIN LATERAL (
-      SELECT email
-      FROM emails
-      WHERE member_id = sm.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) e ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT phone_number
-      FROM phone_numbers
-      WHERE member_id = sm.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) p ON TRUE
-    WHERE m.lcr_member_id = ANY($1::text[])
-    `,
-    [lcrMemberIds]
-  );
+  const db = openSqliteSpikeDb();
+  try {
+    const placeholders = lcrMemberIds.map(() => "?").join(", ");
+    const rows = db.prepare(
+      `
+      SELECT DISTINCT
+        sm.primary_email AS email,
+        sm.primary_phone AS phoneNumber
+      FROM members m
+      JOIN members sm ON sm.household_id = m.household_id AND sm.id != m.id
+      WHERE m.lcr_member_id IN (${placeholders})
+      `
+    ).all(...lcrMemberIds) as Array<{ email: string | null; phoneNumber: string | null }>;
 
-  return {
-    emails: dedupeStrings(result.rows.map((row) => row.email)),
-    phones: dedupeStrings(result.rows.map((row) => row.phoneNumber))
-  };
+    return {
+      emails: dedupeStrings(rows.map((row) => row.email)),
+      phones: dedupeStrings(rows.map((row) => row.phoneNumber))
+    };
+  } finally {
+    db.close();
+  }
 };
 
 export const prepareCommunicationCampaign = async (input: {
@@ -1713,256 +1133,251 @@ export const sendCommunicationCampaign = async (input: {
 };
 
 export const getMemberTimeline = async (memberRef: string) => {
-  const memberResult = await query<{
-    id: number;
-    lcrMemberId: string;
-    fullName: string;
-    unitName: string;
-    birthdate: string | null;
-    moveInDate: string | null;
-    baptismDate: string | null;
-    confirmationDate: string | null;
-    templeRecommendStatus: string | null;
-  }>(
-    `
-    SELECT
-      m.id,
-      m.lcr_member_id AS "lcrMemberId",
-      ${fullNameExpr} AS "fullName",
-      COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-      m.birthdate::text AS birthdate,
-      m.move_in_date::text AS "moveInDate",
-      m.baptism_date::text AS "baptismDate",
-      m.confirmation_date::text AS "confirmationDate",
-      m.temple_recommend_status AS "templeRecommendStatus"
-    FROM members m
-    LEFT JOIN units u ON m.unit_id = u.id
-    WHERE m.lcr_member_id = $1
-       OR ${fullNameExpr} ILIKE $2
-    ORDER BY CASE WHEN m.lcr_member_id = $1 THEN 0 ELSE 1 END
-    LIMIT 1
-    `,
-    [memberRef, `%${memberRef}%`]
-  );
+  const db = openSqliteSpikeDb();
+  try {
+    const member = db.prepare(
+      `
+      SELECT
+        m.id,
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName,
+        m.birthdate,
+        m.move_in_date AS moveInDate,
+        m.baptism_date AS baptismDate,
+        m.confirmation_date AS confirmationDate,
+        m.temple_recommend_status AS templeRecommendStatus
+      FROM members m
+      LEFT JOIN units u ON m.unit_id = u.id
+      WHERE m.lcr_member_id = ?
+         OR ${fullNameExpr} LIKE ?
+      ORDER BY CASE WHEN m.lcr_member_id = ? THEN 0 ELSE 1 END
+      LIMIT 1
+      `
+    ).get(memberRef, `%${memberRef}%`, memberRef) as {
+      id: number;
+      lcrMemberId: string;
+      fullName: string;
+      unitName: string;
+      birthdate: string | null;
+      moveInDate: string | null;
+      baptismDate: string | null;
+      confirmationDate: string | null;
+      templeRecommendStatus: string | null;
+    } | undefined;
 
-  const member = memberResult.rows[0];
-  if (!member) {
-    return null;
-  }
+    if (!member) {
+      return null;
+    }
 
-  const callings = await query<{
-    callingTitle: string;
-    sustainedOn: string | null;
-    setApartOn: string | null;
-    releasedOn: string | null;
-    isCurrent: boolean;
-    updatedAt: string;
-  }>(
-    `
-    SELECT
-      c.title AS "callingTitle",
-      c.sustained_on::text AS "sustainedOn",
-      c.set_apart_on::text AS "setApartOn",
-      c.released_on::text AS "releasedOn",
-      c.is_current AS "isCurrent",
-      c.updated_at::text AS "updatedAt"
-    FROM callings c
-    WHERE c.member_id = $1
-    ORDER BY c.updated_at DESC
-    LIMIT 200
-    `,
-    [member.id]
-  );
+    const callingRows = db.prepare(
+      `
+      SELECT
+        c.title AS callingTitle,
+        c.sustained_on AS sustainedOn,
+        c.set_apart_on AS setApartOn,
+        c.released_on AS releasedOn,
+        c.is_current AS isCurrent,
+        c.updated_at AS updatedAt
+      FROM callings c
+      WHERE c.lcr_member_id = ?
+      ORDER BY c.updated_at DESC
+      LIMIT 200
+      `
+    ).all(member.lcrMemberId) as Array<{
+      callingTitle: string;
+      sustainedOn: string | null;
+      setApartOn: string | null;
+      releasedOn: string | null;
+      isCurrent: number;
+      updatedAt: string;
+    }>;
 
-  const events: Array<{ date: string | null; type: string; title: string; details?: string }> = [];
-  if (member.birthdate) {
-    events.push({ date: member.birthdate, type: "birthdate", title: "Birthdate recorded" });
-  }
-  if (member.moveInDate) {
-    events.push({ date: member.moveInDate, type: "move_in", title: "Moved into unit" });
-  }
-  if (member.baptismDate) {
-    events.push({ date: member.baptismDate, type: "baptism", title: "Baptism date recorded" });
-  }
-  if (member.confirmationDate) {
-    events.push({ date: member.confirmationDate, type: "confirmation", title: "Confirmation date recorded" });
-  }
-  if (member.templeRecommendStatus) {
-    events.push({
-      date: null,
-      type: "recommend_status",
-      title: "Temple recommend status",
-      details: member.templeRecommendStatus
+    const events: Array<{ date: string | null; type: string; title: string; details?: string }> = [];
+    if (member.birthdate) {
+      events.push({ date: member.birthdate, type: "birthdate", title: "Birthdate recorded" });
+    }
+    if (member.moveInDate) {
+      events.push({ date: member.moveInDate, type: "move_in", title: "Moved into unit" });
+    }
+    if (member.baptismDate) {
+      events.push({ date: member.baptismDate, type: "baptism", title: "Baptism date recorded" });
+    }
+    if (member.confirmationDate) {
+      events.push({ date: member.confirmationDate, type: "confirmation", title: "Confirmation date recorded" });
+    }
+    if (member.templeRecommendStatus) {
+      events.push({
+        date: null,
+        type: "recommend_status",
+        title: "Temple recommend status",
+        details: member.templeRecommendStatus
+      });
+    }
+
+    for (const row of callingRows) {
+      const callingTitle = cleanCallingTitle(row.callingTitle) ?? row.callingTitle;
+      const isCurrent = Boolean(row.isCurrent);
+      if (row.sustainedOn) {
+        events.push({
+          date: row.sustainedOn,
+          type: "calling_sustained",
+          title: `${callingTitle} sustained`,
+          details: isCurrent ? "Current" : "Historical"
+        });
+      }
+      if (row.setApartOn) {
+        events.push({
+          date: row.setApartOn,
+          type: "calling_set_apart",
+          title: `${callingTitle} set apart`,
+          details: isCurrent ? "Current" : "Historical"
+        });
+      }
+      if (row.releasedOn) {
+        events.push({
+          date: row.releasedOn,
+          type: "calling_released",
+          title: `${callingTitle} released`
+        });
+      }
+    }
+
+    const sorted = events.sort((left, right) => {
+      if (!left.date && !right.date) {
+        return left.type.localeCompare(right.type);
+      }
+      if (!left.date) {
+        return 1;
+      }
+      if (!right.date) {
+        return -1;
+      }
+      return right.date.localeCompare(left.date);
     });
+
+    return {
+      member: {
+        lcrMemberId: member.lcrMemberId,
+        fullName: member.fullName,
+        unitName: member.unitName
+      },
+      timeline: sorted
+    };
+  } finally {
+    db.close();
   }
-
-  for (const row of callings.rows) {
-    const callingTitle = cleanCallingTitle(row.callingTitle) ?? row.callingTitle;
-    if (row.sustainedOn) {
-      events.push({
-        date: row.sustainedOn,
-        type: "calling_sustained",
-        title: `${callingTitle} sustained`,
-        details: row.isCurrent ? "Current" : "Historical"
-      });
-    }
-    if (row.setApartOn) {
-      events.push({
-        date: row.setApartOn,
-        type: "calling_set_apart",
-        title: `${callingTitle} set apart`,
-        details: row.isCurrent ? "Current" : "Historical"
-      });
-    }
-    if (row.releasedOn) {
-      events.push({
-        date: row.releasedOn,
-        type: "calling_released",
-        title: `${callingTitle} released`
-      });
-    }
-  }
-
-  const sorted = events.sort((left, right) => {
-    if (!left.date && !right.date) {
-      return left.type.localeCompare(right.type);
-    }
-    if (!left.date) {
-      return 1;
-    }
-    if (!right.date) {
-      return -1;
-    }
-    return right.date.localeCompare(left.date);
-  });
-
-  return {
-    member: {
-      lcrMemberId: member.lcrMemberId,
-      fullName: member.fullName,
-      unitName: member.unitName
-    },
-    timeline: sorted
-  };
 };
 
 export const getDataQualityWorkbench = async () => {
-  const [counts, duplicatesByIdentity, duplicateCallings, missingContacts] = await Promise.all([
-    query<{
+  const db = openSqliteSpikeDb();
+  try {
+    const summary = db.prepare(
+      `
+      SELECT
+        CAST(SUM(CASE WHEN (m.primary_phone IS NULL OR m.primary_phone = '') THEN 1 ELSE 0 END) AS TEXT) AS missingPhone,
+        CAST(SUM(CASE WHEN (m.primary_email IS NULL OR m.primary_email = '') THEN 1 ELSE 0 END) AS TEXT) AS missingEmail,
+        CAST(SUM(CASE WHEN (
+          COALESCE(NULLIF(m.address_line1, ''), NULLIF(h.address_line1, '')) IS NULL
+          OR COALESCE(NULLIF(m.city, ''), NULLIF(h.city, '')) IS NULL
+          OR COALESCE(NULLIF(m.postal_code, ''), NULLIF(h.postal_code, '')) IS NULL
+        ) THEN 1 ELSE 0 END) AS TEXT) AS missingAddress,
+        CAST(COUNT(*) AS TEXT) AS totalMembers
+      FROM members m
+      LEFT JOIN households h ON m.household_id = h.id
+      `
+    ).get() as {
       missingPhone: string;
       missingEmail: string;
       missingAddress: string;
       totalMembers: string;
-    }>(
-      `
-      SELECT
-        COUNT(*) FILTER (WHERE p.phone_number IS NULL)::text AS "missingPhone",
-        COUNT(*) FILTER (WHERE e.email IS NULL)::text AS "missingEmail",
-        COUNT(*) FILTER (
-          WHERE COALESCE(NULLIF(m.address_line1, ''), NULLIF(h.address_line1, '')) IS NULL
-             OR COALESCE(NULLIF(m.address_city, ''), NULLIF(h.city, '')) IS NULL
-             OR COALESCE(NULLIF(m.address_postal_code, ''), NULLIF(h.postal_code, '')) IS NULL
-        )::text AS "missingAddress",
-        COUNT(*)::text AS "totalMembers"
-      FROM members m
-      LEFT JOIN households h ON m.household_id = h.id
-      LEFT JOIN LATERAL (
-        SELECT phone_number
-        FROM phone_numbers
-        WHERE member_id = m.id
-        ORDER BY is_primary DESC, updated_at DESC
-        LIMIT 1
-      ) p ON TRUE
-      LEFT JOIN LATERAL (
-        SELECT email
-        FROM emails
-        WHERE member_id = m.id
-        ORDER BY is_primary DESC, updated_at DESC
-        LIMIT 1
-      ) e ON TRUE
-      `
-    ),
-    query<{
-      identityKey: string;
-      duplicateCount: string;
-      members: string;
-    }>(
+    };
+
+    const duplicatesByIdentity = db.prepare(
       `
       WITH keyed AS (
         SELECT
-          LOWER(REGEXP_REPLACE(${fullNameExpr}, '[^a-z0-9]+', ' ', 'g')) || '|' || COALESCE(m.birthdate::text, 'unknown') AS identity_key,
+          LOWER(REPLACE(REPLACE(REPLACE(${fullNameExpr}, '-', ' '), '.', ' '), ',', ' ')) || '|' || COALESCE(m.birthdate, 'unknown') AS identity_key,
           ${fullNameExpr} AS full_name
         FROM members m
       )
       SELECT
-        identity_key AS "identityKey",
-        COUNT(*)::text AS "duplicateCount",
-        STRING_AGG(full_name, ' | ' ORDER BY full_name) AS members
+        identity_key AS identityKey,
+        CAST(COUNT(*) AS TEXT) AS duplicateCount,
+        GROUP_CONCAT(full_name, ' | ') AS members
       FROM keyed
       GROUP BY identity_key
       HAVING COUNT(*) > 1
       ORDER BY COUNT(*) DESC, identity_key
       LIMIT 50
       `
-    ),
-    query<{
-      lcrMemberId: string;
-      fullName: string;
-      unitName: string;
-      callingTitle: string;
+    ).all() as Array<{
+      identityKey: string;
       duplicateCount: string;
-    }>(
+      members: string;
+    }>;
+
+    const duplicateCallings = db.prepare(
       `
       WITH normalized AS (
         SELECT
           m.lcr_member_id AS lcr_member_id,
           ${fullNameExpr} AS full_name,
           COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unit_name,
-          BTRIM(REGEXP_REPLACE(LOWER(c.title), '[^a-z0-9]+', ' ', 'g')) AS title_key
-        FROM current_callings_dedup c
-        JOIN members m ON c.member_id = m.id
+          TRIM(LOWER(REPLACE(REPLACE(REPLACE(c.title, '-', ' '), '.', ' '), ',', ' '))) AS title_key
+        FROM callings c
+        JOIN members m ON c.lcr_member_id = m.lcr_member_id
         LEFT JOIN units u ON m.unit_id = u.id
+        WHERE c.released_on IS NULL AND c.is_current = 1
       )
       SELECT
-        lcr_member_id AS "lcrMemberId",
-        full_name AS "fullName",
-        unit_name AS "unitName",
-        title_key AS "callingTitle",
-        COUNT(*)::text AS "duplicateCount"
+        lcr_member_id AS lcrMemberId,
+        full_name AS fullName,
+        unit_name AS unitName,
+        title_key AS callingTitle,
+        CAST(COUNT(*) AS TEXT) AS duplicateCount
       FROM normalized
       GROUP BY lcr_member_id, full_name, unit_name, title_key
       HAVING COUNT(*) > 1
       ORDER BY COUNT(*) DESC, full_name
       LIMIT 50
       `
-    ),
-    getMissingContactDataList({ limit: 100 })
-  ]);
+    ).all() as Array<{
+      lcrMemberId: string;
+      fullName: string;
+      unitName: string;
+      callingTitle: string;
+      duplicateCount: string;
+    }>;
 
-  const summary = counts.rows[0];
-  return {
-    generatedAt: new Date().toISOString(),
-    summary: {
-      totalMembers: Number.parseInt(summary.totalMembers, 10),
-      missingPhone: Number.parseInt(summary.missingPhone, 10),
-      missingEmail: Number.parseInt(summary.missingEmail, 10),
-      missingAddress: Number.parseInt(summary.missingAddress, 10),
-      duplicateIdentityGroups: duplicatesByIdentity.rows.length,
-      duplicateCallingGroups: duplicateCallings.rows.length
-    },
-    details: {
-      duplicateIdentities: duplicatesByIdentity.rows.map((row) => ({
-        ...row,
-        duplicateCount: Number.parseInt(row.duplicateCount, 10)
-      })),
-      duplicateCallings: duplicateCallings.rows.map((row) => ({
-        ...row,
-        duplicateCount: Number.parseInt(row.duplicateCount, 10),
-        callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle
-      })),
-      missingContactSample: missingContacts
-    }
-  };
+    const missingContacts = await getMissingContactDataList({ limit: 100 });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalMembers: Number.parseInt(summary.totalMembers, 10),
+        missingPhone: Number.parseInt(summary.missingPhone, 10),
+        missingEmail: Number.parseInt(summary.missingEmail, 10),
+        missingAddress: Number.parseInt(summary.missingAddress, 10),
+        duplicateIdentityGroups: duplicatesByIdentity.length,
+        duplicateCallingGroups: duplicateCallings.length
+      },
+      details: {
+        duplicateIdentities: duplicatesByIdentity.map((row) => ({
+          ...row,
+          duplicateCount: Number.parseInt(row.duplicateCount, 10)
+        })),
+        duplicateCallings: duplicateCallings.map((row) => ({
+          ...row,
+          duplicateCount: Number.parseInt(row.duplicateCount, 10),
+          callingTitle: cleanCallingTitle(row.callingTitle) ?? row.callingTitle
+        })),
+        missingContactSample: missingContacts
+      }
+    };
+  } finally {
+    db.close();
+  }
 };
 
 const allowedDocExtensions = new Set([".txt", ".md", ".csv", ".tsv", ".json", ".log"]);
@@ -2020,74 +1435,79 @@ export const documentCrossReference = async (input: {
   const maxMatches = Math.max(1, Math.min(input.maxMatches ?? 200, 2000));
   const search = input.query?.trim().toLowerCase() || null;
 
-  const memberRows = await query<{ fullName: string; unitName: string }>(
-    `
-    SELECT
-      ${fullNameExpr} AS "fullName",
-      COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName"
-    FROM members m
-    LEFT JOIN units u ON m.unit_id = u.id
-    ORDER BY m.last_name, m.first_name
-    LIMIT 2000
-    `
-  );
+  const db = openSqliteSpikeDb();
+  try {
+    const memberRows = db.prepare(
+      `
+      SELECT
+        ${fullNameExpr} AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS unitName
+      FROM members m
+      LEFT JOIN units u ON m.unit_id = u.id
+      ORDER BY m.last_name, m.first_name
+      LIMIT 2000
+      `
+    ).all() as Array<{ fullName: string; unitName: string }>;
 
-  const memberTokens = memberRows.rows
-    .map((row) => ({ fullName: row.fullName, unitName: row.unitName, token: row.fullName.toLowerCase() }))
-    .filter((row) => row.token.length >= 6);
+    const memberTokens = memberRows
+      .map((row) => ({ fullName: row.fullName, unitName: row.unitName, token: row.fullName.toLowerCase() }))
+      .filter((row) => row.token.length >= 6);
 
-  const files = await collectFiles(root, maxFiles);
-  const matches: Array<{
-    filePath: string;
-    queryMatched: boolean;
-    memberHits: Array<{ fullName: string; unitName: string }>;
-    hitCount: number;
-  }> = [];
+    const files = await collectFiles(root, maxFiles);
+    const matches: Array<{
+      filePath: string;
+      queryMatched: boolean;
+      memberHits: Array<{ fullName: string; unitName: string }>;
+      hitCount: number;
+    }> = [];
 
-  for (const filePath of files) {
-    if (matches.length >= maxMatches) {
-      break;
-    }
-
-    let content = "";
-    try {
-      content = (await fs.readFile(filePath, "utf8")).slice(0, 250000);
-    } catch {
-      continue;
-    }
-
-    const normalized = content.toLowerCase();
-    const queryMatched = search ? normalized.includes(search) || filePath.toLowerCase().includes(search) : false;
-    const memberHits: Array<{ fullName: string; unitName: string }> = [];
-
-    for (const member of memberTokens) {
-      if (memberHits.length >= 8) {
+    for (const filePath of files) {
+      if (matches.length >= maxMatches) {
         break;
       }
-      if (normalized.includes(member.token)) {
-        memberHits.push({ fullName: member.fullName, unitName: member.unitName });
+
+      let content = "";
+      try {
+        content = (await fs.readFile(filePath, "utf8")).slice(0, 250000);
+      } catch {
+        continue;
       }
+
+      const normalized = content.toLowerCase();
+      const queryMatched = search ? normalized.includes(search) || filePath.toLowerCase().includes(search) : false;
+      const memberHits: Array<{ fullName: string; unitName: string }> = [];
+
+      for (const member of memberTokens) {
+        if (memberHits.length >= 8) {
+          break;
+        }
+        if (normalized.includes(member.token)) {
+          memberHits.push({ fullName: member.fullName, unitName: member.unitName });
+        }
+      }
+
+      if (!queryMatched && memberHits.length === 0) {
+        continue;
+      }
+
+      matches.push({
+        filePath,
+        queryMatched,
+        memberHits,
+        hitCount: memberHits.length + (queryMatched ? 1 : 0)
+      });
     }
 
-    if (!queryMatched && memberHits.length === 0) {
-      continue;
-    }
-
-    matches.push({
-      filePath,
-      queryMatched,
-      memberHits,
-      hitCount: memberHits.length + (queryMatched ? 1 : 0)
-    });
+    return {
+      folderPath: root,
+      filesScanned: files.length,
+      matches: matches
+        .sort((left, right) => right.hitCount - left.hitCount)
+        .slice(0, maxMatches)
+    };
+  } finally {
+    db.close();
   }
-
-  return {
-    folderPath: root,
-    filesScanned: files.length,
-    matches: matches
-      .sort((left, right) => right.hitCount - left.hitCount)
-      .slice(0, maxMatches)
-  };
 };
 
 export const getTaskRecommendations = async () => {

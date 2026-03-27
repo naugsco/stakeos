@@ -1,5 +1,5 @@
 import { env, splitEmails } from "@/src/config/env";
-import { query } from "@/src/db/pool";
+import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { ensureMailer } from "@/src/email/mailer";
 
 export type EmailTargetType = "calling" | "organization" | "stake_council" | "stake_presidency" | "custom";
@@ -20,63 +20,80 @@ interface SendEmailInput {
 
 const dedupe = (items: string[]) => Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
 
-const recipientsForCalling = async (callingText: string): Promise<RecipientRow[]> => {
-  const result = await query<RecipientRow>(
-    `
-    SELECT DISTINCT
-      e.email,
-      m.id AS "memberId",
-      m.household_id AS "householdId"
-    FROM current_callings_dedup c
-    JOIN members m ON c.member_id = m.id
-    JOIN emails e ON e.member_id = m.id
-    LEFT JOIN organizations o ON c.organization_id = o.id
-    WHERE c.title ILIKE $1 OR o.name ILIKE $1
-    `,
-    [`%${callingText}%`]
-  );
-
-  return result.rows;
+const recipientsForCalling = (callingText: string): RecipientRow[] => {
+  const db = openSqliteSpikeDb();
+  try {
+    return db
+      .prepare<[string, string], RecipientRow>(
+        `
+        SELECT DISTINCT
+          m.primary_email AS email,
+          m.id AS memberId,
+          m.household_id AS householdId
+        FROM callings c
+        JOIN members m ON c.member_id = m.id
+        WHERE c.released_on IS NULL
+          AND c.is_current = 1
+          AND m.primary_email IS NOT NULL
+          AND (c.title LIKE ? OR c.organization_name LIKE ?)
+        `
+      )
+      .all(`%${callingText}%`, `%${callingText}%`);
+  } finally {
+    db.close();
+  }
 };
 
-const recipientsForOrganization = async (organizationText: string): Promise<RecipientRow[]> => {
-  const result = await query<RecipientRow>(
-    `
-    SELECT DISTINCT
-      e.email,
-      m.id AS "memberId",
-      m.household_id AS "householdId"
-    FROM current_callings_dedup c
-    JOIN organizations o ON c.organization_id = o.id
-    JOIN members m ON c.member_id = m.id
-    JOIN emails e ON e.member_id = m.id
-    WHERE o.name ILIKE $1
-    `,
-    [`%${organizationText}%`]
-  );
-
-  return result.rows;
+const recipientsForOrganization = (organizationText: string): RecipientRow[] => {
+  const db = openSqliteSpikeDb();
+  try {
+    return db
+      .prepare<[string], RecipientRow>(
+        `
+        SELECT DISTINCT
+          m.primary_email AS email,
+          m.id AS memberId,
+          m.household_id AS householdId
+        FROM callings c
+        JOIN members m ON c.member_id = m.id
+        WHERE c.released_on IS NULL
+          AND c.is_current = 1
+          AND m.primary_email IS NOT NULL
+          AND c.organization_name LIKE ?
+        `
+      )
+      .all(`%${organizationText}%`);
+  } finally {
+    db.close();
+  }
 };
 
-const spouseEmails = async (householdIds: number[]): Promise<string[]> => {
+const spouseEmails = (householdIds: number[]): string[] => {
   if (!householdIds.length) {
     return [];
   }
 
-  const result = await query<{ email: string }>(
-    `
-    SELECT DISTINCT e.email
-    FROM members m
-    JOIN emails e ON e.member_id = m.id
-    WHERE m.household_id = ANY($1::bigint[])
-    `,
-    [householdIds]
-  );
+  const db = openSqliteSpikeDb();
+  try {
+    const placeholders = householdIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare<unknown[], { email: string }>(
+        `
+        SELECT DISTINCT m.primary_email AS email
+        FROM members m
+        WHERE m.household_id IN (${placeholders})
+          AND m.primary_email IS NOT NULL
+        `
+      )
+      .all(...householdIds);
 
-  return result.rows.map((row) => row.email);
+    return rows.map((row) => row.email);
+  } finally {
+    db.close();
+  }
 };
 
-const resolveRecipients = async (input: SendEmailInput): Promise<string[]> => {
+const resolveRecipients = (input: SendEmailInput): string[] => {
   if (input.targetType === "stake_presidency") {
     return splitEmails(env.STAKE_PRESIDENCY_EMAILS);
   }
@@ -91,8 +108,8 @@ const resolveRecipients = async (input: SendEmailInput): Promise<string[]> => {
 
   const baseRows =
     input.targetType === "calling"
-      ? await recipientsForCalling(input.targetValue)
-      : await recipientsForOrganization(input.targetValue);
+      ? recipientsForCalling(input.targetValue)
+      : recipientsForOrganization(input.targetValue);
 
   let recipients = baseRows.map((row) => row.email);
 
@@ -101,7 +118,7 @@ const resolveRecipients = async (input: SendEmailInput): Promise<string[]> => {
       .map((value) => Number.parseInt(value, 10))
       .filter((value) => Number.isFinite(value));
 
-    const spouseRecipientList = await spouseEmails(householdIds);
+    const spouseRecipientList = spouseEmails(householdIds);
     recipients = recipients.concat(spouseRecipientList);
   }
 
@@ -109,7 +126,7 @@ const resolveRecipients = async (input: SendEmailInput): Promise<string[]> => {
 };
 
 export const sendCallingEmail = async (input: SendEmailInput) => {
-  const recipients = await resolveRecipients(input);
+  const recipients = resolveRecipients(input);
   if (!recipients.length) {
     return { sent: 0, rejected: 0, messageId: null as string | null, recipients };
   }
@@ -130,55 +147,48 @@ export const sendCallingEmail = async (input: SendEmailInput) => {
   };
 };
 
-export const createWhatsAppInviteList = async (
+export const createWhatsAppInviteList = (
   mode: "calling" | "meeting" | "organization",
   value: string
-): Promise<string> => {
-  let result;
-
+): string => {
   if (mode === "meeting") {
-    result = await query<{
-      fullName: string;
-      phoneNumber: string;
-    }>(
-      `
-      SELECT DISTINCT
-        TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS "fullName",
-        p.phone_number AS "phoneNumber"
-      FROM meeting_assignments ma
-      JOIN members m ON ma.member_id = m.id
-      JOIN phone_numbers p ON p.member_id = m.id
-      WHERE ma.meeting_name ILIKE $1
-      ORDER BY "fullName"
-      `,
-      [`%${value}%`]
-    );
-  } else {
-    const whereClause =
-      mode === "calling"
-        ? "c.title ILIKE $1"
-        : "o.name ILIKE $1";
-
-    result = await query<{
-      fullName: string;
-      phoneNumber: string;
-    }>(
-      `
-      SELECT DISTINCT
-        TRIM(CONCAT(m.first_name, ' ', m.last_name)) AS "fullName",
-        p.phone_number AS "phoneNumber"
-      FROM current_callings_dedup c
-      LEFT JOIN organizations o ON c.organization_id = o.id
-      JOIN members m ON c.member_id = m.id
-      JOIN phone_numbers p ON p.member_id = m.id
-      WHERE ${whereClause}
-      ORDER BY "fullName"
-      `,
-      [`%${value}%`]
-    );
+    // No meeting_assignments table in SQLite schema; return empty list
+    return `WhatsApp Invite List (meeting: ${value})`;
   }
 
-  const lines = result.rows.map((row) => `${row.fullName}: ${row.phoneNumber}`);
+  const db = openSqliteSpikeDb();
+  try {
+    const whereClause =
+      mode === "calling"
+        ? "(c.title LIKE ? OR c.organization_name LIKE ?)"
+        : "c.organization_name LIKE ?";
 
-  return [`WhatsApp Invite List (${mode}: ${value})`, ...lines].join("\n");
+    const params =
+      mode === "calling"
+        ? [`%${value}%`, `%${value}%`]
+        : [`%${value}%`];
+
+    const rows = db
+      .prepare<unknown[], { fullName: string; phoneNumber: string }>(
+        `
+        SELECT DISTINCT
+          TRIM(m.first_name || ' ' || m.last_name) AS fullName,
+          m.primary_phone AS phoneNumber
+        FROM callings c
+        JOIN members m ON c.lcr_member_id = m.lcr_member_id
+        WHERE c.released_on IS NULL
+          AND c.is_current = 1
+          AND m.primary_phone IS NOT NULL
+          AND ${whereClause}
+        ORDER BY fullName
+        `
+      )
+      .all(...params);
+
+    const lines = rows.map((row) => `${row.fullName}: ${row.phoneNumber}`);
+
+    return [`WhatsApp Invite List (${mode}: ${value})`, ...lines].join("\n");
+  } finally {
+    db.close();
+  }
 };

@@ -2,13 +2,26 @@ import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { env } from "@/src/config/env";
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const schemaPath = resolve(moduleDir, "schema.sql");
 const legacyDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "sqlite-spike", "stakeos-spike.db");
 const defaultDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "stakeos.db");
+
+const getSchemaPath = () => {
+  const candidates = [
+    resolve(process.cwd(), "src", "sqlite", "schema.sql"),
+    resolve(process.cwd(), "dist", "sqlite", "schema.sql"),
+    resolve(dirname(process.argv[1] ?? process.cwd()), "..", "src", "sqlite", "schema.sql"),
+    resolve(dirname(process.argv[1] ?? process.cwd()), "schema.sql")
+  ];
+
+  const schemaPath = candidates.find((candidate) => existsSync(candidate));
+  if (!schemaPath) {
+    throw new Error("SQLite schema.sql could not be located.");
+  }
+
+  return schemaPath;
+};
 
 const resolveDefaultDbPath = () => {
   if (!existsSync(defaultDbPath) && existsSync(legacyDbPath)) {
@@ -38,7 +51,7 @@ export const openSqliteSpikeDb = () => {
 };
 
 export const ensureSqliteSpikeSchema = (db: Database.Database) => {
-  const schema = readFileSync(schemaPath, "utf8");
+  const schema = readFileSync(getSchemaPath(), "utf8");
   db.exec(schema);
   const columns = db.prepare("PRAGMA table_info(members)").all() as Array<{ name: string }>;
   const columnNames = new Set(columns.map((column) => column.name));
