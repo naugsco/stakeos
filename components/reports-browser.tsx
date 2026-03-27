@@ -448,14 +448,14 @@ export function ReportsBrowser({
 
   return (
     <div className="space-y-8">
-      <section id="temple-and-covenants" className="scroll-mt-24 space-y-4">
+      <section id="temple-and-covenants" className="scroll-mt-32 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Temple And Covenants</h2>
           <p className="text-sm text-slate-600">Temple status, expiration risk, and covenant progression belong together because they describe the same recommend and ordinance stewardship.</p>
         </div>
 
         <section className="grid gap-6 lg:grid-cols-2">
-          <article id="recommend-expiration-risk-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <article id="recommend-expiration-risk-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <h2 className="text-lg font-semibold">Recommend Expiration Risk</h2>
             </header>
@@ -509,7 +509,7 @@ export function ReportsBrowser({
             </div>
           </article>
 
-          <section id="temple-recommend-list" className="grid gap-6">
+          <section id="temple-recommend-list" className="scroll-mt-32 grid gap-6">
             <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h2 className="text-lg font-semibold">Temple Recommend Attention List</h2>
@@ -618,7 +618,7 @@ export function ReportsBrowser({
           </section>
         </section>
 
-        <section id="covenant-path-progression-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="covenant-path-progression-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="text-lg font-semibold">Covenant Path Progression</h2>
             <p className="text-xs text-slate-600">Leadership buckets show ordinance, temple, service, youth formation, and family ordinance progress.</p>
@@ -677,13 +677,13 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section id="youth-and-formation" className="scroll-mt-24 space-y-4">
+      <section id="youth-and-formation" className="scroll-mt-32 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Youth And Formation</h2>
           <p className="text-sm text-slate-600">Seminary and institute participation, plus the institute follow-up list, should stay together because they support the same formation discussion.</p>
         </div>
 
-        <section id="seminary-institute-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="seminary-institute-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="text-lg font-semibold">Seminary/Institute Participation by Unit</h2>
           </header>
@@ -732,7 +732,7 @@ export function ReportsBrowser({
           </table>
         </section>
 
-        <section id="seminary-institute-opportunity-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="seminary-institute-opportunity-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="text-lg font-semibold">Institute Opportunity List</h2>
             <p className="text-xs text-slate-600">Institute-age members not currently marked as attending.</p>
@@ -783,7 +783,7 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section id="ministering-and-household-care" className="scroll-mt-24 space-y-4">
+      <section id="ministering-and-household-care" className="scroll-mt-32 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Ministering And Household Care</h2>
           <p className="text-sm text-slate-600">These lists are immediate pastoral follow-up queues: move-ins, missing ministering coverage, and households that need contact.</p>
@@ -837,7 +837,7 @@ export function ReportsBrowser({
             </div>
           </article>
 
-          <section id="ministering-gap-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <section id="ministering-gap-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <h2 className="text-lg font-semibold">Ministering Gap List</h2>
             </header>
@@ -895,7 +895,7 @@ export function ReportsBrowser({
           </section>
         </section>
 
-        <section id="household-outreach-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="household-outreach-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="text-lg font-semibold">Household Outreach Opportunities</h2>
           </header>
@@ -956,13 +956,13 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section id="growth-and-leadership" className="scroll-mt-24 space-y-4">
+      <section id="growth-and-leadership" className="scroll-mt-32 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Growth And Leadership</h2>
           <p className="text-sm text-slate-600">Unit-level health, baptisms, leadership tenure, strengthening, and priesthood progression are the broader leadership review lists.</p>
         </div>
 
-        <section id="unit-health-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section id="unit-health-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h2 className="text-lg font-semibold">Unit Health</h2>
           </header>
@@ -1059,7 +1059,7 @@ export function ReportsBrowser({
             </div>
           </article>
 
-          <article id="recent-baptisms-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <article id="recent-baptisms-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <h2 className="text-lg font-semibold">Recent Baptisms</h2>
             </header>
@@ -1108,7 +1108,7 @@ export function ReportsBrowser({
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
-          <section id="new-returning-strengthening" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <section id="new-returning-strengthening" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <h2 className="text-lg font-semibold">New/Returning Member Strengthening</h2>
             </header>
@@ -1174,7 +1174,7 @@ export function ReportsBrowser({
             </div>
           </section>
 
-          <section id="priesthood-progression-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <section id="priesthood-progression-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
               <h2 className="text-lg font-semibold">Priesthood Progression Candidates</h2>
             </header>

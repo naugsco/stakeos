@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { AppUpdateNotice } from "@/components/app-update-notice";
 import { Navigation } from "@/components/navigation";
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           <div className="orb orb-c" />
         </div>
         <Navigation />
+        <AppUpdateNotice />
         <main className="mx-auto max-w-7xl px-6 py-8 pb-16">{children}</main>
       </body>
     </html>

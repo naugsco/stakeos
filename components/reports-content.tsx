@@ -30,7 +30,7 @@ export function ReportsContent({
 
   return (
     <>
-      <section id="recent-baptism-follow-up" className="scroll-mt-24 space-y-4">
+      <section id="recent-baptism-follow-up" className="scroll-mt-32 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Recent Baptism Follow-Up</h2>
           <p className="text-sm text-slate-600">

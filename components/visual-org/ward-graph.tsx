@@ -221,6 +221,9 @@ const blendWithCream = (hex, weight = 0.18) => {
 
 const getCallingBubbleFill = (color) => blendWithCream(color, 0.22);
 const getMeetingBubbleFill = (color) => blendWithCream(color, 0.18);
+const getSelectedBubbleFill = (color) => blendWithCream(color, 0.34);
+const getBubbleTitleColor = (color) => d3.interpolateRgb("#1f2937", color)(0.45);
+const getBubbleSecondaryTextColor = (color) => d3.interpolateRgb("#475569", color)(0.28);
 
 // Handbook URL base
 const HB = "https://www.churchofjesuschrist.org/study/manual/general-handbook";
@@ -729,14 +732,14 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
       // Title
       nodeEls.append("text").attr("class", "mtitle")
         .attr("text-anchor", "middle").attr("dy", 0)
-        .attr("fill", "#1f2937").attr("font-size", 9)
+        .attr("fill", d => getBubbleTitleColor(d.color || d.bg || "#334155")).attr("font-size", 9)
         .attr("font-weight", 700).attr("font-family", "'Outfit', sans-serif")
         .style("pointer-events", "none")
         .text(d => d.short);
 
       // Freq label
       nodeEls.append("text").attr("class", "freq-label")
-        .attr("text-anchor", "middle").attr("dy", 13).attr("fill", "#64748b").attr("font-size", 7)
+        .attr("text-anchor", "middle").attr("dy", 13).attr("fill", d => getBubbleSecondaryTextColor(d.color || d.bg || "#334155")).attr("font-size", 7)
         .attr("font-family", "'Outfit', sans-serif").style("pointer-events", "none")
         .text(d => d.freq);
 
@@ -783,7 +786,7 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
         .attr("fill", d => getCallingBubbleFill(d.color || "#64748b")).attr("stroke", d => d.color).attr("stroke-width", 1.8);
 
       nodeEls.append("text").attr("text-anchor", "middle").attr("dy", d => d._titleDy)
-        .attr("fill", "#1f2937").attr("font-size", d => d.radius >= 20 ? 13.5 : d.radius >= 14 ? 12 : 10.5)
+        .attr("fill", d => getBubbleTitleColor(d.color || "#64748b")).attr("font-size", d => d.radius >= 20 ? 13.5 : d.radius >= 14 ? 12 : 10.5)
         .attr("font-weight", 600).attr("font-family", "'Outfit', sans-serif")
         .style("pointer-events", "none")
         .text(d => d.short);
@@ -794,7 +797,7 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
         const label = d3.select(this).append("text")
           .attr("class", "assignment-text")
           .attr("text-anchor", "middle")
-          .attr("fill", "#475569")
+          .attr("fill", getBubbleSecondaryTextColor(d.color || "#64748b"))
           .attr("font-size", d.radius >= 20 ? 10.5 : d.radius >= 14 ? 9.5 : 8.5)
           .attr("font-weight", 500)
           .attr("font-family", "'Outfit', sans-serif")
@@ -921,7 +924,7 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
       el.select(".mtitle")
         .transition().duration(600).ease(d3.easeCubicOut)
         .attr("dy", isExp ? -(r - 12) : 0)
-        .attr("fill", isExp ? d.color : "#e2e8f0")
+        .attr("fill", getBubbleTitleColor(d.color || d.bg || "#334155"))
         .attr("font-size", isExp ? 10 : 9);
 
       // Show/hide freq label
@@ -946,11 +949,19 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
             .style("cursor", "pointer")
             .on("click", (event) => { event.stopPropagation(); onDetail(att); })
             .on("touchend", (event) => { event.stopPropagation(); event.preventDefault(); onDetail(att); });
-          ag.append("circle").attr("r", 13).attr("fill", "#0f172a").attr("stroke", att.color).attr("stroke-width", 1.5);
+          const label = att.short.length > 16 ? `${att.short.substring(0, 15)}…` : att.short;
+          const badgeRx = Math.max(15, Math.min(40, label.length * 2.9 + 6));
+          const badgeRy = label.length > 11 ? 10.5 : 9.5;
+          ag.append("ellipse")
+            .attr("rx", badgeRx)
+            .attr("ry", badgeRy)
+            .attr("fill", getCallingBubbleFill(att.color))
+            .attr("stroke", att.color)
+            .attr("stroke-width", 1.4);
           ag.append("text").attr("text-anchor", "middle").attr("dy", "0.3em")
-            .attr("fill", "#e2e8f0").attr("font-size", 7).attr("font-weight", 600)
+            .attr("fill", getBubbleTitleColor(att.color)).attr("font-size", label.length > 12 ? 6.1 : 6.8).attr("font-weight", 700)
             .attr("font-family", "'Outfit', sans-serif").style("pointer-events", "none")
-            .text(att.short.length > 11 ? att.short.substring(0, 10) + "…" : att.short);
+            .text(label);
           // Staggered pop-in
           ag.transition().delay(200 + i * 50).duration(400).ease(d3.easeBackOut.overshoot(1.2))
             .attr("transform", `translate(${ax},${ay}) scale(1)`);
@@ -983,10 +994,12 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
         const isLinked = linkedIds.has(d.id);
         const dimmed = selected && !isLinked;
         el.select(".node-circle")
-          .attr("fill", isSel ? d.color : "#1e293b")
+          .attr("fill", isSel ? getSelectedBubbleFill(d.color || "#64748b") : getCallingBubbleFill(d.color || "#64748b"))
           .attr("stroke-width", isSel ? 3 : 1.8)
           .attr("filter", isSel ? "url(#glow)" : "none");
-        el.style("opacity", dimmed ? 0.12 : 1);
+        el.selectAll("text")
+          .attr("opacity", dimmed ? 0.38 : 1);
+        el.style("opacity", dimmed ? 0.2 : 1);
       });
     }
 
@@ -1101,7 +1114,14 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Reports To</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   <span style={{ padding: "2px 8px", borderRadius: 4, background: C[data.reportsTo].color + "20", color: C[data.reportsTo].color, fontSize: 13, fontWeight: 600 }}>↑ {C[data.reportsTo].title}</span>
-                  {data.stakeReport && C[data.stakeReport] && <span style={{ padding: "2px 8px", borderRadius: 4, background: C[data.stakeReport].color + "20", color: C[data.stakeReport].color, fontSize: 13, fontWeight: 600 }}>↑ {C[data.stakeReport].title} (stake)</span>}
+                </div>
+              </div>
+            )}
+            {data.stakeReport && C[data.stakeReport] && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Training / Support From</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  <span style={{ padding: "2px 8px", borderRadius: 4, background: C[data.stakeReport].color + "20", color: C[data.stakeReport].color, fontSize: 13, fontWeight: 600 }}>↘ {C[data.stakeReport].title}</span>
                 </div>
               </div>
             )}

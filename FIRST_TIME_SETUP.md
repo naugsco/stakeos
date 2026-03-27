@@ -40,21 +40,29 @@ StakeOS does **not** capture or store your LCR credentials.
 
 ## Quickstart
 
-If you already know your way around Terminal, this is the shortest correct path:
+There are now two valid first-install paths.
+
+### Desktop app install
+
+1. Open the downloaded StakeOS app.
+2. Paste the stake's LCR custom report URL.
+3. Use the in-app diagnostics step to install Chromium if StakeOS says it is missing.
+4. Run the first full sync and log in to LCR manually.
+5. Open the dashboard.
+
+### Source install
+
+If you are running from source, this is the shortest correct path:
 
 ```bash
 brew install node
 git clone <YOUR_GITHUB_REPO_URL>
 cd stakeos
 npm install
-npx playwright install chromium
-cp .env.example .env
-npm run sqlite:init
-npm run sqlite:sync
 npm run desktop:start
 ```
 
-If you want the full walkthrough, continue below.
+Then finish setup inside the app.
 
 ## 1. Install Homebrew
 
@@ -114,11 +122,7 @@ Install Node packages:
 npm install
 ```
 
-Install the Playwright browser used for LCR sync:
-
-```bash
-npx playwright install chromium
-```
+You do not need to install Chromium manually up front unless you want to. StakeOS Desktop can install it from the in-app setup diagnostics screen.
 
 ## 5. Create and Configure `.env`
 
@@ -130,7 +134,7 @@ cp .env.example .env
 
 Then edit `.env`.
 
-Minimum required values:
+Minimum practical values:
 
 ```env
 NODE_ENV=development
@@ -143,8 +147,9 @@ UNIT_NUMBER=000000
 ```
 
 Notes:
-- `PLAYWRIGHT_HEADLESS=false` is recommended for first sync so you can log in manually.
 - `LCR_DIRECTORY_URL` should be your stake's LCR custom report URL.
+- `PLAYWRIGHT_HEADLESS=false` is recommended for first sync so you can log in manually.
+- `STAKE_NAME` and `UNIT_NUMBER` can stay on defaults for first install.
 - `SMTP_*` settings are not required for normal desktop use.
 
 ## 6. LCR Custom Report Specification
@@ -159,6 +164,8 @@ StakeOS expects the LCR custom report to return **one row per person**.
 - if you rename headers in a way that LCR changes the visible column label, the scraper may stop recognizing them
 
 StakeOS matches columns by header name, not by position.
+
+Unit names in the app are populated from the report data itself. You do not need to preconfigure each ward or branch manually for a new stake.
 
 ### Minimum Required Columns
 

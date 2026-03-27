@@ -16,6 +16,12 @@ export async function GET() {
     errorMessage: string | null;
     recordsProcessed: number;
   } | null = null;
+  let latestSuccessfulFullSyncSummary: {
+    completedAt: string | null;
+    membersImported: number;
+    unitsFound: number;
+    callingsImported: number;
+  } | null = null;
 
   const db = openSqliteSpikeDb();
   try {
@@ -35,6 +41,37 @@ export async function GET() {
       LIMIT 1
       `
     ).get() as typeof latest | undefined;
+
+    const latestSuccessfulFullSync = db.prepare(
+      `
+      SELECT
+        CAST(id AS TEXT) AS id,
+        completed_at AS completedAt
+      FROM sync_logs
+      WHERE status = 'success'
+        AND sync_type IN ('sqlite_full_sync', 'sqlite_spike_full_sync')
+      ORDER BY completed_at DESC, id DESC
+      LIMIT 1
+      `
+    ).get() as { id?: string; completedAt?: string | null } | undefined;
+
+    if (latestSuccessfulFullSync?.id) {
+      const membersImported = db.prepare(`SELECT COUNT(*) AS count FROM members`).get() as { count: number };
+      const unitsFound = db.prepare(
+        `SELECT COUNT(DISTINCT COALESCE(NULLIF(unit_name, ''), unit_abbreviation, unit_number)) AS count FROM members`
+      ).get() as { count: number };
+      const callingsImported = db.prepare(
+        `SELECT COUNT(*) AS count FROM callings WHERE released_on IS NULL AND is_current = 1`
+      ).get() as { count: number };
+
+      latestSuccessfulFullSyncSummary = {
+        completedAt: latestSuccessfulFullSync.completedAt ?? null,
+        membersImported: membersImported.count,
+        unitsFound: unitsFound.count,
+        callingsImported: callingsImported.count
+      };
+    }
+
     databaseRunning = running.count > 0;
     latest = latestRow ?? null;
   } finally {
@@ -52,6 +89,7 @@ export async function GET() {
     running: databaseRunning || Boolean(activeLaunch),
     phase: databaseRunning ? "running" : activeLaunch ? "launching" : "idle",
     activeJob: activeLaunch,
-    latest
+    latest,
+    latestSuccessfulFullSyncSummary
   });
 }

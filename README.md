@@ -59,39 +59,19 @@ StakeOS is a private local desktop and MCP system for stake leadership. It syncs
 
 ## Source Setup
 
-### 1. Install dependencies
+For a source install, the fastest path is:
 
 ```bash
 npm install
-npx playwright install chromium
+npm run desktop:start
 ```
 
-### 2. Configure environment
+Then complete setup inside StakeOS Desktop:
+1. paste the stake's `LCR_DIRECTORY_URL`
+2. use the diagnostics step to install Chromium if needed
+3. run the first full sync and log in to LCR manually
 
-```bash
-cp .env.example .env
-```
-
-Update `.env` values:
-- `LCR_DIRECTORY_URL`
-- `STAKE_*` metadata and optional recipient lists
-
-### 3. Initialize database
-
-```bash
-npm run sqlite:init
-```
-
-### 4. First sync (manual login)
-
-```bash
-npm run sqlite:sync
-```
-
-What happens:
-- Playwright opens Chromium.
-- You manually log in to LCR.
-- StakeOS navigates to `LCR_DIRECTORY_URL` (defaults to your custom report URL), waits for report rows to fully load, then stores normalized records in local SQLite.
+The app creates the local SQLite store itself during setup. You do not need to initialize PostgreSQL or pre-create the SQLite file.
 
 ## Running StakeOS
 
@@ -206,8 +186,8 @@ Then restart Claude Desktop.
 ## Typical User Path
 
 1. Install StakeOS Desktop
-2. Enter the LCR custom report URL
-3. Install Chromium from the in-app setup screen if needed
+2. Paste the LCR custom report URL for the stake
+3. Let the app verify Chromium and the local store
 4. Run the first full sync and log in to LCR manually
 5. Use the dashboard
 6. Optionally enable Claude Desktop MCP from StakeOS Settings

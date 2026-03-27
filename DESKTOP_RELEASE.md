@@ -10,7 +10,7 @@ StakeOS Desktop is currently packaged for macOS through Electron.
 
 Important constraints:
 - the desktop app uses an embedded local SQLite database
-- the user still needs a valid LCR custom report URL
+- on first launch the user only needs a valid LCR custom report URL
 - the user still logs in to LCR manually through the Playwright browser session
 - the packaged app does not require a separate PostgreSQL install
 - if Apple signing/notarization credentials are not present, the release will still build with ad-hoc signing and skip notarization automatically

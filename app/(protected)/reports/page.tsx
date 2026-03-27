@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { ReportsContent } from "@/components/reports-content";
+import { ReportsIndexNav } from "@/components/reports-index-nav";
 import { StatCard } from "@/components/stat-card";
 import { loadReportsPageDataBySource, loadReportsPageShellDataBySource } from "@/lib/dashboardData";
 
@@ -71,30 +72,7 @@ export default async function ReportsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="hidden xl:block">
-          <div className="sticky top-24 rounded-[28px] border border-amber-900/10 bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Reports Index</div>
-            <p className="mt-2 text-sm text-slate-600">
-              Jump by report family instead of scanning the entire page top to bottom.
-            </p>
-            <div className="mt-5 space-y-5">
-              {reportGroups.map((group) => (
-                <div key={group.heading}>
-                  <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group.heading}</div>
-                  <nav className="mt-2 space-y-2">
-                    {group.items.map((section) => (
-                      <a
-                        key={section.id}
-                        href={`#${section.id}`}
-                        className="block rounded-2xl border border-transparent bg-[#fffaf0] px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-amber-300 hover:bg-white"
-                      >
-                        {section.label}
-                      </a>
-                    ))}
-                  </nav>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ReportsIndexNav reportGroups={reportGroups} />
         </aside>
 
         <div className="min-w-0">

@@ -143,6 +143,10 @@ export const importProjectEnvIntoDesktopConfig = () => {
 
 export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env) => ({
   ...baseEnv,
+  PLAYWRIGHT_USER_DATA_DIR: baseEnv.PLAYWRIGHT_USER_DATA_DIR || ".playwright/profile",
+  PLAYWRIGHT_HEADLESS: baseEnv.PLAYWRIGHT_HEADLESS || "false",
+  STAKE_NAME: baseEnv.STAKE_NAME || "StakeOS Stake",
+  UNIT_NUMBER: baseEnv.UNIT_NUMBER || "000000",
   ...loadDesktopConfig()
 });
 

@@ -105,12 +105,12 @@ const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 
 const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
-  { id: "welcome", label: "Welcome", description: "Understand how StakeOS setup works before changing anything." },
-  { id: "required", label: "Required", description: "Enter the minimum settings required to run StakeOS Desktop." },
-  { id: "diagnostics", label: "Diagnostics", description: "Handle prerequisites and verify local readiness." },
-  { id: "firstSync", label: "First Sync", description: "Run the first full LCR sync so the app has local data." },
-  { id: "optional", label: "Optional", description: "Add predefined recipient lists if you want them available in the app." },
-  { id: "finish", label: "Finish", description: "Save the final settings and open the dashboard." }
+  { id: "welcome", label: "Welcome", description: "See how the first-run flow works before starting." },
+  { id: "required", label: "Report URL", description: "Paste the LCR custom report URL for this stake." },
+  { id: "diagnostics", label: "Checks", description: "Prepare the local store and browser runtime." },
+  { id: "firstSync", label: "First Sync", description: "Populate the local SQLite store with the first sync." },
+  { id: "optional", label: "Optional", description: "Optional MCP setup and reusable communication lists." },
+  { id: "finish", label: "Finish", description: "Open the app once local data is ready." }
 ];
 
 const statusTone = (ok: boolean) =>
@@ -426,10 +426,24 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       setForm((payload.snapshot as ConfigSnapshot).effectiveConfig);
       setMessage(payload.result?.message || "Setup action completed.");
       setWizardStep(getWizardStepFromSnapshot(payload.snapshot as ConfigSnapshot, initialSetup, false));
+      return payload.snapshot as ConfigSnapshot;
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Setup action failed.");
+      return null;
     } finally {
       setSetupAction(null);
+    }
+  };
+
+  const installChromiumAndContinue = async () => {
+    const refreshed = await runDiagnosticAction("install_chromium");
+    if (!refreshed) {
+      return;
+    }
+
+    if (refreshed.status.prerequisitesReady) {
+      setWizardStep(refreshed.status.firstSyncCompleted ? "optional" : "firstSync");
+      setMessage("Chromium is installed. Continuing to the next setup step.");
     }
   };
 
@@ -521,33 +535,55 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         LCR Custom Report URL
         <input className={fieldClassName} value={form.LCR_DIRECTORY_URL || ""} onChange={(event) => handleChange("LCR_DIRECTORY_URL", event.target.value)} placeholder="https://lcr.churchofjesuschrist.org/mlt/report/..." />
       </label>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label className="block text-sm font-medium text-slate-700">
-          Stake Name
-          <input className={fieldClassName} value={form.STAKE_NAME || ""} onChange={(event) => handleChange("STAKE_NAME", event.target.value)} placeholder="StakeOS Stake" />
-        </label>
-        <label className="block text-sm font-medium text-slate-700">
-          Unit Number
-          <input className={fieldClassName} value={form.UNIT_NUMBER || ""} onChange={(event) => handleChange("UNIT_NUMBER", event.target.value)} placeholder="000000" />
-        </label>
-      </div>
-      <div className="grid gap-5 md:grid-cols-2">
-        <label className="block text-sm font-medium text-slate-700">
-          Playwright User Data Directory
-          <input className={fieldClassName} value={form.PLAYWRIGHT_USER_DATA_DIR || ""} onChange={(event) => handleChange("PLAYWRIGHT_USER_DATA_DIR", event.target.value)} placeholder=".playwright/profile" />
-        </label>
-        <label className="block text-sm font-medium text-slate-700">
-          Playwright Headless
-          <select className={fieldClassName} value={form.PLAYWRIGHT_HEADLESS || "false"} onChange={(event) => handleChange("PLAYWRIGHT_HEADLESS", event.target.value)}>
-            <option value="false">false</option>
-            <option value="true">true</option>
-          </select>
-        </label>
+      <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+        <p>That is the only value StakeOS needs before the first sync.</p>
+        <p className="mt-2">The local SQLite file is created automatically, and units populate from the member rows returned by your LCR report.</p>
+        <p className="mt-2">Playwright profile location, browser mode, and stake metadata use app defaults unless you change them later.</p>
       </div>
     </div>
   );
 
-  const renderDiagnostics = () => (
+  const renderAdvancedRuntimeSettings = () => (
+    <div className="grid gap-6">
+      <div className={sectionClassName}>
+        <h3 className="font-serif text-2xl text-slate-900">Advanced Runtime</h3>
+        <p className="mt-2 text-sm text-slate-600">Optional. Change these only if you need a custom browser profile location, headless automation, or custom metadata defaults.</p>
+        <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <label className="block text-sm font-medium text-slate-700">
+            Playwright User Data Directory
+            <input className={fieldClassName} value={form.PLAYWRIGHT_USER_DATA_DIR || ""} onChange={(event) => handleChange("PLAYWRIGHT_USER_DATA_DIR", event.target.value)} placeholder=".playwright/profile" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Playwright Headless
+            <select className={fieldClassName} value={form.PLAYWRIGHT_HEADLESS || "false"} onChange={(event) => handleChange("PLAYWRIGHT_HEADLESS", event.target.value)}>
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </label>
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <label className="block text-sm font-medium text-slate-700">
+            Stake Name
+            <input className={fieldClassName} value={form.STAKE_NAME || ""} onChange={(event) => handleChange("STAKE_NAME", event.target.value)} placeholder="StakeOS Stake" />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Unit Number
+            <input className={fieldClassName} value={form.UNIT_NUMBER || ""} onChange={(event) => handleChange("UNIT_NUMBER", event.target.value)} placeholder="000000" />
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDiagnostics = () => {
+    const chromiumCheck = snapshot.status.diagnostics.find((check) => check.key === "playwright_runtime");
+    const chromiumNeedsInstall = Boolean(
+      chromiumCheck &&
+      chromiumCheck.status === "fail" &&
+      chromiumCheck.actionKey === "install_chromium"
+    );
+
+    return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-5">
         <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.requiredComplete)}`}>
@@ -571,6 +607,25 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="mt-1 font-semibold">{snapshot.status.diagnosticSummary.fail}</div>
         </div>
       </div>
+
+      {chromiumNeedsInstall ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+          <div className="font-semibold">Chromium is the one missing runtime piece.</div>
+          <div className="mt-1">
+            Install it here and StakeOS will move straight to the first sync step when diagnostics are clear.
+          </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => void installChromiumAndContinue()}
+              disabled={saving || restarting || setupAction !== null}
+              className="rounded-full bg-teal-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {setupAction === "install_chromium" ? "Installing Chromium..." : "Install Chromium And Continue"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         {snapshot.status.diagnostics.map((check) => (
@@ -603,6 +658,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       </div>
     </div>
   );
+  };
 
   const renderFirstSync = () => (
     <div className="space-y-5">
@@ -683,8 +739,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const renderOptionalSettings = () => (
     <div className="grid gap-6">
       <div className={sectionClassName}>
-        <h3 className="font-serif text-2xl text-slate-900">Report Recipients</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. Store common leadership recipient lists for quick access inside StakeOS.</p>
+        <h3 className="font-serif text-2xl text-slate-900">Saved Leadership Email Lists</h3>
+        <p className="mt-2 text-sm text-slate-600">Optional. These are used by the StakeOS email and MCP campaign tools for quick stake presidency and stake council targeting.</p>
         <div className="mt-6 space-y-5">
           <label className="block text-sm font-medium text-slate-700">
             Stake Presidency Emails
@@ -763,7 +819,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">First-Run Setup</p>
           <h1 className="mt-3 font-serif text-4xl text-slate-900">StakeOS Desktop Setup</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Handle local prerequisites, restart into the saved configuration automatically, run the first sync, and then hand the user off to the actual app.
+            Paste the stake&apos;s LCR report URL, let StakeOS prepare the local runtime, run the first sync, and then move straight into the app.
           </p>
           <div className="mt-6 grid gap-3 md:grid-cols-6">
             {setupSteps.map((step, index) => {
@@ -798,8 +854,10 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             {wizardStep === "welcome" ? (
               <div className="space-y-4 text-sm text-slate-600">
                 <p>
-                  StakeOS Desktop never captures or stores LCR credentials. It relies on a Playwright browser profile that you control. The first-run flow verifies the machine,
-                  applies required configuration, then guides the user through the first real directory sync.
+                  StakeOS Desktop never captures or stores LCR credentials. It opens a Playwright-managed browser that you control, then uses your manual LCR login session to sync the custom report into a local SQLite store.
+                </p>
+                <p>
+                  For a normal first install, the app should only ask for the stake&apos;s LCR report URL, verify Chromium and the local store, and then walk through the first sync. Unit names and organizations populate from the synced report data.
                 </p>
                 <p>
                   If this repo is already configured in <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env</code>, import those values now. StakeOS will restart itself automatically.
@@ -932,7 +990,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="font-serif text-2xl text-slate-900">Required Core Settings</h2>
-              <p className="mt-2 text-sm text-slate-600">These are the minimum fields needed for StakeOS Desktop to operate cleanly.</p>
+              <p className="mt-2 text-sm text-slate-600">For most users, this is just the LCR report URL. Other runtime values can stay on the app defaults.</p>
             </div>
             <button type="button" onClick={importFromEnv} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
               {saving || restarting ? "Importing..." : "Import Current .env And Restart"}
@@ -966,6 +1024,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       ) : null}
 
       {renderOptionalSettings()}
+
+      {renderAdvancedRuntimeSettings()}
 
       <div className="flex items-center justify-between rounded-[28px] border border-amber-900/10 bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div>

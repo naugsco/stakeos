@@ -20,6 +20,12 @@ type SyncStatusPayload = {
     errorMessage: string | null;
     recordsProcessed: number;
   } | null;
+  latestSuccessfulFullSyncSummary: {
+    completedAt: string | null;
+    membersImported: number;
+    unitsFound: number;
+    callingsImported: number;
+  } | null;
 };
 
 type SyncLogPayload = {
@@ -294,6 +300,46 @@ export function SyncCenter() {
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-600">No sync has been recorded yet.</p>
+            )}
+          </div>
+
+          <div className={cardClassName}>
+            <h2 className="font-serif text-2xl text-slate-900">Latest Full Sync Summary</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Use this as the post-sync confirmation screen. It shows the current local import footprint after the latest successful full sync.
+            </p>
+            {status?.latestSuccessfulFullSyncSummary ? (
+              <>
+                <div className="mt-6 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Members Imported</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.membersImported}</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Units Found</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.unitsFound}</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Callings Imported</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.callingsImported}</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Sync Time</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900">
+                      {status.latestSuccessfulFullSyncSummary.completedAt
+                        ? new Date(status.latestSuccessfulFullSyncSummary.completedAt).toLocaleString()
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  Full sync completed and local SQLite data is ready for the dashboard, reports, and MCP tools.
+                </div>
+              </>
+            ) : (
+              <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+                No successful full sync has been recorded yet.
+              </div>
             )}
           </div>
         </div>

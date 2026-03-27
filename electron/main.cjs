@@ -215,8 +215,8 @@ function updateSplashStatus(message) {
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 440,
-    height: 280,
+    width: 500,
+    height: 320,
     frame: false,
     resizable: false,
     movable: true,
@@ -243,9 +243,9 @@ function createSplashWindow() {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background:
-              radial-gradient(circle at top left, rgba(15,118,110,0.16), transparent 38%),
-              radial-gradient(circle at bottom right, rgba(245,158,11,0.18), transparent 36%),
-              linear-gradient(180deg, #fffdf8 0%, #f4efe3 100%);
+              radial-gradient(circle at top left, rgba(15,118,110,0.12), transparent 34%),
+              radial-gradient(circle at bottom right, rgba(245,158,11,0.12), transparent 32%),
+              linear-gradient(180deg, #fffdf8 0%, #f6f0e4 100%);
             color: #1f2937;
             display: flex;
             align-items: center;
@@ -253,73 +253,40 @@ function createSplashWindow() {
             min-height: 100vh;
             overflow: hidden;
           }
-          body::before,
-          body::after {
-            content: '';
-            position: absolute;
-            inset: auto;
-            width: 240px;
-            height: 240px;
-            border-radius: 999px;
-            filter: blur(42px);
-            opacity: 0.38;
-            animation: drift 9s ease-in-out infinite;
-          }
-          body::before {
-            top: -40px;
-            right: -40px;
-            background: rgba(15, 118, 110, 0.18);
-          }
-          body::after {
-            bottom: -60px;
-            left: -40px;
-            background: rgba(245, 158, 11, 0.18);
-            animation-delay: -4.5s;
-          }
           .shell {
             position: relative;
             z-index: 2;
-            width: 408px;
-            padding: 30px 30px 26px;
+            width: 420px;
+            padding: 32px 32px 28px;
             border: 1px solid rgba(149, 123, 79, 0.18);
             border-radius: 30px;
-            background: rgba(255, 252, 246, 0.94);
+            background: rgba(255, 252, 246, 0.96);
             box-shadow:
-              0 28px 80px rgba(15, 23, 42, 0.10),
+              0 24px 70px rgba(15, 23, 42, 0.08),
               inset 0 1px 0 rgba(255,255,255,0.7);
-            backdrop-filter: blur(18px);
+            backdrop-filter: blur(14px);
           }
           .brand {
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin-bottom: 18px;
+            gap: 16px;
+            margin-bottom: 20px;
           }
           .mark {
-            width: 56px;
-            height: 56px;
-            border-radius: 18px;
+            width: 58px;
+            height: 58px;
+            border-radius: 20px;
             background:
-              linear-gradient(145deg, rgba(15,118,110,0.18), rgba(245,158,11,0.16)),
+              linear-gradient(145deg, rgba(15,118,110,0.16), rgba(245,158,11,0.12)),
               #fff;
             border: 1px solid rgba(15,118,110,0.18);
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 700;
             color: #0f766e;
-            position: relative;
-            overflow: hidden;
-          }
-          .mark::after {
-            content: '';
-            position: absolute;
-            inset: 8px;
-            border-radius: 14px;
-            border: 1px solid rgba(15,118,110,0.14);
-            animation: spin 5s linear infinite;
           }
           .eyebrow {
             font-size: 11px;
@@ -327,24 +294,24 @@ function createSplashWindow() {
             letter-spacing: 0.16em;
             text-transform: uppercase;
             color: #0f766e;
-            margin-bottom: 6px;
+            margin-bottom: 7px;
           }
           h1 {
-            font-size: 30px;
-            line-height: 1.02;
+            font-size: 31px;
+            line-height: 1.04;
             margin: 0;
             font-family: "Iowan Old Style", "Palatino Linotype", serif;
           }
-          p {
-            font-size: 13px;
-            line-height: 1.55;
+          .lead {
+            font-size: 14px;
+            line-height: 1.6;
             color: #64748b;
             margin: 0 0 18px;
           }
           .status {
-            min-height: 48px;
-            padding: 14px 16px;
-            border-radius: 18px;
+            min-height: 62px;
+            padding: 15px 16px;
+            border-radius: 20px;
             border: 1px solid rgba(15,118,110,0.12);
             background: rgba(255,255,255,0.74);
             font-size: 14px;
@@ -358,26 +325,9 @@ function createSplashWindow() {
             font-weight: 500;
             color: #64748b;
           }
-          .chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 18px 0 16px;
-          }
-          .chip {
-            padding: 8px 11px;
-            border-radius: 999px;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            background: rgba(255,255,255,0.74);
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: #475569;
-          }
           .bar {
-            margin-top: 16px;
-            height: 10px;
+            margin-top: 18px;
+            height: 8px;
             border-radius: 999px;
             overflow: hidden;
             background: rgba(215, 207, 190, 0.72);
@@ -387,84 +337,46 @@ function createSplashWindow() {
             content: '';
             display: block;
             height: 100%;
-            width: 36%;
+            width: 32%;
             border-radius: 999px;
             background: linear-gradient(90deg, #0f766e 0%, #f59e0b 100%);
-            animation: pulse 1.6s ease-in-out infinite;
+            animation: pulse 1.9s ease-in-out infinite;
           }
-          .orbit {
-            position: absolute;
-            top: 26px;
-            right: 26px;
-            width: 92px;
-            height: 92px;
-            pointer-events: none;
-          }
-          .orbit-ring {
-            position: absolute;
-            inset: 0;
-            border-radius: 999px;
-            border: 1px solid rgba(15, 118, 110, 0.12);
-          }
-          .orbit-ring:nth-child(2) {
-            inset: 14px;
-            border-color: rgba(245, 158, 11, 0.16);
-          }
-          .orbit-dot {
-            position: absolute;
-            top: -4px;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            margin-left: -5px;
-            border-radius: 999px;
-            background: #0f766e;
-            box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.12);
-            transform-origin: 5px 50px;
-            animation: orbit 3.6s linear infinite;
-          }
-          .orbit-dot.alt {
-            background: #f59e0b;
-            box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.12);
-            transform-origin: 5px 36px;
-            animation-duration: 2.8s;
-            animation-direction: reverse;
-          }
-          .footer {
+          .dots {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             margin-top: 16px;
+            color: #64748b;
+            font-size: 12px;
+          }
+          .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            animation: blink 1.4s ease-in-out infinite;
+          }
+          .dot:nth-child(2) { animation-delay: 0.2s; }
+          .dot:nth-child(3) { animation-delay: 0.4s; }
+          .foot {
+            margin-top: 12px;
             font-size: 11px;
             color: #64748b;
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-          }
-          @keyframes orbit {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-          @keyframes drift {
-            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-            50% { transform: translate3d(14px, -10px, 0) scale(1.08); }
           }
           @keyframes pulse {
             0% { transform: translateX(-18%); width: 28%; }
             50% { transform: translateX(95%); width: 42%; }
             100% { transform: translateX(-18%); width: 28%; }
           }
+          @keyframes blink {
+            0%, 80%, 100% { transform: scale(0.9); opacity: 0.35; }
+            40% { transform: scale(1); opacity: 1; background: #0f766e; }
+          }
         </style>
       </head>
       <body>
         <div class="shell">
-          <div class="orbit" aria-hidden="true">
-            <div class="orbit-ring"></div>
-            <div class="orbit-ring"></div>
-            <div class="orbit-dot"></div>
-            <div class="orbit-dot alt"></div>
-          </div>
           <div class="brand">
             <div class="mark">S</div>
             <div>
@@ -472,22 +384,18 @@ function createSplashWindow() {
               <h1>Launching StakeOS</h1>
             </div>
           </div>
-          <p>The desktop shell is loading the local dashboard, SQLite data store, browser automation runtime, and MCP services.</p>
-          <div class="chips">
-            <div class="chip">Local Dashboard</div>
-            <div class="chip">SQLite Data</div>
-            <div class="chip">Playwright</div>
-            <div class="chip">MCP Ready</div>
-          </div>
+          <p class="lead">Preparing the local dashboard and checking the runtime needed for your next sync.</p>
           <div id="status" class="status">
             Preparing application shell...
-            <div class="substatus">StakeOS is checking local artifacts and starting the internal server.</div>
+            <div class="substatus">StakeOS is checking local files and starting the internal server.</div>
           </div>
           <div class="bar"></div>
-          <div class="footer">
-            <span>Private local data</span>
-            <span>Manual LCR login</span>
+          <div class="dots" aria-hidden="true">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
           </div>
+          <div class="foot">Private local data. Manual LCR login when sync runs.</div>
         </div>
         <script>
           window.__setStatus = (message) => {
@@ -858,16 +766,23 @@ function getCurrentAppRoute() {
 }
 
 async function ensureStakeosReady() {
+  const rebuildNeeded = shouldRebuildArtifacts();
+
   if (await isServerHealthy()) {
-    updateSplashStatus('Using existing local StakeOS server...');
-    return;
+    if (!rebuildNeeded) {
+      updateSplashStatus('Using existing local StakeOS server...');
+      return;
+    }
+
+    updateSplashStatus('Source changes detected. Refreshing StakeOS desktop...');
+    await stopExistingStakeosServerOnDesktopPort();
   }
 
   if (await isPortListening(DESKTOP_PORT)) {
     const existingPid = getListeningPidForPort(DESKTOP_PORT);
 
     if (existingPid && isStakeosServerPid(existingPid)) {
-      updateSplashStatus('Stopping stale local StakeOS server...');
+      updateSplashStatus(rebuildNeeded ? 'Restarting local StakeOS server for updated code...' : 'Stopping stale local StakeOS server...');
       killPid(existingPid);
       await new Promise((resolve) => setTimeout(resolve, 1200));
     } else {

@@ -84,7 +84,7 @@ export function RecentBaptismPathBrowser({
   const derivedAssignmentCount = rows.filter((row) => row.assignedAsMinisterLabel === "Yes").length;
 
   return (
-    <section id="recent-baptism-path-list" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section id="recent-baptism-path-list" className="scroll-mt-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
         <h2 className="text-lg font-semibold">Recent Baptism Readiness Cohort</h2>
         <p className="text-xs text-slate-600">
