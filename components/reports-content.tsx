@@ -38,13 +38,17 @@ export function ReportsContent({
           </p>
         </div>
 
-        <div>
-          <h3 className="mb-2 text-lg font-semibold">Recent Baptism Readiness Stages</h3>
-          <p className="mb-2 text-xs text-slate-600">
-            Cohort = members baptized in the last 24 months. Each stage shows how much of that cohort currently has an active recommend, a current calling, assigned ministers, and is assigned as a minister.
-          </p>
-          <RecentBaptismStageChart rows={data.recentBaptismPathCohort} href={recentBaptismHref} />
-        </div>
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <h2 className="text-lg font-semibold">Recent Baptism Readiness Stages</h2>
+            <p className="text-xs text-slate-600">
+              Cohort = members baptized in the last 24 months. Each stage shows how much of that cohort currently has an active recommend, a current calling, assigned ministers, and is assigned as a minister.
+            </p>
+          </header>
+          <div className="p-4">
+            <RecentBaptismStageChart rows={data.recentBaptismPathCohort} href={recentBaptismHref} />
+          </div>
+        </section>
 
         <RecentBaptismUnitHeatmap rows={data.recentBaptismPathCohort} />
 

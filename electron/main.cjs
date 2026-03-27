@@ -92,41 +92,21 @@ function getInitialDesktopRoute() {
       return false;
     }
   })();
-  const sqliteDbPath = (() => {
-    const configured = `${effectiveConfig.SQLITE_DB_PATH || ''}`.trim();
-    if (configured) {
-      return path.resolve(configured);
-    }
-    return path.join(path.dirname(DESKTOP_CONFIG_PATH), 'stakeos.db');
-  })();
-  const hasCompletedFirstSync = (() => {
-    if (!fs.existsSync(sqliteDbPath)) {
-      return false;
+  return hasValidLcrUrl ? '/dashboard' : '/settings?setup=1';
+}
+
+async function resolveStartupRoute() {
+  try {
+    const response = await fetch(`${BASE_URL}/api/desktop-config`, { cache: 'no-store' });
+    if (!response.ok) {
+      return getInitialDesktopRoute();
     }
 
-    try {
-      const Database = require('better-sqlite3');
-      const db = new Database(sqliteDbPath, { readonly: true });
-      try {
-        const row = db.prepare(`
-          SELECT completed_at AS completedAt
-          FROM sync_logs
-          WHERE status = 'success'
-            AND sync_type IN ('sqlite_full_sync', 'sqlite_spike_full_sync')
-            AND completed_at IS NOT NULL
-          ORDER BY completed_at DESC, id DESC
-          LIMIT 1
-        `).get();
-        return Boolean(row && row.completedAt);
-      } finally {
-        db.close();
-      }
-    } catch {
-      return false;
-    }
-  })();
-
-  return hasValidLcrUrl && hasCompletedFirstSync ? '/dashboard' : '/settings?setup=1';
+    const snapshot = await response.json();
+    return snapshot?.status?.setupComplete ? '/dashboard' : '/settings?setup=1';
+  } catch {
+    return getInitialDesktopRoute();
+  }
 }
 
 function ensureRunDir() {
@@ -136,6 +116,28 @@ function ensureRunDir() {
 function appendLog(fileName, message) {
   ensureRunDir();
   fs.appendFileSync(path.join(RUN_DIR, fileName), `${new Date().toISOString()} ${message}\n`);
+}
+
+function readJsonRequestBody(request) {
+  return new Promise((resolve) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      if (!body.trim()) {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        resolve({});
+      }
+    });
+    request.on('error', () => resolve({}));
+  });
 }
 
 function startControlServer() {
@@ -169,15 +171,18 @@ function startControlServer() {
     }
 
     if (request.url === '/restart' && request.method === 'POST') {
-      response.writeHead(202, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, restarting: true, mode: 'server' }));
-      setTimeout(() => {
-        restartStakeosServer().catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          appendLog('desktop-shell.log', `Server restart failed: ${message}`);
-          dialog.showErrorBox('StakeOS Desktop', `StakeOS could not restart its local server.\n\n${message}`);
-        });
-      }, 150);
+      void readJsonRequestBody(request).then((body) => {
+        const route = typeof body?.route === 'string' ? body.route : undefined;
+        response.writeHead(202, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ ok: true, restarting: true, mode: 'server' }));
+        setTimeout(() => {
+          restartStakeosServer(route).catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            appendLog('desktop-shell.log', `Server restart failed: ${message}`);
+            dialog.showErrorBox('StakeOS Desktop', `StakeOS could not restart its local server.\n\n${message}`);
+          });
+        }, 150);
+      });
       return;
     }
 
@@ -248,7 +253,32 @@ function createSplashWindow() {
             min-height: 100vh;
             overflow: hidden;
           }
+          body::before,
+          body::after {
+            content: '';
+            position: absolute;
+            inset: auto;
+            width: 240px;
+            height: 240px;
+            border-radius: 999px;
+            filter: blur(42px);
+            opacity: 0.38;
+            animation: drift 9s ease-in-out infinite;
+          }
+          body::before {
+            top: -40px;
+            right: -40px;
+            background: rgba(15, 118, 110, 0.18);
+          }
+          body::after {
+            bottom: -60px;
+            left: -40px;
+            background: rgba(245, 158, 11, 0.18);
+            animation-delay: -4.5s;
+          }
           .shell {
+            position: relative;
+            z-index: 2;
             width: 408px;
             padding: 30px 30px 26px;
             border: 1px solid rgba(149, 123, 79, 0.18);
@@ -280,6 +310,16 @@ function createSplashWindow() {
             font-size: 22px;
             font-weight: 700;
             color: #0f766e;
+            position: relative;
+            overflow: hidden;
+          }
+          .mark::after {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border-radius: 14px;
+            border: 1px solid rgba(15,118,110,0.14);
+            animation: spin 5s linear infinite;
           }
           .eyebrow {
             font-size: 11px;
@@ -341,6 +381,7 @@ function createSplashWindow() {
             border-radius: 999px;
             overflow: hidden;
             background: rgba(215, 207, 190, 0.72);
+            position: relative;
           }
           .bar::after {
             content: '';
@@ -351,6 +392,44 @@ function createSplashWindow() {
             background: linear-gradient(90deg, #0f766e 0%, #f59e0b 100%);
             animation: pulse 1.6s ease-in-out infinite;
           }
+          .orbit {
+            position: absolute;
+            top: 26px;
+            right: 26px;
+            width: 92px;
+            height: 92px;
+            pointer-events: none;
+          }
+          .orbit-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 999px;
+            border: 1px solid rgba(15, 118, 110, 0.12);
+          }
+          .orbit-ring:nth-child(2) {
+            inset: 14px;
+            border-color: rgba(245, 158, 11, 0.16);
+          }
+          .orbit-dot {
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            margin-left: -5px;
+            border-radius: 999px;
+            background: #0f766e;
+            box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.12);
+            transform-origin: 5px 50px;
+            animation: orbit 3.6s linear infinite;
+          }
+          .orbit-dot.alt {
+            background: #f59e0b;
+            box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.12);
+            transform-origin: 5px 36px;
+            animation-duration: 2.8s;
+            animation-direction: reverse;
+          }
           .footer {
             margin-top: 16px;
             font-size: 11px;
@@ -358,6 +437,18 @@ function createSplashWindow() {
             display: flex;
             justify-content: space-between;
             gap: 12px;
+          }
+          @keyframes orbit {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          @keyframes drift {
+            0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+            50% { transform: translate3d(14px, -10px, 0) scale(1.08); }
           }
           @keyframes pulse {
             0% { transform: translateX(-18%); width: 28%; }
@@ -368,6 +459,12 @@ function createSplashWindow() {
       </head>
       <body>
         <div class="shell">
+          <div class="orbit" aria-hidden="true">
+            <div class="orbit-ring"></div>
+            <div class="orbit-ring"></div>
+            <div class="orbit-dot"></div>
+            <div class="orbit-dot alt"></div>
+          </div>
           <div class="brand">
             <div class="mark">S</div>
             <div>
@@ -745,6 +842,12 @@ function getCurrentAppRoute() {
   try {
     const currentUrl = new URL(mainWindow.webContents.getURL());
     if (currentUrl.origin === BASE_URL) {
+      if (currentUrl.pathname === '/settings' && currentUrl.search.includes('setup=1')) {
+        const initialRoute = getInitialDesktopRoute();
+        if (initialRoute === '/dashboard') {
+          return initialRoute;
+        }
+      }
       return `${currentUrl.pathname}${currentUrl.search}`;
     }
   } catch {
@@ -853,13 +956,13 @@ async function ensureBuildArtifacts() {
   await runCommand(['run', 'build'], 'Building StakeOS desktop...');
 }
 
-async function restartStakeosServer() {
+async function restartStakeosServer(routeOverride) {
   if (restartingServer) {
     return;
   }
 
   restartingServer = true;
-  const routeToRestore = getCurrentAppRoute();
+  const routeToRestore = routeOverride || getCurrentAppRoute();
 
   try {
     updateSplashStatus('Restarting local StakeOS server...');
@@ -942,7 +1045,7 @@ async function bootstrap() {
   }
 
   await ensureStakeosReady();
-  const initialRoute = getInitialDesktopRoute();
+  const initialRoute = await resolveStartupRoute();
   updateSplashStatus(initialRoute.startsWith('/settings') ? 'Opening StakeOS setup...' : 'Opening StakeOS dashboard...');
   await mainWindow.loadURL(`${BASE_URL}${initialRoute}`);
 }

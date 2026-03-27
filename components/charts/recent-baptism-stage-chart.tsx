@@ -71,10 +71,10 @@ export function RecentBaptismStageChart({
   }));
 
   return (
-    <div className="relative h-[24rem] w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
+    <div className="relative h-[24rem] w-full">
       <Link
         href={href}
-        className="absolute right-3 top-3 z-10 rounded-lg border border-amber-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm transition hover:bg-white"
+        className="absolute right-0 top-0 z-10 rounded-lg border border-amber-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm transition hover:bg-white"
       >
         {linkLabel}
       </Link>

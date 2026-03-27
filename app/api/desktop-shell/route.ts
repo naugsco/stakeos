@@ -40,6 +40,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const action = typeof body?.action === "string" ? body.action : "";
+  const route = typeof body?.route === "string" ? body.route : undefined;
 
   if (action !== "restart") {
     return NextResponse.json({ error: "Unsupported desktop action." }, { status: 400 });
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   const result = await requestDesktopShell("/restart", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action })
+    body: JSON.stringify({ action, route })
   });
 
   return new NextResponse(result.bodyText, {

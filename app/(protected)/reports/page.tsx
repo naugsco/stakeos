@@ -8,20 +8,43 @@ export default async function ReportsPage() {
   const shellData = await loadReportsPageShellDataBySource();
   const overview = shellData.overview;
   const reportsData = await loadReportsPageDataBySource();
-  const reportSections = [
-    { id: "recent-baptism-follow-up", label: "Recent Baptism Follow-Up" },
-    { id: "temple-and-covenants", label: "Temple And Covenants" },
-    { id: "youth-and-formation", label: "Youth And Formation" },
-    { id: "ministering-and-household-care", label: "Ministering And Household Care" },
-    { id: "growth-and-leadership", label: "Growth And Leadership" },
-    { id: "recommend-expiration-risk-list", label: "Recommend Expiration Risk" },
-    { id: "temple-recommend-list", label: "Temple Recommend Attention" },
-    { id: "seminary-institute-list", label: "Seminary/Institute By Unit" },
-    { id: "ministering-gap-list", label: "Ministering Gap List" },
-    { id: "household-outreach-list", label: "Household Outreach" },
-    { id: "recent-baptisms-list", label: "Recent Baptisms" },
-    { id: "new-returning-strengthening", label: "New/Returning Strengthening" },
-    { id: "priesthood-progression-list", label: "Priesthood Progression" }
+  const reportGroups = [
+    {
+      heading: "Follow-Up",
+      items: [
+        { id: "recent-baptism-follow-up", label: "Recent Baptism Follow-Up" },
+        { id: "recent-baptisms-list", label: "Recent Baptisms" },
+        { id: "new-returning-strengthening", label: "New/Returning Strengthening" }
+      ]
+    },
+    {
+      heading: "Temple And Covenants",
+      items: [
+        { id: "temple-and-covenants", label: "Temple And Covenants" },
+        { id: "temple-recommend-list", label: "Temple Recommend Attention" },
+        { id: "recommend-expiration-risk-list", label: "Recommend Expiration Risk" }
+      ]
+    },
+    {
+      heading: "Youth And Formation",
+      items: [
+        { id: "youth-and-formation", label: "Youth And Formation" },
+        { id: "seminary-institute-list", label: "Seminary/Institute By Unit" },
+        { id: "priesthood-progression-list", label: "Priesthood Progression" }
+      ]
+    },
+    {
+      heading: "Ministering And Household Care",
+      items: [
+        { id: "ministering-and-household-care", label: "Ministering And Household Care" },
+        { id: "ministering-gap-list", label: "Ministering Gap List" },
+        { id: "household-outreach-list", label: "Household Outreach" }
+      ]
+    },
+    {
+      heading: "Growth And Leadership",
+      items: [{ id: "growth-and-leadership", label: "Growth And Leadership" }]
+    }
   ];
 
   return (
@@ -51,19 +74,26 @@ export default async function ReportsPage() {
           <div className="sticky top-24 rounded-[28px] border border-amber-900/10 bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Reports Index</div>
             <p className="mt-2 text-sm text-slate-600">
-              Jump directly to the report family or drill-down section you need.
+              Jump by report family instead of scanning the entire page top to bottom.
             </p>
-            <nav className="mt-5 space-y-2">
-              {reportSections.map((section) => (
-                <a
-                  key={section.id}
-                  href={`#${section.id}`}
-                  className="block rounded-2xl border border-transparent bg-[#fffaf0] px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-amber-300 hover:bg-white"
-                >
-                  {section.label}
-                </a>
+            <div className="mt-5 space-y-5">
+              {reportGroups.map((group) => (
+                <div key={group.heading}>
+                  <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{group.heading}</div>
+                  <nav className="mt-2 space-y-2">
+                    {group.items.map((section) => (
+                      <a
+                        key={section.id}
+                        href={`#${section.id}`}
+                        className="block rounded-2xl border border-transparent bg-[#fffaf0] px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-amber-300 hover:bg-white"
+                      >
+                        {section.label}
+                      </a>
+                    ))}
+                  </nav>
+                </div>
               ))}
-            </nav>
+            </div>
           </div>
         </aside>
 

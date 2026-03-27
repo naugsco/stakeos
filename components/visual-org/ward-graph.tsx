@@ -214,6 +214,14 @@ const RESP = {
   recordsFinance: { id: "recordsFinance", title: "Records & Finance", icon: "📋", color: "#94a3b8", desc: "Membership records, tithing, budget, meetinghouse.", coordMeetings: ["bishopricMeeting"] },
 };
 
+const blendWithCream = (hex, weight = 0.18) => {
+  const mixed = d3.interpolateRgb("#fffaf0", hex)(weight);
+  return mixed;
+};
+
+const getCallingBubbleFill = (color) => blendWithCream(color, 0.22);
+const getMeetingBubbleFill = (color) => blendWithCream(color, 0.18);
+
 // Handbook URL base
 const HB = "https://www.churchofjesuschrist.org/study/manual/general-handbook";
 
@@ -714,14 +722,14 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
       // Background circle
       nodeEls.append("circle").attr("class", "bg-circle")
         .attr("r", 32)
-        .attr("fill", d => d.bg || "#1a2332")
-        .attr("stroke", d => d.color).attr("stroke-width", 1.5)
-        .attr("stroke-opacity", 0.5);
+        .attr("fill", d => getMeetingBubbleFill(d.color || d.bg || "#334155"))
+        .attr("stroke", d => d.color).attr("stroke-width", 1.6)
+        .attr("stroke-opacity", 0.65);
 
       // Title
       nodeEls.append("text").attr("class", "mtitle")
         .attr("text-anchor", "middle").attr("dy", 0)
-        .attr("fill", "#e2e8f0").attr("font-size", 9)
+        .attr("fill", "#1f2937").attr("font-size", 9)
         .attr("font-weight", 700).attr("font-family", "'Outfit', sans-serif")
         .style("pointer-events", "none")
         .text(d => d.short);
@@ -772,12 +780,12 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
         .attr("fill", "none").attr("stroke", d => d.color).attr("stroke-width", 0).attr("stroke-opacity", 0);
 
       nodeEls.append("ellipse").attr("class", "node-circle").attr("rx", d => d._shapeRx).attr("ry", d => d._shapeRy)
-        .attr("fill", "#1e293b").attr("stroke", d => d.color).attr("stroke-width", 1.8);
+        .attr("fill", d => getCallingBubbleFill(d.color || "#64748b")).attr("stroke", d => d.color).attr("stroke-width", 1.8);
 
       nodeEls.append("text").attr("text-anchor", "middle").attr("dy", d => d._titleDy)
-        .attr("fill", "#e2e8f0").attr("font-size", d => d.radius >= 20 ? 13.5 : d.radius >= 14 ? 12 : 10.5)
+        .attr("fill", "#1f2937").attr("font-size", d => d.radius >= 20 ? 13.5 : d.radius >= 14 ? 12 : 10.5)
         .attr("font-weight", 600).attr("font-family", "'Outfit', sans-serif")
-        .style("pointer-events", "none").style("text-shadow", "0 1px 3px rgba(0,0,0,0.9)")
+        .style("pointer-events", "none")
         .text(d => d.short);
 
       nodeEls.each(function(d) {
@@ -786,7 +794,7 @@ function ForceGraph({ view, respFilter, expandedMeeting, selected, onSelect, onD
         const label = d3.select(this).append("text")
           .attr("class", "assignment-text")
           .attr("text-anchor", "middle")
-          .attr("fill", "#cbd5e1")
+          .attr("fill", "#475569")
           .attr("font-size", d.radius >= 20 ? 10.5 : d.radius >= 14 ? 9.5 : 8.5)
           .attr("font-weight", 500)
           .attr("font-family", "'Outfit', sans-serif")

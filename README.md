@@ -1,10 +1,12 @@
 # StakeOS
 
-StakeOS is a private local AI assistant system for stake leadership, built around LCR browser automation and a local leadership intelligence database.
+StakeOS is a private local desktop and MCP system for stake leadership. It syncs LCR data through a user-controlled Playwright browser session, stores the result locally in SQLite, and exposes that data through the dashboard and optional Claude Desktop MCP tools.
 
-For a first-time public installation walkthrough, start with [StakeOS Installation Guide](./FIRST_TIME_SETUP.md).
-For desktop packaging and GitHub release workflow, use [StakeOS Desktop Release Guide](./DESKTOP_RELEASE.md).
-For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GITHUB_RELEASE_CHECKLIST.md).
+## Start Here
+
+- End users installing StakeOS: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
+- Maintainers building the desktop app: [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md)
+- Maintainers publishing a GitHub release: [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)
 
 ## Stack
 
@@ -55,7 +57,7 @@ For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GIT
   - youth progression
   - recent convert growth
 
-## Setup
+## Source Setup
 
 ### 1. Install dependencies
 
@@ -72,8 +74,7 @@ cp .env.example .env
 
 Update `.env` values:
 - `LCR_DIRECTORY_URL`
-- `STAKE_*` metadata and report recipients
-- `SMTP_*` values only if you plan to use advanced email workflows
+- `STAKE_*` metadata and optional recipient lists
 
 ### 3. Initialize database
 
@@ -201,6 +202,15 @@ Then restart Claude Desktop.
 - StakeOS does not request, capture, or persist LCR credentials.
 - Authentication is manual in the browser window you control.
 - Playwright user data stores browser session state only in `PLAYWRIGHT_USER_DATA_DIR`.
+
+## Typical User Path
+
+1. Install StakeOS Desktop
+2. Enter the LCR custom report URL
+3. Install Chromium from the in-app setup screen if needed
+4. Run the first full sync and log in to LCR manually
+5. Use the dashboard
+6. Optionally enable Claude Desktop MCP from StakeOS Settings
 
 ## Useful Commands
 

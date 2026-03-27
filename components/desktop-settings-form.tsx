@@ -307,13 +307,13 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     throw new Error("StakeOS Desktop did not come back after restart.");
   };
 
-  const restartAndRefresh = async (successMessage: string) => {
+  const restartAndRefresh = async (successMessage: string, routeToRestore?: string) => {
     setRestarting(true);
     try {
       const restartResponse = await fetch("/api/desktop-shell", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "restart" })
+        body: JSON.stringify({ action: "restart", route: routeToRestore })
       });
       const restartPayload = await restartResponse.json().catch(() => null);
 
@@ -353,9 +353,12 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       setForm(payload.effectiveConfig);
       await loadShellStatus();
 
-      const shouldRestart = restart || initialSetup || runtimeCriticalChanged;
+      const shouldRestart = restart || restartRequired || runtimeCriticalChanged;
       if (shouldRestart) {
-        const refreshed = await restartAndRefresh("Settings saved. StakeOS Desktop reloaded with the new configuration.");
+        const refreshed = await restartAndRefresh(
+          "Settings saved. StakeOS Desktop reloaded with the new configuration.",
+          redirectToDashboard ? "/dashboard" : undefined
+        );
         if (redirectToDashboard && refreshed.status.firstSyncCompleted) {
           window.location.href = "/dashboard";
         }

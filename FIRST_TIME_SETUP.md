@@ -1,13 +1,11 @@
 # StakeOS Installation Guide
 
-StakeOS runs locally on your machine. It uses:
-- Node.js
-- SQLite (embedded)
-- Playwright
-- Next.js
-- Claude Desktop for MCP integration
-
 This guide is written for a first-time macOS setup.
+
+StakeOS runs locally and uses:
+- SQLite for local data
+- Playwright for LCR browser automation
+- Claude Desktop only if you want optional MCP access
 
 If you want to build the packaged desktop app after setup is working, use [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md).
 If you are the maintainer publishing a GitHub release, use [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
@@ -16,9 +14,9 @@ If you are the maintainer publishing a GitHub release, use [GITHUB_RELEASE_CHECK
 
 By the end of this guide, you will have:
 - a local SQLite database at `~/Library/Application Support/StakeOS/stakeos.db`
-- the StakeOS web dashboard running at `http://localhost:3000/dashboard`
 - a working first LCR sync
-- a built MCP server ready for Claude Desktop
+- the StakeOS dashboard available locally
+- optional Claude Desktop MCP access if you enable it
 
 If you install StakeOS from an unsigned GitHub desktop release instead of running from source, macOS may ask you to:
 - right-click the app and choose `Open`
@@ -53,13 +51,8 @@ npx playwright install chromium
 cp .env.example .env
 npm run sqlite:init
 npm run sqlite:sync
-npm run sqlite:seed-baseline
-npm run dev
+npm run desktop:start
 ```
-
-Then open:
-
-[http://localhost:3000/dashboard](http://localhost:3000/dashboard)
 
 If you want the full walkthrough, continue below.
 
@@ -152,7 +145,7 @@ UNIT_NUMBER=000000
 Notes:
 - `PLAYWRIGHT_HEADLESS=false` is recommended for first sync so you can log in manually.
 - `LCR_DIRECTORY_URL` should be your stake's LCR custom report URL.
-- `SMTP_*` settings can stay blank unless you plan to use advanced email workflows.
+- `SMTP_*` settings are not required for normal desktop use.
 
 ## 6. LCR Custom Report Specification
 
@@ -379,7 +372,25 @@ Important:
 - StakeOS does not ask for or store your password
 - local session state is stored only in `PLAYWRIGHT_USER_DATA_DIR`
 
-## 9. Seed the Baseline for Sync Comparison
+## 9. Run the Desktop App
+
+Recommended:
+
+```bash
+npm run desktop:start
+```
+
+Developer/browser mode still exists if you need it:
+
+```bash
+npm run dev
+```
+
+Then open:
+
+[http://localhost:3000/dashboard](http://localhost:3000/dashboard)
+
+## 10. Optional: Seed the Baseline for Sync Comparison
 
 Run:
 
@@ -387,21 +398,9 @@ Run:
 npm run sqlite:seed-baseline
 ```
 
-Do this once after the first successful sync.
+Do this once after the first successful sync if you want exact sync-diff history.
 
 This allows StakeOS to report exact changes between future syncs.
-
-## 10. Run the Dashboard
-
-Start the dashboard:
-
-```bash
-npm run dev
-```
-
-Open:
-
-[http://localhost:3000/dashboard](http://localhost:3000/dashboard)
 
 ## 11. Build the MCP Server
 
