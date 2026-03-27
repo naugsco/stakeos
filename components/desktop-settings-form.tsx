@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type DiagnosticActionKey = "create_database" | "run_db_migrate" | "install_chromium";
+type DiagnosticActionKey = "initialize_local_store" | "install_chromium" | "configure_mcp";
 
 type DiagnosticCheck = {
   key: string;
@@ -23,6 +23,17 @@ type ConfigSnapshot = {
     requiredComplete: boolean;
     missing: string[];
     database: { ok: boolean; message: string; exists: boolean; schemaReady: boolean };
+    mcp: {
+      configPath: string;
+      configExists: boolean;
+      launcherPath: string;
+      launcherExists: boolean;
+      serverPath: string | null;
+      serverExists: boolean;
+      configured: boolean;
+      matchesExpected: boolean;
+      detail: string;
+    };
     playwrightConfigured: boolean;
     lcrConfigured: boolean;
     schemaReady: boolean;
@@ -30,6 +41,7 @@ type ConfigSnapshot = {
     latestSuccessfulSyncAt: string | null;
     latestSuccessfulSyncType: string | null;
     prerequisitesReady: boolean;
+    setupComplete: boolean;
     diagnostics: DiagnosticCheck[];
     diagnosticSummary: {
       pass: number;
@@ -681,6 +693,33 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           </label>
         </div>
       </div>
+      <div className={sectionClassName}>
+        <h3 className="font-serif text-2xl text-slate-900">Claude Desktop MCP</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Optional. Register StakeOS as a local MCP server in Claude Desktop so Claude can query the same local SQLite data as the app.
+        </p>
+        <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+          <div><span className="font-semibold text-slate-900">Claude config:</span> {snapshot.status.mcp.configPath}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">StakeOS MCP:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : snapshot.status.mcp.configured ? "Needs refresh" : "Not configured"}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">Launcher:</span> {snapshot.status.mcp.launcherPath}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">Server build:</span> {snapshot.status.mcp.serverExists ? snapshot.status.mcp.serverPath : "Missing dist/server.cjs"}</div>
+          <div className="mt-1">{snapshot.status.mcp.detail}</div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => void runDiagnosticAction("configure_mcp")}
+            disabled={saving || restarting || setupAction !== null}
+            className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {setupAction === "configure_mcp"
+              ? "Configuring Claude MCP..."
+              : snapshot.status.mcp.matchesExpected
+                ? "Refresh Claude MCP Setup"
+                : "Enable StakeOS MCP In Claude Desktop"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 
@@ -695,9 +734,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="text-xs font-semibold uppercase tracking-wide">Desktop Shell</div>
           <div className="mt-1 font-semibold">{shellStatus?.available ? "Connected" : "Unavailable"}</div>
         </div>
-        <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.requiredComplete && !restartRequired)}`}>
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.setupComplete && !restartRequired)}`}>
           <div className="text-xs font-semibold uppercase tracking-wide">Setup Gate</div>
-          <div className="mt-1 font-semibold">{snapshot.status.requiredComplete && !restartRequired ? "Unlocked" : "Locked to setup"}</div>
+          <div className="mt-1 font-semibold">{snapshot.status.setupComplete && !restartRequired ? "Unlocked" : "Locked to setup"}</div>
         </div>
       </div>
       <div className="mt-4 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
@@ -786,6 +825,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
                   <div><span className="font-semibold text-slate-900">Required config:</span> {snapshot.status.requiredComplete ? "Ready" : "Still incomplete"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">Prerequisites:</span> {snapshot.status.prerequisitesReady ? "Ready" : "Needs attention"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">First sync:</span> {snapshot.status.firstSyncCompleted ? "Completed" : "Missing"}</div>
+                  <div className="mt-1"><span className="font-semibold text-slate-900">Claude Desktop MCP:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : "Optional and not configured"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">Last successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
                 </div>
               </div>
@@ -856,9 +896,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           StakeOS Desktop stores local configuration outside the repo and applies it before any fallback <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env</code> values.
         </p>
         <div className="mt-6 grid gap-3 md:grid-cols-5">
-          <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.requiredComplete && !restartRequired)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Required Config</div>
-            <div className="mt-1 font-semibold">{snapshot.status.requiredComplete && !restartRequired ? "Ready" : "Needs attention"}</div>
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.setupComplete && !restartRequired)}`}>
+            <div className="text-xs font-semibold uppercase tracking-wide">Setup Complete</div>
+            <div className="mt-1 font-semibold">{snapshot.status.setupComplete && !restartRequired ? "Ready" : "Needs attention"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.database.ok)}`}>
             <div className="text-xs font-semibold uppercase tracking-wide">Local Data Store</div>

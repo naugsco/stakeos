@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { z } from "zod";
+import { getClaudeDesktopMcpStatus } from "@/src/setup/mcpSetup";
 
 const desktopConfigSchema = z.object({
   DATABASE_URL: z.string().optional(),
@@ -35,7 +36,7 @@ export interface DiagnosticCheck {
   summary: string;
   detail?: string;
   action?: string;
-  actionKey?: "create_database" | "run_db_migrate" | "install_chromium";
+  actionKey?: "initialize_local_store" | "install_chromium" | "configure_mcp";
   actionLabel?: string;
 }
 
@@ -287,7 +288,7 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
     checks.push({
       key: "playwright_runtime",
       label: "Chromium Runtime",
-      status: executablePath ? "pass" : "warn",
+      status: executablePath ? "pass" : "fail",
       summary: executablePath ? "Playwright Chromium is available." : "Chromium executable path was not resolved.",
       detail: executablePath || undefined,
       action: executablePath ? undefined : "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
@@ -406,27 +407,48 @@ export const getDesktopConfigSnapshot = async () => {
   const effectiveEnv = getEffectiveDesktopEnv();
   const missing = REQUIRED_FIELDS.filter((key) => isMissingValue(key, effectiveEnv));
   const database = await inspectDatabase();
+  const mcp = getClaudeDesktopMcpStatus();
   const diagnostics = [
     validateSqliteStore(),
     {
       key: "database",
       label: "Local Directory Store",
-      status: database.ok ? "pass" : "fail",
-      summary: database.ok ? "Local store is available." : "Local store is not ready yet.",
+      status: !database.exists ? "warn" : database.ok ? "pass" : "fail",
+      summary: !database.exists
+        ? "Local store has not been created yet."
+        : database.ok
+          ? "Local store is available."
+          : "Local store is not ready yet.",
       detail: database.message,
-      action: database.ok ? undefined : "Run the first full sync to initialize the local store."
+      action: !database.exists
+        ? "Initialize the local store now, or skip this and let the first full sync create it automatically."
+        : database.ok
+          ? undefined
+          : "Initialize the local store now, or let the first full sync recreate it if needed.",
+      actionKey: !database.exists || !database.ok ? "initialize_local_store" : undefined,
+      actionLabel: !database.exists || !database.ok ? "Initialize Local Store" : undefined
     } satisfies DiagnosticCheck,
     {
       key: "schema",
       label: "Local Data Schema",
-      status: !database.ok ? "info" : database.schemaReady ? "pass" : "fail",
-      summary: !database.ok
+      status: !database.exists
+        ? "info"
+        : database.ok && database.schemaReady
+          ? "pass"
+          : database.ok
+            ? "warn"
+            : "fail",
+      summary: !database.exists
         ? "Schema check is waiting for the local store to exist."
         : database.schemaReady
           ? "Local data schema is ready."
           : "Local data schema has not been initialized yet.",
       detail: database.schemaMessage,
-      action: !database.ok || database.schemaReady ? undefined : "Run the first full sync to initialize the schema."
+      action: !database.exists || database.schemaReady
+        ? undefined
+        : "Initialize the local store now, or let the first full sync initialize the schema automatically.",
+      actionKey: !database.exists || database.schemaReady ? undefined : "initialize_local_store",
+      actionLabel: !database.exists || database.schemaReady ? undefined : "Initialize Local Store"
     } satisfies DiagnosticCheck,
     validateLcrUrl(effectiveEnv.LCR_DIRECTORY_URL),
     ...(await validatePlaywright(effectiveEnv)),
@@ -447,7 +469,6 @@ export const getDesktopConfigSnapshot = async () => {
   const diagnosticSummary = summarizeDiagnostics(diagnostics);
   const prerequisitesReady =
     isValidLcrUrl(effectiveEnv.LCR_DIRECTORY_URL) &&
-    database.schemaReady &&
     diagnostics.every((check) => check.status !== "fail");
 
   return {
@@ -474,6 +495,7 @@ export const getDesktopConfigSnapshot = async () => {
       requiredComplete: missing.length === 0,
       missing,
       database,
+      mcp,
       playwrightConfigured: Boolean(effectiveEnv.PLAYWRIGHT_USER_DATA_DIR),
       lcrConfigured: !isMissingValue("LCR_DIRECTORY_URL", effectiveEnv),
       schemaReady: database.schemaReady,
@@ -481,6 +503,7 @@ export const getDesktopConfigSnapshot = async () => {
       latestSuccessfulSyncAt: database.latestSuccessfulSyncAt,
       latestSuccessfulSyncType: database.latestSuccessfulSyncType,
       prerequisitesReady,
+      setupComplete: missing.length === 0 && prerequisitesReady && database.firstSyncCompleted,
       diagnostics,
       diagnosticSummary
     }

@@ -80,19 +80,6 @@ function getInitialDesktopRoute() {
   };
 
   const lcrUrl = `${effectiveConfig.LCR_DIRECTORY_URL || ''}`.trim();
-  const databaseUrl = `${effectiveConfig.DATABASE_URL || ''}`.trim();
-  const hasValidDatabaseUrl = (() => {
-    if (!databaseUrl) {
-      return false;
-    }
-
-    try {
-      const parsed = new URL(databaseUrl);
-      return parsed.protocol === 'postgres:' || parsed.protocol === 'postgresql:';
-    } catch {
-      return false;
-    }
-  })();
   const hasValidLcrUrl = (() => {
     if (!lcrUrl || lcrUrl.includes('YOUR-REPORT-ID')) {
       return false;
@@ -105,11 +92,41 @@ function getInitialDesktopRoute() {
       return false;
     }
   })();
-  const hasRequiredSettings =
-    hasValidDatabaseUrl &&
-    hasValidLcrUrl;
+  const sqliteDbPath = (() => {
+    const configured = `${effectiveConfig.SQLITE_DB_PATH || ''}`.trim();
+    if (configured) {
+      return path.resolve(configured);
+    }
+    return path.join(path.dirname(DESKTOP_CONFIG_PATH), 'stakeos.db');
+  })();
+  const hasCompletedFirstSync = (() => {
+    if (!fs.existsSync(sqliteDbPath)) {
+      return false;
+    }
 
-  return hasRequiredSettings ? '/dashboard' : '/settings?setup=1';
+    try {
+      const Database = require('better-sqlite3');
+      const db = new Database(sqliteDbPath, { readonly: true });
+      try {
+        const row = db.prepare(`
+          SELECT completed_at AS completedAt
+          FROM sync_logs
+          WHERE status = 'success'
+            AND sync_type = 'sqlite_spike_full_sync'
+            AND completed_at IS NOT NULL
+          ORDER BY completed_at DESC, id DESC
+          LIMIT 1
+        `).get();
+        return Boolean(row && row.completedAt);
+      } finally {
+        db.close();
+      }
+    } catch {
+      return false;
+    }
+  })();
+
+  return hasValidLcrUrl && hasCompletedFirstSync ? '/dashboard' : '/settings?setup=1';
 }
 
 function ensureRunDir() {

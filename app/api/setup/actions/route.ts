@@ -5,7 +5,7 @@ import { runSetupAction, type SetupActionKey } from "@/src/setup/setupActions";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const supportedActions = new Set<SetupActionKey>(["create_database", "run_db_migrate", "install_chromium"]);
+const supportedActions = new Set<SetupActionKey>(["initialize_local_store", "install_chromium", "configure_mcp"]);
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -16,8 +16,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const snapshot = await getDesktopConfigSnapshot();
-    const result = await runSetupAction(action, snapshot.effectiveConfig.DATABASE_URL);
+    const result = await runSetupAction(action);
 
     return NextResponse.json({
       ok: true,

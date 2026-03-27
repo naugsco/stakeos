@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import {
   getDesktopConfigSnapshot,
   importProjectEnvIntoDesktopConfig,
+  loadDesktopConfig,
   saveDesktopConfig,
   type DesktopConfig
 } from "@/src/config/desktopConfig";
 
 const configKeys = [
-  "DATABASE_URL",
   "LCR_DIRECTORY_URL",
   "PLAYWRIGHT_USER_DATA_DIR",
   "PLAYWRIGHT_HEADLESS",
@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     configKeys.map((key) => [key, typeof incoming[key] === "string" ? incoming[key] : ""])
   ) as DesktopConfig;
 
-  saveDesktopConfig(nextConfig);
+  saveDesktopConfig({
+    ...loadDesktopConfig(),
+    ...nextConfig
+  });
 
   return NextResponse.json({
     ...(await getDesktopConfigSnapshot()),

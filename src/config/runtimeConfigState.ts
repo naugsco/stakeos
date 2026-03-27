@@ -7,7 +7,6 @@ export const getRuntimeConfigState = async () => {
   const snapshot = await getDesktopConfigSnapshot();
 
   const runtimeMatchesDesktopConfig =
-    normalize(env.DATABASE_URL) === normalize(snapshot.effectiveConfig.DATABASE_URL) &&
     normalize(env.LCR_DIRECTORY_URL) === normalize(snapshot.effectiveConfig.LCR_DIRECTORY_URL) &&
     normalize(env.PLAYWRIGHT_USER_DATA_DIR) === normalize(snapshot.effectiveConfig.PLAYWRIGHT_USER_DATA_DIR) &&
     normalize(String(env.PLAYWRIGHT_HEADLESS ?? false)) === normalize(snapshot.effectiveConfig.PLAYWRIGHT_HEADLESS) &&
@@ -25,6 +24,7 @@ export const getRuntimeConfigState = async () => {
   return {
     snapshot,
     runtimeMatchesDesktopConfig,
-    restartRequired: snapshot.configExists && !runtimeMatchesDesktopConfig
+    restartRequired: snapshot.configExists && !runtimeMatchesDesktopConfig,
+    setupComplete: snapshot.status.setupComplete
   };
 };
