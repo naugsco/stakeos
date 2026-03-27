@@ -5,12 +5,14 @@ export function DashboardOverviewCards({
   overview,
   recommendRecovered,
   showRecommendRecovered = true,
-  missionReadyHint
+  missionReadyHint,
+  missionReadyLabel = "Mission Ready"
 }: {
   overview: DashboardOverviewMetrics;
   recommendRecovered?: number;
   showRecommendRecovered?: boolean;
   missionReadyHint?: string;
+  missionReadyLabel?: string;
 }) {
   return (
     <section className={`grid gap-4 md:grid-cols-2 ${showRecommendRecovered ? "xl:grid-cols-5" : "xl:grid-cols-5"}`}>
@@ -22,7 +24,7 @@ export function DashboardOverviewCards({
       ) : (
         <StatCard label="Recent Baptisms This Year" value={overview.recentBaptismsThisYear} />
       )}
-      <StatCard label="Mission Ready" value={overview.missionReady} hint={missionReadyHint} />
+      <StatCard label={missionReadyLabel} value={overview.missionReady} hint={missionReadyHint} />
     </section>
   );
 }

@@ -76,6 +76,9 @@ export default async function DashboardPage({
     ? `History tracking since ${new Date(data.templeRecommendHealth.trackingSince).toLocaleDateString()} (${data.templeRecommendHealth.daysTracked} days tracked).`
     : "History tracking has not started yet. Run a full sync to begin.";
   const missionGenderNote = `Men: ${data.missionGenderBreakdown.menEligible} eligible, ${data.missionGenderBreakdown.menReady} ready. Women: ${data.missionGenderBreakdown.womenEligible} eligible, ${data.missionGenderBreakdown.womenReady} ready.`;
+  const missionReadyCount = data.missionReadiness.summary.find((row) => row.label === "Ready")?.value ?? 0;
+  const missionProgressingCount = data.missionReadiness.summary.find((row) => row.label === "Progressing")?.value ?? 0;
+  const missionPipelineCount = missionReadyCount + missionProgressingCount;
 
   const viewLinks: Array<{ id: DashboardView; label: string; description: string }> = [
     { id: "overview", label: "Overview", description: "Core health snapshot" },
@@ -150,50 +153,57 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-4 py-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
+          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-5 py-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center">
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sections</span>
-              {viewLinks.map((link) => {
-                const active = selectedView === link.id;
-                return (
-                  <Link
-                    key={link.id}
-                    href={buildHref({ unit: selectedUnit, view: link.id, mode: selectedMode })}
-                    className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
-                      active
-                        ? "border-teal-300 bg-teal-50 text-teal-900"
-                        : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                {viewLinks.map((link) => {
+                  const active = selectedView === link.id;
+                  return (
+                    <Link
+                      key={link.id}
+                      href={buildHref({ unit: selectedUnit, view: link.id, mode: selectedMode })}
+                      className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
+                        active
+                          ? "border-teal-300 bg-teal-50 text-teal-900"
+                          : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-4 py-3 shadow-sm">
-            <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 md:gap-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Display</span>
-              {modeLinks.map((link) => {
-                const active = selectedMode === link.id;
-                return (
-                  <Link
-                    key={link.id}
-                    href={buildHref({ unit: selectedUnit, view: selectedView, mode: link.id })}
-                    className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
-                      active
-                        ? "border-teal-300 bg-teal-50 text-teal-900"
-                        : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                );
-              })}
-              <div className="min-w-0 flex-1 basis-full lg:basis-[18rem] lg:flex-none">
-                <DashboardUnitSelect units={data.availableUnits} selectedUnit={data.selectedUnit} compact />
+          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-5 py-4 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start">
+              <span className="pt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Display</span>
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                  {modeLinks.map((link) => {
+                    const active = selectedMode === link.id;
+                    return (
+                      <Link
+                        key={link.id}
+                        href={buildHref({ unit: selectedUnit, view: selectedView, mode: link.id })}
+                        className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
+                          active
+                            ? "border-teal-300 bg-teal-50 text-teal-900"
+                            : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ward / Branch Scope</div>
+                  <DashboardUnitSelect units={data.availableUnits} selectedUnit={data.selectedUnit} compact hideLabel />
+                </div>
               </div>
             </div>
           </div>
@@ -205,11 +215,12 @@ export default async function DashboardPage({
           totalMembers: data.overview.totalMembers,
           currentCallings: data.overview.currentCallings,
           recommendActive: recommendMap.Active ?? 0,
-          missionReady: data.missionReadiness.summary.find((row) => row.label === "Ready")?.value ?? 0,
+          missionReady: missionPipelineCount,
           recentBaptismsThisYear: data.recentBaptisms.summary.find((row) => row.label === "This Year")?.value ?? 0
         }}
         recommendRecovered={data.newReturningStrengthening.summary.find((row) => row.label === "Recommend Recovered (1y+)")?.value ?? 0}
-        missionReadyHint={`Men ${data.missionGenderBreakdown.menReady} · Women ${data.missionGenderBreakdown.womenReady}`}
+        missionReadyLabel="Mission Pipeline"
+        missionReadyHint={`Ready ${missionReadyCount} · Progressing ${missionProgressingCount}`}
       />
 
       {selectedMode === "unit-leader" && !selectedUnit ? (

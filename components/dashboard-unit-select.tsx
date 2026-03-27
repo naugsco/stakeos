@@ -6,9 +6,10 @@ type DashboardUnitSelectProps = {
   units: string[];
   selectedUnit: string | null;
   compact?: boolean;
+  hideLabel?: boolean;
 };
 
-export function DashboardUnitSelect({ units, selectedUnit, compact = false }: DashboardUnitSelectProps) {
+export function DashboardUnitSelect({ units, selectedUnit, compact = false, hideLabel = false }: DashboardUnitSelectProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -26,12 +27,14 @@ export function DashboardUnitSelect({ units, selectedUnit, compact = false }: Da
 
   return (
     <div className={compact ? "flex min-w-0 flex-wrap items-center gap-2 sm:gap-3" : undefined}>
-      <label
-        htmlFor="dashboard-unit-filter"
-        className={`text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 ${compact ? "whitespace-nowrap" : ""}`}
-      >
-        Ward / Branch Scope
-      </label>
+      {!hideLabel ? (
+        <label
+          htmlFor="dashboard-unit-filter"
+          className={`text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 ${compact ? "whitespace-nowrap" : ""}`}
+        >
+          Ward / Branch Scope
+        </label>
+      ) : null}
       <select
         id="dashboard-unit-filter"
         value={selectedUnit ?? ""}
