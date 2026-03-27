@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, utilityProcess } = require('electron');
 const { execFileSync, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -35,6 +35,7 @@ const DESKTOP_CONFIG_PATH = (() => {
 let mainWindow = null;
 let splashWindow = null;
 let nextProcess = null;
+let nextProcessKind = null;
 let managedNextProcess = false;
 let quitting = false;
 let relaunchRequested = false;
@@ -653,25 +654,25 @@ function runCommand(args, label) {
   });
 }
 
-function getPackagedNodeEntry(scriptPath, args = []) {
-  return {
-    command: process.execPath,
-    args: [scriptPath, ...args],
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      STAKEOS_PACKAGED: '1',
-      STAKEOS_PROJECT_ROOT: PROJECT_ROOT,
-    },
-  };
+function hasManagedNextProcess() {
+  return Boolean(managedNextProcess && nextProcess && typeof nextProcess.kill === 'function' && nextProcess.pid);
+}
+
+function killManagedNextProcess(force = false) {
+  if (!nextProcess || typeof nextProcess.kill !== 'function') {
+    return false;
+  }
+
+  if (nextProcessKind === 'utility') {
+    return nextProcess.kill();
+  }
+
+  return nextProcess.kill(force ? 'SIGKILL' : 'SIGTERM');
 }
 
 function getNextStartCommand() {
   if (PACKAGED_MODE) {
-    return getPackagedNodeEntry(
-      path.join(PROJECT_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'),
-      ['start', '--port', DESKTOP_PORT],
-    );
+    return null;
   }
 
   return {
@@ -685,31 +686,55 @@ function startManagedNextServer() {
   updateSplashStatus('Starting local StakeOS server...');
   ensureRunDir();
   const logStream = fs.createWriteStream(path.join(RUN_DIR, 'desktop-next.log'), { flags: 'a' });
-  const nextCommand = getNextStartCommand();
-  nextProcess = spawn(nextCommand.command, nextCommand.args, {
-    cwd: PROJECT_ROOT,
-    env: {
-      ...nextCommand.env,
-      PORT: DESKTOP_PORT,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  if (PACKAGED_MODE) {
+    nextProcess = utilityProcess.fork(
+      path.join(PROJECT_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next'),
+      ['start', '--port', DESKTOP_PORT],
+      {
+        cwd: PROJECT_ROOT,
+        env: {
+          ...process.env,
+          PORT: DESKTOP_PORT,
+          STAKEOS_PACKAGED: '1',
+          STAKEOS_PROJECT_ROOT: PROJECT_ROOT,
+        },
+        stdio: 'pipe',
+        serviceName: 'StakeOS Server',
+      },
+    );
+    nextProcessKind = 'utility';
+  } else {
+    const nextCommand = getNextStartCommand();
+    nextProcess = spawn(nextCommand.command, nextCommand.args, {
+      cwd: PROJECT_ROOT,
+      env: {
+        ...nextCommand.env,
+        PORT: DESKTOP_PORT,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    nextProcessKind = 'child';
+  }
   managedNextProcess = true;
 
-  nextProcess.stdout.on('data', (chunk) => {
+  nextProcess.stdout?.on('data', (chunk) => {
     const text = chunk.toString();
     logStream.write(text);
     appendLog('desktop-shell.log', text.trimEnd());
   });
-  nextProcess.stderr.on('data', (chunk) => {
+  nextProcess.stderr?.on('data', (chunk) => {
     const text = chunk.toString();
     logStream.write(text);
     appendLog('desktop-shell.log', text.trimEnd());
   });
   nextProcess.on('exit', (code, signal) => {
-    appendLog('desktop-shell.log', `Next server exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`);
+    appendLog(
+      'desktop-shell.log',
+      `Next server exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`,
+    );
     logStream.end();
     nextProcess = null;
+    nextProcessKind = null;
     managedNextProcess = false;
     if (!quitting && !restartingServer && mainWindow && !mainWindow.isDestroyed()) {
       dialog.showErrorBox(
@@ -830,7 +855,7 @@ async function ensureStakeosReady() {
 }
 
 async function stopExistingStakeosServerOnDesktopPort() {
-  if (managedNextProcess && nextProcess && !nextProcess.killed) {
+  if (hasManagedNextProcess()) {
     await shutdownManagedNext();
     await waitForPortClosed(DESKTOP_PORT);
     return;
@@ -966,14 +991,14 @@ async function bootstrap() {
 }
 
 async function shutdownManagedNext() {
-  if (!managedNextProcess || !nextProcess || nextProcess.killed) {
+  if (!hasManagedNextProcess()) {
     return;
   }
 
   await new Promise((resolve) => {
     const timeout = setTimeout(() => {
-      if (nextProcess && !nextProcess.killed) {
-        nextProcess.kill('SIGKILL');
+      if (hasManagedNextProcess()) {
+        killManagedNextProcess(true);
       }
       resolve();
     }, 4000);
@@ -983,7 +1008,7 @@ async function shutdownManagedNext() {
       resolve();
     });
 
-    nextProcess.kill('SIGTERM');
+    killManagedNextProcess(false);
   });
 }
 
