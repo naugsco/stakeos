@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVisualOrgData } from "@/src/services/visualOrgService";
+import { loadSqliteSpikeVisualOrgData } from "@/src/sqlite/queries";
 
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   const selectedUnit = request.nextUrl.searchParams.get("unit");
-  const data = await getVisualOrgData(selectedUnit);
+  const data = await loadSqliteSpikeVisualOrgData(selectedUnit);
   return NextResponse.json(data);
 }

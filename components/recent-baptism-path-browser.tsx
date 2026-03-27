@@ -48,7 +48,11 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
-export function RecentBaptismPathBrowser({ rows }: { rows: RecentBaptismPathRow[] }) {
+export function RecentBaptismPathBrowser({
+  rows,
+}: {
+  rows: RecentBaptismPathRow[];
+}) {
   const [sortKey, setSortKey] = useState<
     "baptismDate" | "unitName" | "fullName" | "templeRecommendStatus" | "hasCurrentCalling" | "ministeringAssigned" | "assignedAsMinisterLabel"
   >("baptismDate");

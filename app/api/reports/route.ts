@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { loadReportsPageData } from "@/lib/dashboardData";
+import { loadReportsPageDataBySource } from "@/lib/dashboardData";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const data = await loadReportsPageData();
+  const data = await loadReportsPageDataBySource();
   return NextResponse.json(data);
 }

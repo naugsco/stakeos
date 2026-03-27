@@ -2,7 +2,7 @@
 
 StakeOS runs locally on your machine. It uses:
 - Node.js
-- PostgreSQL
+- SQLite (embedded)
 - Playwright
 - Next.js
 - Claude Desktop for MCP integration
@@ -15,7 +15,7 @@ If you are the maintainer publishing a GitHub release, use [GITHUB_RELEASE_CHECK
 ## What You Will End Up With
 
 By the end of this guide, you will have:
-- a local PostgreSQL database named `stakeos`
+- a local SQLite database at `~/Library/Application Support/StakeOS/stakeos.db`
 - the StakeOS web dashboard running at `http://localhost:3000/dashboard`
 - a working first LCR sync
 - a built MCP server ready for Claude Desktop
@@ -29,13 +29,6 @@ If you install StakeOS from an unsigned GitHub desktop release instead of runnin
 For most users, this is the best setup:
 - Homebrew
 - Node.js LTS
-- local PostgreSQL
-
-Local PostgreSQL is recommended over Docker for first-time installs because:
-- `psql` works directly in Terminal
-- the setup is simpler
-- debugging is easier
-- there are fewer moving parts
 
 ## Prerequisites
 
@@ -52,17 +45,15 @@ StakeOS does **not** capture or store your LCR credentials.
 If you already know your way around Terminal, this is the shortest correct path:
 
 ```bash
-brew install node postgresql@16
-brew services start postgresql@16
-createdb stakeos
+brew install node
 git clone <YOUR_GITHUB_REPO_URL>
 cd stakeos
 npm install
 npx playwright install chromium
 cp .env.example .env
-npm run db:migrate
-npm run sync:full
-npm run sync:seed-baseline
+npm run sqlite:init
+npm run sqlite:sync
+npm run sqlite:seed-baseline
 npm run dev
 ```
 
@@ -109,107 +100,7 @@ node -v
 npm -v
 ```
 
-## 3. Install PostgreSQL
-
-Install PostgreSQL 16:
-
-```bash
-brew install postgresql@16
-```
-
-Start the database service:
-
-```bash
-brew services start postgresql@16
-```
-
-Verify that it is running:
-
-```bash
-brew services list
-```
-
-Verify that `psql` is available:
-
-```bash
-psql --version
-```
-
-### If `psql` Says `command not found`
-
-Add PostgreSQL to your shell path.
-
-Apple Silicon Macs:
-
-```bash
-echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Intel Macs:
-
-```bash
-echo 'export PATH="/usr/local/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Then test again:
-
-```bash
-psql --version
-```
-
-## 4. Create the StakeOS Database
-
-Create the local database:
-
-```bash
-createdb stakeos
-```
-
-Test it:
-
-```bash
-psql -d stakeos -c "select current_user, current_database();"
-```
-
-Expected result:
-- your local macOS username
-- `stakeos`
-
-## 5. Choose a Working `DATABASE_URL`
-
-For most local installs, this works:
-
-```env
-DATABASE_URL=postgresql://localhost:5432/stakeos
-```
-
-If your local PostgreSQL install expects an explicit username, use:
-
-```env
-DATABASE_URL=postgresql://YOUR_MAC_USERNAME@localhost:5432/stakeos
-```
-
-Example:
-
-```env
-DATABASE_URL=postgresql://jane@localhost:5432/stakeos
-```
-
-If you are unsure which one works, test both:
-
-```bash
-psql "postgresql://localhost:5432/stakeos" -c "select now();"
-```
-
-```bash
-psql "postgresql://YOUR_MAC_USERNAME@localhost:5432/stakeos" -c "select now();"
-```
-
-Use the one that succeeds.
-
-## 6. Clone the Repository
+## 3. Clone the Repository
 
 ```bash
 git clone <YOUR_GITHUB_REPO_URL>
@@ -222,7 +113,7 @@ If you already have the repo locally, just change into it:
 cd /path/to/stakeos
 ```
 
-## 7. Install App Dependencies
+## 4. Install App Dependencies
 
 Install Node packages:
 
@@ -236,7 +127,7 @@ Install the Playwright browser used for LCR sync:
 npx playwright install chromium
 ```
 
-## 8. Create and Configure `.env`
+## 5. Create and Configure `.env`
 
 Copy the template:
 
@@ -249,7 +140,6 @@ Then edit `.env`.
 Minimum required values:
 
 ```env
-DATABASE_URL=postgresql://localhost:5432/stakeos
 NODE_ENV=development
 PLAYWRIGHT_USER_DATA_DIR=.playwright/profile
 PLAYWRIGHT_HEADLESS=false
@@ -261,10 +151,10 @@ UNIT_NUMBER=000000
 
 Notes:
 - `PLAYWRIGHT_HEADLESS=false` is recommended for first sync so you can log in manually.
-- `LCR_DIRECTORY_URL` should be your stake’s LCR custom report URL.
+- `LCR_DIRECTORY_URL` should be your stake's LCR custom report URL.
 - SMTP settings can be left blank until you are ready to use email features.
 
-## 9. LCR Custom Report Specification
+## 6. LCR Custom Report Specification
 
 StakeOS expects the LCR custom report to return **one row per person**.
 
@@ -458,34 +348,22 @@ What will break the sync:
 - changing the report into something other than one row per person
 - changing column labels so they no longer match the expected LCR headers
 
-## 10. Create the Database Schema
+## 7. Initialize the Database
 
 Run:
 
 ```bash
-npm run db:migrate
+npm run sqlite:init
 ```
 
-Important:
+This creates the SQLite database and schema automatically.
 
-The correct script is:
-
-```bash
-npm run db:migrate
-```
-
-Not:
-
-```bash
-npm run db_migrate
-```
-
-## 11. Run the First Full Sync
+## 8. Run the First Full Sync
 
 Run:
 
 ```bash
-npm run sync:full
+npm run sqlite:sync
 ```
 
 What happens:
@@ -493,25 +371,25 @@ What happens:
 - you log in manually
 - StakeOS opens your configured `LCR_DIRECTORY_URL`
 - it waits for the report to finish loading
-- it stores normalized data in PostgreSQL
+- it stores normalized data in local SQLite
 
 Important:
 - StakeOS does not ask for or store your password
 - local session state is stored only in `PLAYWRIGHT_USER_DATA_DIR`
 
-## 12. Seed the Baseline for Sync Comparison
+## 9. Seed the Baseline for Sync Comparison
 
 Run:
 
 ```bash
-npm run sync:seed-baseline
+npm run sqlite:seed-baseline
 ```
 
 Do this once after the first successful sync.
 
 This allows StakeOS to report exact changes between future syncs.
 
-## 13. Run the Dashboard
+## 10. Run the Dashboard
 
 Start the dashboard:
 
@@ -523,7 +401,7 @@ Open:
 
 [http://localhost:3000/dashboard](http://localhost:3000/dashboard)
 
-## 14. Build the MCP Server
+## 11. Build the MCP Server
 
 Build it:
 
@@ -537,7 +415,7 @@ Start it manually if needed:
 npm run mcp:start
 ```
 
-## 15. Connect StakeOS to Claude Desktop
+## 12. Connect StakeOS to Claude Desktop
 
 On macOS, edit:
 
@@ -593,10 +471,10 @@ What each user still must do locally:
 
 Important:
 - the MCP server code is shared through Git
-- the Claude Desktop connection to that MCP server is always local to each user’s machine
+- the Claude Desktop connection to that MCP server is always local to each user's machine
 - each user needs their own local database, LCR report URL, and Claude Desktop config entry
 
-## 16. Useful Commands
+## 13. Useful Commands
 
 Run the dashboard:
 
@@ -607,19 +485,19 @@ npm run dev
 Run a full sync:
 
 ```bash
-npm run sync:full
+npm run sqlite:sync
 ```
 
 Run a calling-only sync:
 
 ```bash
-npm run sync:callings
+npm run sqlite:callings
 ```
 
 Seed baseline snapshots:
 
 ```bash
-npm run sync:seed-baseline
+npm run sqlite:seed-baseline
 ```
 
 Build the MCP server:
@@ -635,28 +513,6 @@ npm run typecheck
 ```
 
 ## Troubleshooting
-
-### `psql: command not found`
-
-PostgreSQL is either not installed or not on your shell path.
-
-Try:
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-psql --version
-```
-
-If needed, add the PostgreSQL bin directory to `~/.zshrc`.
-
-### `npm error Missing script: "db_migrate"`
-
-Use:
-
-```bash
-npm run db:migrate
-```
 
 ### Dashboard fails to start
 
@@ -680,20 +536,12 @@ Common causes:
 - the LCR page has not fully loaded yet
 - you are not fully signed in
 
-### Find the PostgreSQL data directory
-
-Run:
-
-```bash
-psql -d stakeos -c "show data_directory;"
-```
-
 ## Security Notes
 
 Do not commit:
 - `.env`
 - `.playwright/profile`
-- your PostgreSQL data directory
+- your SQLite database file
 - exported member data
 - browser session files
 

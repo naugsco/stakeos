@@ -13,22 +13,23 @@ export type SyncLaunchState = {
 
 const projectRoot = process.cwd();
 const runDir = path.join(projectRoot, ".run");
-const stateFilePath = path.join(runDir, "sync-state.json");
 
 const shell = process.platform === "win32" ? "cmd.exe" : "zsh";
 const isWindows = process.platform === "win32";
 
+const stateFilePath = path.join(runDir, "sync-state.json");
+
 const getCommandForKind = (kind: SyncJobKind) => {
   if (kind === "full") {
-    return "npm run db:migrate && npm run sync:full";
+    return "npm run sqlite:init && npm run sqlite:sync && npm run sqlite:seed-baseline";
   }
 
-  return "npm run sync:callings";
+  return "npm run sqlite:init && npm run sqlite:callings";
 };
 
 const getLogFileName = (kind: SyncJobKind) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `web-${kind}-sync-${timestamp}.log`;
+  return `web-sqlite-${kind}-sync-${timestamp}.log`;
 };
 
 const ensureRunDir = () => {
@@ -121,7 +122,7 @@ export const getLatestSyncLogFile = () => {
   }
 
   const logFiles = readdirSync(runDir)
-    .filter((fileName) => /^web-(full|callings)-sync-.*\.log$/.test(fileName))
+    .filter((fileName) => /^web-sqlite-(full|callings)-sync-.*\.log$/.test(fileName))
     .map((fileName) => path.join(runDir, fileName));
 
   if (logFiles.length === 0) {

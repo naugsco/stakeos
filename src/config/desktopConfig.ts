@@ -1,13 +1,14 @@
 import dotenv from "dotenv";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Pool } from "pg";
+import Database from "better-sqlite3";
 import { z } from "zod";
 
 const desktopConfigSchema = z.object({
   DATABASE_URL: z.string().optional(),
+  SQLITE_DB_PATH: z.string().optional(),
   LCR_DIRECTORY_URL: z.string().optional(),
   PLAYWRIGHT_USER_DATA_DIR: z.string().optional(),
   PLAYWRIGHT_HEADLESS: z.string().optional(),
@@ -38,7 +39,7 @@ export interface DiagnosticCheck {
   actionLabel?: string;
 }
 
-const REQUIRED_FIELDS = ["DATABASE_URL", "LCR_DIRECTORY_URL"] as const;
+const REQUIRED_FIELDS = ["LCR_DIRECTORY_URL"] as const;
 
 const getDesktopConfigDir = () => {
   const home = os.homedir();
@@ -51,6 +52,32 @@ const getDesktopConfigDir = () => {
     default:
       return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "StakeOS");
   }
+};
+
+const getSqliteDbPath = () => {
+  const configured = loadDesktopConfig().SQLITE_DB_PATH?.trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
+
+  const defaultPath = path.resolve(getDesktopConfigDir(), "stakeos.db");
+  const legacyPath = path.resolve(getDesktopConfigDir(), "sqlite-spike", "stakeos-spike.db");
+
+  if (!existsSync(defaultPath) && existsSync(legacyPath)) {
+    mkdirSync(path.dirname(defaultPath), { recursive: true });
+    renameSync(legacyPath, defaultPath);
+  }
+
+  return defaultPath;
+};
+
+const openSqliteConfigDb = () => {
+  const dbPath = getSqliteDbPath();
+  mkdirSync(path.dirname(dbPath), { recursive: true });
+  const db = new Database(dbPath);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  return db;
 };
 
 export const getDesktopConfigPath = () => path.join(getDesktopConfigDir(), "config.json");
@@ -119,19 +146,6 @@ export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env)
   ...loadDesktopConfig()
 });
 
-const isValidDatabaseUrl = (value?: string) => {
-  if (!value) {
-    return false;
-  }
-
-  try {
-    const parsed = new URL(value);
-    return ["postgres:", "postgresql:"].includes(parsed.protocol);
-  } catch {
-    return false;
-  }
-};
-
 const isValidLcrUrl = (value?: string) => {
   if (!value) {
     return false;
@@ -149,10 +163,6 @@ const isMissingValue = (key: typeof REQUIRED_FIELDS[number], effectiveEnv: Recor
   const value = effectiveEnv[key]?.trim();
   if (!value) {
     return true;
-  }
-
-  if (key === "DATABASE_URL") {
-    return !isValidDatabaseUrl(value);
   }
 
   if (key === "LCR_DIRECTORY_URL") {
@@ -180,17 +190,6 @@ const isPlaceholderValue = (value?: string) => {
     "no-reply@example.com"
   ].includes(normalized);
 };
-
-const getEmailConfigured = (effectiveEnv: Record<string, string | undefined>) =>
-  Boolean(
-    effectiveEnv.SMTP_HOST &&
-      effectiveEnv.SMTP_PORT &&
-      effectiveEnv.SMTP_FROM &&
-      !isPlaceholderValue(effectiveEnv.SMTP_HOST) &&
-      !isPlaceholderValue(effectiveEnv.SMTP_USER) &&
-      !isPlaceholderValue(effectiveEnv.SMTP_PASS) &&
-      !isPlaceholderValue(effectiveEnv.SMTP_FROM)
-  );
 
 const summarizeDiagnostics = (checks: DiagnosticCheck[]) => ({
   pass: checks.filter((check) => check.status === "pass").length,
@@ -252,85 +251,13 @@ const validateLcrUrl = (rawUrl?: string): DiagnosticCheck => {
   }
 };
 
-const validateEmailSettings = (effectiveEnv: Record<string, string | undefined>): DiagnosticCheck => {
-  const host = effectiveEnv.SMTP_HOST?.trim();
-  const port = effectiveEnv.SMTP_PORT?.trim();
-  const from = effectiveEnv.SMTP_FROM?.trim();
-  const user = effectiveEnv.SMTP_USER?.trim();
-  const pass = effectiveEnv.SMTP_PASS?.trim();
-
-  const configuredCount = [host, port, from, user, pass].filter(Boolean).length;
-  if (configuredCount === 0) {
-    return {
-      key: "smtp",
-      label: "SMTP",
-      status: "info",
-      summary: "Email is optional and not configured.",
-      action: "Add SMTP host, port, credentials, and from-address if you want StakeOS to send emails."
-    };
-  }
-
-  const missing = [
-    !host && "SMTP_HOST",
-    !port && "SMTP_PORT",
-    !from && "SMTP_FROM",
-    !user && "SMTP_USER",
-    !pass && "SMTP_PASS"
-  ].filter(Boolean);
-
-  if (missing.length > 0) {
-    return {
-      key: "smtp",
-      label: "SMTP",
-      status: "warn",
-      summary: "Email configuration is incomplete.",
-      detail: `Missing: ${missing.join(", ")}`,
-      action: "Complete all SMTP fields or leave them all blank."
-    };
-  }
-
-  const parsedPort = Number(port);
-  const validPort = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort < 65536;
-  const validFrom = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(from ?? "");
-
-  if (!validPort || !validFrom || isPlaceholderValue(host) || isPlaceholderValue(user) || isPlaceholderValue(pass) || isPlaceholderValue(from)) {
-    return {
-      key: "smtp",
-      label: "SMTP",
-      status: "warn",
-      summary: "Email settings exist but still need review.",
-      detail: !validPort ? "SMTP port is invalid." : !validFrom ? "SMTP from-address is invalid." : "One or more values still look like placeholders.",
-      action: "Confirm the SMTP host, port, credentials, and from-address before using email delivery."
-    };
-  }
-
-  return {
-    key: "smtp",
-    label: "SMTP",
-    status: "pass",
-    summary: "Email settings look complete.",
-    detail: `${host}:${port}`
-  };
-};
-
-const validatePostgresCli = (): DiagnosticCheck => {
-  if (commandExists("psql")) {
-    return {
-      key: "postgres_cli",
-      label: "PostgreSQL CLI",
-      status: "pass",
-      summary: "`psql` is available on this machine."
-    };
-  }
-
-  return {
-    key: "postgres_cli",
-    label: "PostgreSQL CLI",
-    status: "warn",
-    summary: "`psql` is not available in the current PATH.",
-    action: "Install PostgreSQL or update your PATH so local database setup and troubleshooting are easier."
-  };
-};
+const validateSqliteStore = (): DiagnosticCheck => ({
+  key: "sqlite_store",
+  label: "Local Data Store Path",
+  status: "info",
+  summary: "StakeOS Desktop stores local data in the application-support folder.",
+  detail: getSqliteDbPath()
+});
 
 const validatePlaywright = async (effectiveEnv: Record<string, string | undefined>): Promise<DiagnosticCheck[]> => {
   const checks: DiagnosticCheck[] = [];
@@ -394,81 +321,57 @@ type DatabaseInspection = {
   latestSuccessfulSyncType: string | null;
 };
 
-const getAdminDatabaseUrl = (databaseUrl: string) => {
-  const parsed = new URL(databaseUrl);
-  parsed.pathname = "/postgres";
-  return parsed.toString();
-};
+const inspectDatabase = async (): Promise<DatabaseInspection> => {
+  const dbPath = getSqliteDbPath();
 
-const getTargetDatabaseName = (databaseUrl: string) => {
-  const parsed = new URL(databaseUrl);
-  return decodeURIComponent(parsed.pathname.replace(/^\//, ""));
-};
-
-const inspectDatabase = async (databaseUrl?: string): Promise<DatabaseInspection> => {
-  if (!databaseUrl) {
+  if (!existsSync(dbPath)) {
     return {
       ok: false,
-      message: "DATABASE_URL is missing.",
+      message: "Local directory store has not been initialized yet.",
       exists: false,
       schemaReady: false,
-      schemaMessage: "Database URL is missing.",
+      schemaMessage: "Run the first full sync to create the local store.",
       firstSyncCompleted: false,
       latestSuccessfulSyncAt: null,
       latestSuccessfulSyncType: null
     };
   }
 
-  if (!isValidDatabaseUrl(databaseUrl)) {
-    return {
-      ok: false,
-      message: "DATABASE_URL is not a valid PostgreSQL connection string.",
-      exists: false,
-      schemaReady: false,
-      schemaMessage: "Database URL is invalid.",
-      firstSyncCompleted: false,
-      latestSuccessfulSyncAt: null,
-      latestSuccessfulSyncType: null
-    };
-  }
-
-  const pool = new Pool({ connectionString: databaseUrl, max: 1, idleTimeoutMillis: 2000, connectionTimeoutMillis: 3000 });
+  const db = openSqliteConfigDb();
 
   try {
-    await pool.query("select 1");
-    const schemaResult = await pool.query<{
-      syncLogs: string | null;
-      members: string | null;
-    }>(
-      `
-      SELECT
-        to_regclass('public.sync_logs')::text AS "syncLogs",
-        to_regclass('public.members')::text AS "members"
-      `
-    );
+    const tableRows = db
+      .prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table'
+           AND name IN ('members', 'callings', 'sync_logs')`
+      )
+      .all() as Array<{ name: string }>;
+    const tableNames = new Set(tableRows.map((row) => row.name));
+    const schemaReady =
+      tableNames.has("members") && tableNames.has("callings") && tableNames.has("sync_logs");
 
-    const schemaReady = Boolean(schemaResult.rows[0]?.syncLogs && schemaResult.rows[0]?.members);
     let latestSuccessfulSyncAt: string | null = null;
     let latestSuccessfulSyncType: string | null = null;
     let firstSyncCompleted = false;
 
     if (schemaReady) {
-      const syncResult = await pool.query<{ syncType: string; completedAt: string | null }>(
-        `
-        SELECT
-          sync_type AS "syncType",
-          completed_at::text AS "completedAt"
-        FROM sync_logs
-        WHERE status = 'success'
-          AND sync_type = 'nightly_full_directory_sync'
-          AND completed_at IS NOT NULL
-        ORDER BY completed_at DESC, id DESC
-        LIMIT 1
-        `
-      );
+      const latestSync = db
+        .prepare(
+          `SELECT
+             sync_type AS syncType,
+             completed_at AS completedAt
+           FROM sync_logs
+           WHERE status = 'success'
+             AND sync_type = 'sqlite_spike_full_sync'
+             AND completed_at IS NOT NULL
+           ORDER BY completed_at DESC, id DESC
+           LIMIT 1`
+        )
+        .get() as { syncType?: string | null; completedAt?: string | null } | undefined;
 
-      latestSuccessfulSyncAt = syncResult.rows[0]?.completedAt ?? null;
-      latestSuccessfulSyncType = syncResult.rows[0]?.syncType ?? null;
+      latestSuccessfulSyncAt = latestSync?.completedAt ?? null;
+      latestSuccessfulSyncType = latestSync?.syncType ?? null;
       firstSyncCompleted = Boolean(latestSuccessfulSyncAt);
     }
 
@@ -477,68 +380,24 @@ const inspectDatabase = async (databaseUrl?: string): Promise<DatabaseInspection
       message: "Connected",
       exists: true,
       schemaReady,
-      schemaMessage: schemaReady ? "StakeOS schema is present." : "StakeOS schema has not been applied yet.",
+      schemaMessage: schemaReady ? "Local data schema is present." : "Local data schema has not been initialized yet.",
       firstSyncCompleted,
       latestSuccessfulSyncAt,
       latestSuccessfulSyncType
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to connect to PostgreSQL.";
-
-    if (/does not exist/i.test(message) && /database/i.test(message)) {
-      const adminPool = new Pool({
-        connectionString: getAdminDatabaseUrl(databaseUrl),
-        max: 1,
-        idleTimeoutMillis: 2000,
-        connectionTimeoutMillis: 3000
-      });
-
-      try {
-        const databaseName = getTargetDatabaseName(databaseUrl);
-        const existsResult = await adminPool.query<{ exists: boolean }>(
-          `SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1) AS "exists"`,
-          [databaseName]
-        );
-
-        const exists = Boolean(existsResult.rows[0]?.exists);
-        return {
-          ok: false,
-          message,
-          exists,
-          schemaReady: false,
-          schemaMessage: exists ? "StakeOS schema has not been applied yet." : "Target database does not exist yet.",
-          firstSyncCompleted: false,
-          latestSuccessfulSyncAt: null,
-          latestSuccessfulSyncType: null
-        };
-      } catch {
-        return {
-          ok: false,
-          message,
-          exists: false,
-          schemaReady: false,
-          schemaMessage: "Target database does not exist yet.",
-          firstSyncCompleted: false,
-          latestSuccessfulSyncAt: null,
-          latestSuccessfulSyncType: null
-        };
-      } finally {
-        await adminPool.end().catch(() => undefined);
-      }
-    }
-
     return {
       ok: false,
-      message,
-      exists: false,
+      message: error instanceof Error ? error.message : "Unable to inspect the local data store.",
+      exists: true,
       schemaReady: false,
-      schemaMessage: "StakeOS cannot inspect the database schema until the connection works.",
+      schemaMessage: "StakeOS cannot inspect the local data schema right now.",
       firstSyncCompleted: false,
       latestSuccessfulSyncAt: null,
       latestSuccessfulSyncType: null
     };
   } finally {
-    await pool.end().catch(() => undefined);
+    db.close();
   }
 };
 
@@ -546,46 +405,37 @@ export const getDesktopConfigSnapshot = async () => {
   const storedConfig = loadDesktopConfig();
   const effectiveEnv = getEffectiveDesktopEnv();
   const missing = REQUIRED_FIELDS.filter((key) => isMissingValue(key, effectiveEnv));
-  const database = await inspectDatabase(effectiveEnv.DATABASE_URL);
+  const database = await inspectDatabase();
   const diagnostics = [
-    validatePostgresCli(),
+    validateSqliteStore(),
     {
       key: "database",
-      label: "PostgreSQL",
+      label: "Local Directory Store",
       status: database.ok ? "pass" : "fail",
-      summary: database.ok ? "Database connection succeeded." : "Database connection failed.",
+      summary: database.ok ? "Local store is available." : "Local store is not ready yet.",
       detail: database.message,
-      action: database.ok
-        ? undefined
-        : database.exists
-          ? "Confirm PostgreSQL is running and DATABASE_URL points to the correct local database."
-          : "Create the target database or update DATABASE_URL to a database that already exists.",
-      actionKey: !database.ok && !database.exists && isValidDatabaseUrl(effectiveEnv.DATABASE_URL) ? "create_database" : undefined,
-      actionLabel: !database.ok && !database.exists && isValidDatabaseUrl(effectiveEnv.DATABASE_URL) ? "Create Database" : undefined
+      action: database.ok ? undefined : "Run the first full sync to initialize the local store."
     } satisfies DiagnosticCheck,
     {
       key: "schema",
-      label: "StakeOS Schema",
+      label: "Local Data Schema",
       status: !database.ok ? "info" : database.schemaReady ? "pass" : "fail",
       summary: !database.ok
-        ? "Schema check is waiting for a working database connection."
+        ? "Schema check is waiting for the local store to exist."
         : database.schemaReady
-          ? "StakeOS schema is ready."
-          : "StakeOS schema has not been applied yet.",
+          ? "Local data schema is ready."
+          : "Local data schema has not been initialized yet.",
       detail: database.schemaMessage,
-      action: !database.ok || database.schemaReady ? undefined : "Run StakeOS database migrations before the first sync.",
-      actionKey: !database.ok || database.schemaReady ? undefined : "run_db_migrate",
-      actionLabel: !database.ok || database.schemaReady ? undefined : "Run Migrations"
+      action: !database.ok || database.schemaReady ? undefined : "Run the first full sync to initialize the schema."
     } satisfies DiagnosticCheck,
     validateLcrUrl(effectiveEnv.LCR_DIRECTORY_URL),
     ...(await validatePlaywright(effectiveEnv)),
-    validateEmailSettings(effectiveEnv),
     {
       key: "first_sync",
       label: "First Full Sync",
       status: !database.ok || !database.schemaReady ? "info" : database.firstSyncCompleted ? "pass" : "warn",
       summary: !database.ok || !database.schemaReady
-        ? "First sync check is waiting for the database and schema to be ready."
+        ? "First sync check is waiting for the local store and schema to be ready."
         : database.firstSyncCompleted
           ? "A successful full directory sync is already recorded."
           : "StakeOS still needs its first successful full directory sync.",
@@ -596,9 +446,7 @@ export const getDesktopConfigSnapshot = async () => {
   ];
   const diagnosticSummary = summarizeDiagnostics(diagnostics);
   const prerequisitesReady =
-    isValidDatabaseUrl(effectiveEnv.DATABASE_URL) &&
     isValidLcrUrl(effectiveEnv.LCR_DIRECTORY_URL) &&
-    database.exists &&
     database.schemaReady &&
     diagnostics.every((check) => check.status !== "fail");
 
@@ -626,7 +474,6 @@ export const getDesktopConfigSnapshot = async () => {
       requiredComplete: missing.length === 0,
       missing,
       database,
-      emailConfigured: getEmailConfigured(effectiveEnv),
       playwrightConfigured: Boolean(effectiveEnv.PLAYWRIGHT_USER_DATA_DIR),
       lcrConfigured: !isMissingValue("LCR_DIRECTORY_URL", effectiveEnv),
       schemaReady: database.schemaReady,

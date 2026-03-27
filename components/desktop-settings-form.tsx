@@ -23,7 +23,6 @@ type ConfigSnapshot = {
     requiredComplete: boolean;
     missing: string[];
     database: { ok: boolean; message: string; exists: boolean; schemaReady: boolean };
-    emailConfigured: boolean;
     playwrightConfigured: boolean;
     lcrConfigured: boolean;
     schemaReady: boolean;
@@ -91,14 +90,14 @@ const fieldClassName =
 
 const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 
-const runtimeCriticalKeys = ["DATABASE_URL", "LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
+const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
   { id: "welcome", label: "Welcome", description: "Understand how StakeOS setup works before changing anything." },
   { id: "required", label: "Required", description: "Enter the minimum settings required to run StakeOS Desktop." },
   { id: "diagnostics", label: "Diagnostics", description: "Handle prerequisites and verify local readiness." },
   { id: "firstSync", label: "First Sync", description: "Run the first full LCR sync so the app has local data." },
-  { id: "optional", label: "Optional", description: "Configure email and recipient lists if you want in-app delivery." },
+  { id: "optional", label: "Optional", description: "Add predefined recipient lists if you want them available in the app." },
   { id: "finish", label: "Finish", description: "Save the final settings and open the dashboard." }
 ];
 
@@ -172,10 +171,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   );
 
   const requiredFieldLooksComplete = useMemo(() => {
-    const databaseUrl = `${form.DATABASE_URL || ""}`.trim();
     const lcrUrl = `${form.LCR_DIRECTORY_URL || ""}`.trim();
-    return Boolean(databaseUrl) && Boolean(lcrUrl) && !lcrUrl.includes("YOUR-REPORT-ID");
-  }, [form.DATABASE_URL, form.LCR_DIRECTORY_URL]);
+    return Boolean(lcrUrl) && !lcrUrl.includes("YOUR-REPORT-ID");
+  }, [form.LCR_DIRECTORY_URL]);
 
   const runtimeCriticalChanged = useMemo(
     () => runtimeCriticalKeys.some((key) => `${snapshot.effectiveConfig[key] || ""}` !== `${form[key] || ""}`),
@@ -251,7 +249,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     }
 
     const latest = syncStatus.latest;
-    if (latest.status !== "success" || latest.syncType !== "nightly_full_directory_sync") {
+    if (latest.status !== "success" || latest.syncType !== "sqlite_spike_full_sync") {
       return;
     }
 
@@ -505,10 +503,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const renderRequiredSettings = () => (
     <div className="space-y-5">
       <label className="block text-sm font-medium text-slate-700">
-        Database URL
-        <input className={fieldClassName} value={form.DATABASE_URL || ""} onChange={(event) => handleChange("DATABASE_URL", event.target.value)} placeholder="postgresql://localhost:5432/stakeos" />
-      </label>
-      <label className="block text-sm font-medium text-slate-700">
         LCR Custom Report URL
         <input className={fieldClassName} value={form.LCR_DIRECTORY_URL || ""} onChange={(event) => handleChange("LCR_DIRECTORY_URL", event.target.value)} placeholder="https://lcr.churchofjesuschrist.org/mlt/report/..." />
       </label>
@@ -672,46 +666,10 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   );
 
   const renderOptionalSettings = () => (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className={sectionClassName}>
-        <h3 className="font-serif text-2xl text-slate-900">Email Settings</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. Needed for in-app email drafting and automated mail delivery.</p>
-        <div className="mt-6 space-y-5">
-          <label className="block text-sm font-medium text-slate-700">
-            SMTP Host
-            <input className={fieldClassName} value={form.SMTP_HOST || ""} onChange={(event) => handleChange("SMTP_HOST", event.target.value)} placeholder="smtp.example.com" />
-          </label>
-          <div className="grid gap-5 md:grid-cols-2">
-            <label className="block text-sm font-medium text-slate-700">
-              SMTP Port
-              <input className={fieldClassName} value={form.SMTP_PORT || ""} onChange={(event) => handleChange("SMTP_PORT", event.target.value)} placeholder="587" />
-            </label>
-            <label className="block text-sm font-medium text-slate-700">
-              SMTP Secure
-              <select className={fieldClassName} value={form.SMTP_SECURE || "false"} onChange={(event) => handleChange("SMTP_SECURE", event.target.value)}>
-                <option value="false">false</option>
-                <option value="true">true</option>
-              </select>
-            </label>
-          </div>
-          <label className="block text-sm font-medium text-slate-700">
-            SMTP User
-            <input className={fieldClassName} value={form.SMTP_USER || ""} onChange={(event) => handleChange("SMTP_USER", event.target.value)} placeholder="username" />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            SMTP Password
-            <input type="password" className={fieldClassName} value={form.SMTP_PASS || ""} onChange={(event) => handleChange("SMTP_PASS", event.target.value)} placeholder="password" />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            SMTP From Address
-            <input className={fieldClassName} value={form.SMTP_FROM || ""} onChange={(event) => handleChange("SMTP_FROM", event.target.value)} placeholder="stake@example.com" />
-          </label>
-        </div>
-      </div>
-
+    <div className="grid gap-6">
       <div className={sectionClassName}>
         <h3 className="font-serif text-2xl text-slate-900">Report Recipients</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. Used by reporting and messaging features that target predefined leadership groups.</p>
+        <p className="mt-2 text-sm text-slate-600">Optional. Store common leadership recipient lists for quick access inside StakeOS.</p>
         <div className="mt-6 space-y-5">
           <label className="block text-sm font-medium text-slate-700">
             Stake Presidency Emails
@@ -836,7 +794,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-slate-500">
-              {!snapshot.status.requiredComplete ? `Missing required values: ${missingLabel || "DATABASE_URL, LCR_DIRECTORY_URL"}` : restartRequired ? "Restart required before using the app." : "Required values are present."}
+              {!snapshot.status.requiredComplete ? `Missing required values: ${missingLabel || "LCR_DIRECTORY_URL"}` : restartRequired ? "Restart required before using the app." : "Required values are present."}
             </div>
             <div className="flex flex-wrap gap-3">
               {wizardStep !== "welcome" ? (
@@ -903,8 +861,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             <div className="mt-1 font-semibold">{snapshot.status.requiredComplete && !restartRequired ? "Ready" : "Needs attention"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.database.ok)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Database</div>
-            <div className="mt-1 font-semibold">{snapshot.status.database.ok ? "Connected" : "Connection failed"}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide">Local Data Store</div>
+            <div className="mt-1 font-semibold">{snapshot.status.database.ok ? "Ready" : "Needs setup"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.schemaReady)}`}>
             <div className="text-xs font-semibold uppercase tracking-wide">Schema</div>
@@ -914,14 +872,10 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             <div className="text-xs font-semibold uppercase tracking-wide">First Sync</div>
             <div className="mt-1 font-semibold">{snapshot.status.firstSyncCompleted ? "Completed" : "Pending"}</div>
           </div>
-          <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.emailConfigured)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Email</div>
-            <div className="mt-1 font-semibold">{snapshot.status.emailConfigured ? "Configured" : "Optional / not set"}</div>
-          </div>
         </div>
         <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Config file:</span> {snapshot.configPath}</div>
-          <div className="mt-1"><span className="font-semibold text-slate-900">Database status:</span> {snapshot.status.database.message}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">Local store:</span> {snapshot.status.database.message}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">First successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
           {!snapshot.status.requiredComplete ? <div className="mt-1"><span className="font-semibold text-slate-900">Missing required values:</span> {missingLabel}</div> : null}
           {restartRequired ? <div className="mt-1"><span className="font-semibold text-slate-900">Restart required:</span> The running app has not applied the current desktop config yet.</div> : null}

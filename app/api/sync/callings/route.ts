@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
-import { query } from "@/src/db/pool";
+import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { getActiveSyncLaunchState, launchSyncJob } from "@/src/sync/syncControl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const running = await query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM sync_logs WHERE status = 'running'`
-  );
+  let runningCount = 0;
 
-  if (Number.parseInt(running.rows[0]?.count ?? "0", 10) > 0) {
+  const db = openSqliteSpikeDb();
+  try {
+    const row = db
+      .prepare(`SELECT COUNT(*) AS count FROM sync_logs WHERE status = 'running'`)
+      .get() as { count: number };
+    runningCount = row.count;
+  } finally {
+    db.close();
+  }
+
+  if (runningCount > 0) {
     return NextResponse.json(
       { started: false, message: "A sync is already running." },
       { status: 409 }

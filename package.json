@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && npm run build:backend",
-    "build:backend": "tsup src/mcp/server.ts src/scripts/runFullSync.ts src/scripts/runCallingSync.ts src/db/migrate.ts src/scripts/seedSyncSnapshots.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
+    "build:backend": "tsup src/mcp/server.ts src/sqlite/runFullSync.ts src/sqlite/runCallingSync.ts src/sqlite/init.ts src/sqlite/seedSyncSnapshots.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
     "desktop:start": "electron electron/main.cjs",
     "desktop:clean": "rm -rf release",
     "desktop:check-release": "node scripts/checkMacReleasePrereqs.mjs",
@@ -19,17 +19,17 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "sync:seed-baseline": "tsx src/scripts/seedSyncSnapshots.ts",
-    "sync:full": "tsx src/scripts/runFullSync.ts",
-    "sync:callings": "tsx src/scripts/runCallingSync.ts",
-    "sync:rebuild-callings": "tsx src/scripts/rebuildCallingsFromStoredColumns.ts",
+    "sqlite:init": "tsx src/sqlite/init.ts",
+    "sqlite:sync": "tsx src/sqlite/runFullSync.ts",
+    "sqlite:callings": "tsx src/sqlite/runCallingSync.ts",
+    "sqlite:seed-baseline": "tsx src/sqlite/seedSyncSnapshots.ts",
     "mcp:dev": "tsx src/mcp/server.ts",
     "mcp:build": "tsup src/mcp/server.ts --format cjs --out-dir dist --clean",
     "mcp:start": "node dist/server.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
+    "better-sqlite3": "^12.8.0",
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@electron/notarize": "^3.1.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.1",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
@@ -76,7 +77,7 @@
       ".next/**/*",
       "dist/**/*",
       "public/**/*",
-      "src/db/schema.sql",
+      "src/sqlite/schema.sql",
       "package.json",
       "package-lock.json"
     ],

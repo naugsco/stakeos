@@ -2,10 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { TransitionLaneChart } from "@/components/charts/transition-lane-chart";
 import { YouthBrowser } from "@/components/youth-browser";
-import { loadYouthPageData } from "@/lib/dashboardData";
+import { loadYouthPageDataBySource } from "@/lib/dashboardData";
 
 export default async function YouthPage() {
-  const data = await loadYouthPageData();
+  const data = await loadYouthPageDataBySource();
   const milestoneMap = new Map(data.transitionMilestones.map((row) => [row.label, row]));
   const organizationMap = new Map(data.organizationTransitions.map((row) => [row.label, row]));
   const womenMissionReady = milestoneMap.get("17-25 Mission Ready (Women)")?.completedCount ?? 0;
@@ -85,7 +85,12 @@ export default async function YouthPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Youth</h1>
+      <header>
+        <div>
+          <h1 className="text-2xl font-semibold">Youth</h1>
+          <p className="text-sm text-slate-600">Youth and young-adult progression, mission preparation, and seminary or institute follow-up.</p>
+        </div>
+      </header>
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Youth Transitions</h2>
@@ -110,7 +115,6 @@ export default async function YouthPage() {
       </section>
 
       <YouthBrowser
-        currentlyServingMissionaries={data.currentlyServingMissionaries}
         missionEligible={data.missionEligible}
         missionYouthPipeline={data.missionYouthPipeline}
         seminaryInstituteOpportunity={data.seminaryInstituteOpportunity}
