@@ -153,6 +153,11 @@ If you are publishing unsigned macOS builds, also tell users:
 - macOS may block the first launch
 - they can right-click the app and choose `Open`
 - or use `System Settings > Privacy & Security > Open Anyway`
+- if needed, they can run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/StakeOS Desktop.app"
+```
 
 The receiving user still needs:
 - their own LCR custom report URL

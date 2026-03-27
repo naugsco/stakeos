@@ -25,11 +25,19 @@ GitHub Releases:
 2. Drag `StakeOS Desktop.app` into `Applications`
 3. Open `Applications` and launch `StakeOS Desktop`
 
-If macOS blocks the app because it came from GitHub:
+If macOS blocks the app because Apple cannot confirm it is free of malware:
 
 1. Right-click `StakeOS Desktop.app`
 2. Choose `Open`
 3. If needed, use `System Settings > Privacy & Security > Open Anyway`
+
+If that still does not work, use Terminal:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/StakeOS Desktop.app"
+```
+
+Then try opening the app again.
 
 ## What StakeOS Stores On Your Mac
 

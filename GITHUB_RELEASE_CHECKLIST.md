@@ -117,6 +117,10 @@ If the build is unsigned or not notarized, include this note in the GitHub Relea
 
 > macOS may block the app on first launch. If that happens, right-click the app and choose **Open**, or use **System Settings > Privacy & Security > Open Anyway**.
 
+If you want a stronger fallback note for technical users, add:
+
+> If macOS still blocks the app, run `xattr -dr com.apple.quarantine "/Applications/StakeOS Desktop.app"` in Terminal and try again.
+
 ## Optional Signed Release
 
 If Apple signing/notarization is configured on the build machine:

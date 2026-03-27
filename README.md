@@ -21,6 +21,12 @@ Normal install path:
 
 Use the `.zip` only if the `.dmg` does not work for you.
 
+If macOS blocks the app on first launch because Apple cannot confirm it is free of malware:
+
+1. right-click `StakeOS Desktop.app`
+2. choose `Open`
+3. if needed, use `System Settings > Privacy & Security > Open Anyway`
+
 ## Start Here
 
 - Normal users installing StakeOS Desktop: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
