@@ -87,6 +87,12 @@ type SyncStatusPayload = {
     errorMessage: string | null;
     recordsProcessed: number;
   } | null;
+  latestSuccessfulFullSyncSummary: {
+    completedAt: string | null;
+    membersImported: number;
+    unitsFound: number;
+    callingsImported: number;
+  } | null;
 };
 
 type SyncLogPayload = {
@@ -107,10 +113,10 @@ const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "P
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
   { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
-  { id: "diagnostics", label: "Checks", description: "Prepare the local store and browser runtime." },
-  { id: "firstSync", label: "First Sync", description: "Log in through Playwright and populate the local SQLite store." },
-  { id: "optional", label: "Optional", description: "Optional MCP setup and reusable communication lists." },
-  { id: "finish", label: "Finish", description: "Open the app once local data is ready." }
+  { id: "diagnostics", label: "Prepare App", description: "Make sure StakeOS can open the report and save local data." },
+  { id: "firstSync", label: "Sync Data", description: "Run the first sync and bring your stake data into the app." },
+  { id: "optional", label: "Optional", description: "Optional Claude Desktop connection and saved leadership lists." },
+  { id: "finish", label: "Open App", description: "Review the first sync result and move into the dashboard." }
 ];
 
 const statusTone = (ok: boolean) =>
@@ -597,8 +603,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const renderAdvancedRuntimeSettings = () => (
     <div className="grid gap-6">
       <div className={sectionClassName}>
-        <h3 className="font-serif text-2xl text-slate-900">Advanced Runtime</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. Change these only if you need a custom browser profile location, headless automation, or custom metadata defaults.</p>
+        <h3 className="font-serif text-2xl text-slate-900">Advanced App Options</h3>
+        <p className="mt-2 text-sm text-slate-600">Optional. Most users do not need to change these.</p>
         <div className="mt-6 grid gap-5 md:grid-cols-2">
           <label className="block text-sm font-medium text-slate-700">
             Playwright User Data Directory
@@ -638,15 +644,15 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-5">
         <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.requiredComplete)}`}>
-          <div className="text-xs font-semibold uppercase tracking-wide">Required Config</div>
+          <div className="text-xs font-semibold uppercase tracking-wide">Report URL</div>
           <div className="mt-1 font-semibold">{snapshot.status.requiredComplete ? "Ready" : "Needs attention"}</div>
         </div>
         <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.schemaReady)}`}>
-          <div className="text-xs font-semibold uppercase tracking-wide">Schema</div>
-          <div className="mt-1 font-semibold">{snapshot.status.schemaReady ? "Ready" : "Missing"}</div>
+          <div className="text-xs font-semibold uppercase tracking-wide">Local Data</div>
+          <div className="mt-1 font-semibold">{snapshot.status.schemaReady ? "Ready" : "Needs setup"}</div>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <div className="text-xs font-semibold uppercase tracking-wide">Pass</div>
+          <div className="text-xs font-semibold uppercase tracking-wide">Passed</div>
           <div className="mt-1 font-semibold">{snapshot.status.diagnosticSummary.pass}</div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -661,9 +667,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
       {chromiumNeedsInstall ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-          <div className="font-semibold">Chromium is the one missing runtime piece.</div>
+          <div className="font-semibold">StakeOS needs its browser helper before the first sync can run.</div>
           <div className="mt-1">
-            Install it here and StakeOS will move straight to the first sync step when diagnostics are clear.
+            Install Chromium here and StakeOS will move straight to the sync step when the app is ready.
           </div>
           <div className="mt-3">
             <button
@@ -733,9 +739,37 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       </div>
 
       <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
-        <p>Run one full sync now. StakeOS will open Playwright if needed, and you can complete the LCR login manually in that browser session.</p>
-        <p className="mt-2">After the first full sync succeeds, the dashboard, reports, and MCP tools will all have local stake data available.</p>
+        <p>Run one full sync now. StakeOS will open its browser helper if needed, and you can complete the LCR sign-in manually in that browser window.</p>
+        <p className="mt-2">After the first full sync succeeds, the dashboard, reports, and optional Claude tools will all have local stake data available.</p>
       </div>
+
+      {syncStatus?.latestSuccessfulFullSyncSummary ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em]">Latest Full Sync Summary</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700">Members Imported</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">{syncStatus.latestSuccessfulFullSyncSummary.membersImported}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700">Units Found</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">{syncStatus.latestSuccessfulFullSyncSummary.unitsFound}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700">Callings Imported</div>
+              <div className="mt-1 text-xl font-semibold text-slate-900">{syncStatus.latestSuccessfulFullSyncSummary.callingsImported}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-emerald-700">Last Sync Time</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">
+                {syncStatus.latestSuccessfulFullSyncSummary.completedAt
+                  ? new Date(syncStatus.latestSuccessfulFullSyncSummary.completedAt).toLocaleString()
+                  : "None yet"}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -791,7 +825,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     <div className="grid gap-6">
       <div className={sectionClassName}>
         <h3 className="font-serif text-2xl text-slate-900">Saved Leadership Email Lists</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. These are used by the StakeOS email and MCP campaign tools for quick stake presidency and stake council targeting.</p>
+        <p className="mt-2 text-sm text-slate-600">Optional. These are only used if you want StakeOS to prepare quick leadership email groups.</p>
         <div className="mt-6 space-y-5">
           <label className="block text-sm font-medium text-slate-700">
             Stake Presidency Emails
@@ -804,9 +838,9 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         </div>
       </div>
       <div className={sectionClassName}>
-        <h3 className="font-serif text-2xl text-slate-900">Claude Desktop MCP</h3>
+        <h3 className="font-serif text-2xl text-slate-900">Optional Claude Desktop Integration</h3>
         <p className="mt-2 text-sm text-slate-600">
-          Optional. Register StakeOS as a local MCP server in Claude Desktop so Claude can query the same local SQLite data as the app.
+          Optional. Connect StakeOS to Claude Desktop so Claude can query the same local data as the app.
         </p>
         <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Claude config:</span> {snapshot.status.mcp.configPath}</div>
@@ -837,7 +871,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     <div className={sectionClassName}>
       <h2 className="font-serif text-2xl text-slate-900">System Status</h2>
       <p className="mt-2 text-sm text-slate-600">
-        Desktop config overrides <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env</code>. This panel shows setup gate status and the running Electron shell.
+        This panel shows whether the app is ready and whether the desktop shell is connected.
       </p>
       <div className="mt-6 grid gap-3 md:grid-cols-2">
         <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(Boolean(shellStatus?.available))}`}>
@@ -845,7 +879,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="mt-1 font-semibold">{shellStatus?.available ? "Connected" : "Unavailable"}</div>
         </div>
         <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.setupComplete && !restartRequired)}`}>
-          <div className="text-xs font-semibold uppercase tracking-wide">Setup Gate</div>
+          <div className="text-xs font-semibold uppercase tracking-wide">App Ready</div>
           <div className="mt-1 font-semibold">{snapshot.status.setupComplete && !restartRequired ? "Unlocked" : "Locked to setup"}</div>
         </div>
       </div>
@@ -870,7 +904,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">First-Run Setup</p>
           <h1 className="mt-3 font-serif text-4xl text-slate-900">StakeOS Desktop Setup</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Paste the stake&apos;s LCR report URL, let StakeOS prepare the local runtime, run the first sync, and then move straight into the app.
+            Paste the stake&apos;s LCR report URL, let StakeOS prepare the app, run the first sync, and then move straight into the dashboard.
           </p>
           <div className="mt-6 grid gap-3 md:grid-cols-6">
             {setupSteps.map((step, index) => {
@@ -908,12 +942,12 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             {wizardStep === "optional" ? renderOptionalSettings() : null}
             {wizardStep === "finish" ? (
               <div className="space-y-4 text-sm text-slate-600">
-                <p>StakeOS is ready. The required runtime configuration is active, the local prerequisites passed, and the first full sync is recorded.</p>
+                <p>StakeOS is ready. The report URL is saved, the app checks passed, and the first full sync is recorded.</p>
                 <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4">
-                  <div><span className="font-semibold text-slate-900">Required config:</span> {snapshot.status.requiredComplete ? "Ready" : "Still incomplete"}</div>
-                  <div className="mt-1"><span className="font-semibold text-slate-900">Prerequisites:</span> {snapshot.status.prerequisitesReady ? "Ready" : "Needs attention"}</div>
+                  <div><span className="font-semibold text-slate-900">Report URL:</span> {snapshot.status.requiredComplete ? "Ready" : "Still incomplete"}</div>
+                  <div className="mt-1"><span className="font-semibold text-slate-900">App checks:</span> {snapshot.status.prerequisitesReady ? "Ready" : "Needs attention"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">First sync:</span> {snapshot.status.firstSyncCompleted ? "Completed" : "Missing"}</div>
-                  <div className="mt-1"><span className="font-semibold text-slate-900">Claude Desktop MCP:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : "Optional and not configured"}</div>
+                  <div className="mt-1"><span className="font-semibold text-slate-900">Claude Desktop integration:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : "Optional and not configured"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">Last successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
                 </div>
               </div>
@@ -981,19 +1015,19 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Desktop Setup</p>
         <h1 className="mt-3 font-serif text-4xl text-slate-900">StakeOS Settings</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          StakeOS Desktop stores local configuration outside the repo and applies it before any fallback <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env</code> values.
+          Change the report URL, check app readiness, run syncs, and optionally connect Claude Desktop here.
         </p>
         <div className="mt-6 grid gap-3 md:grid-cols-5">
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.setupComplete && !restartRequired)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Setup Complete</div>
+            <div className="text-xs font-semibold uppercase tracking-wide">App Ready</div>
             <div className="mt-1 font-semibold">{snapshot.status.setupComplete && !restartRequired ? "Ready" : "Needs attention"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.database.ok)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Local Data Store</div>
+            <div className="text-xs font-semibold uppercase tracking-wide">Local Data</div>
             <div className="mt-1 font-semibold">{snapshot.status.database.ok ? "Ready" : "Needs setup"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.schemaReady)}`}>
-            <div className="text-xs font-semibold uppercase tracking-wide">Schema</div>
+            <div className="text-xs font-semibold uppercase tracking-wide">App Structure</div>
             <div className="mt-1 font-semibold">{snapshot.status.schemaReady ? "Ready" : "Missing"}</div>
           </div>
           <div className={`rounded-2xl border px-4 py-3 text-sm ${statusTone(snapshot.status.firstSyncCompleted)}`}>
@@ -1003,7 +1037,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         </div>
         <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Config file:</span> {snapshot.configPath}</div>
-          <div className="mt-1"><span className="font-semibold text-slate-900">Local store:</span> {snapshot.status.database.message}</div>
+          <div className="mt-1"><span className="font-semibold text-slate-900">Local data:</span> {snapshot.status.database.message}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">First successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
           {!snapshot.status.requiredComplete ? <div className="mt-1"><span className="font-semibold text-slate-900">Missing required values:</span> {missingLabel}</div> : null}
           {restartRequired ? <div className="mt-1"><span className="font-semibold text-slate-900">Restart required:</span> The running app has not applied the current desktop config yet.</div> : null}
@@ -1017,10 +1051,10 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="font-serif text-2xl text-slate-900">Required Core Settings</h2>
-              <p className="mt-2 text-sm text-slate-600">For most users, this is just the LCR report URL. Other runtime values can stay on the app defaults.</p>
+              <p className="mt-2 text-sm text-slate-600">For most users, this is just the LCR report URL. Everything else can stay on the app defaults.</p>
             </div>
             <button type="button" onClick={importFromEnv} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
-              {saving || restarting ? "Importing..." : "Import Current .env And Restart"}
+              {saving || restarting ? "Importing..." : "Import Developer .env And Restart"}
             </button>
           </div>
           <div className="mt-6">{renderRequiredSettings()}</div>
@@ -1032,11 +1066,11 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       <section className={sectionClassName}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-serif text-2xl text-slate-900">Diagnostics And Prerequisites</h2>
-            <p className="mt-2 text-sm text-slate-600">These checks verify that the machine, database, schema, and Playwright runtime are actually ready to support the desktop app.</p>
+            <h2 className="font-serif text-2xl text-slate-900">App Checks</h2>
+            <p className="mt-2 text-sm text-slate-600">These checks verify that StakeOS can save local data and open the LCR report correctly.</p>
           </div>
           <button type="button" onClick={() => void refreshSnapshot().catch((caughtError) => setError(caughtError instanceof Error ? caughtError.message : "Unable to refresh diagnostics."))} className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
-            Re-run Diagnostics
+            Re-run App Checks
           </button>
         </div>
         <div className="mt-6">{renderDiagnostics()}</div>
@@ -1044,8 +1078,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
       {!snapshot.status.firstSyncCompleted ? (
         <section className={sectionClassName}>
-          <h2 className="font-serif text-2xl text-slate-900">Guided First Sync</h2>
-          <p className="mt-2 text-sm text-slate-600">Run a full sync now so StakeOS has local data to populate the dashboard and MCP tools.</p>
+          <h2 className="font-serif text-2xl text-slate-900">First Sync</h2>
+          <p className="mt-2 text-sm text-slate-600">Run a full sync now so StakeOS can populate the dashboard with local data.</p>
           <div className="mt-6">{renderFirstSync()}</div>
         </section>
       ) : null}
@@ -1057,7 +1091,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       <div className="flex items-center justify-between rounded-[28px] border border-amber-900/10 bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div>
           <div className="text-sm font-semibold text-slate-900">Save Desktop Settings</div>
-          <div className="mt-1 text-sm text-slate-600">Runtime-critical changes auto-restart StakeOS Desktop. Optional settings save without restart.</div>
+          <div className="mt-1 text-sm text-slate-600">Changes to the report URL or browser settings automatically restart StakeOS Desktop. Optional settings save without restart.</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" onClick={() => void saveSettings()} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">

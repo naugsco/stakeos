@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 PID_FILE="$PROJECT_DIR/.run/dashboard.pid"
 PORT="${PORT:-3000}"
 

@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUN_DIR="$PROJECT_DIR/.run"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$RUN_DIR/calling-sync-$TIMESTAMP.log"
@@ -16,7 +17,7 @@ echo "Started: $(date)"
 echo "========================================"
 
 action_ok=true
-if npm run sync:callings 2>&1 | tee "$LOG_FILE"; then
+if npm run sqlite:callings 2>&1 | tee "$LOG_FILE"; then
   echo ""
   echo "Quick calling update completed successfully."
   osascript -e 'display notification "StakeOS calling update completed." with title "StakeOS"'

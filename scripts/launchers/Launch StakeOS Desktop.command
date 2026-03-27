@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUN_DIR="$PROJECT_DIR/.run"
 LOG_FILE="$RUN_DIR/desktop-launcher.log"
 

@@ -1,7 +1,8 @@
 #!/bin/zsh
 set -euo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 RUN_DIR="$PROJECT_DIR/.run"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$RUN_DIR/full-sync-$TIMESTAMP.log"
@@ -17,15 +18,15 @@ echo "Started: $(date)"
 echo "========================================"
 
 echo ""
-echo "Step 1/2: Ensure database schema is up to date"
-npm run db:migrate
+echo "Step 1/2: Ensure local SQLite store is initialized"
+npm run sqlite:init
 
 echo ""
 echo "Step 2/2: Run full directory sync"
 echo "A browser window may open. Complete LCR login manually and wait for the report rows to load."
 
 action_ok=true
-if npm run sync:full 2>&1 | tee "$LOG_FILE"; then
+if npm run sqlite:sync 2>&1 | tee "$LOG_FILE"; then
   echo ""
   echo "Directory update completed successfully."
   osascript -e 'display notification "StakeOS full directory update completed." with title "StakeOS"'

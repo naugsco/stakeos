@@ -1,6 +1,8 @@
 # StakeOS Desktop Release Guide
 
-This guide covers how to build and share the Electron desktop version of StakeOS.
+This guide is for maintainers building and sharing the Electron desktop version of StakeOS.
+
+If you are a normal user trying to install StakeOS, use [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md) instead.
 
 For a short maintainer publish checklist, use [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md).
 
@@ -141,9 +143,11 @@ npm run desktop:release
 ## What To Share With Another User
 
 For a GitHub release or direct handoff, share:
-- the source repo link
-- the desktop release zip or dmg from `release/`
+- the GitHub Release page
+- the desktop `.dmg` as the primary install artifact
+- the `.zip` as a fallback artifact
 - the installation guide: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
+- the LCR report guide: [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md)
 
 If you are publishing unsigned macOS builds, also tell users:
 - macOS may block the first launch
@@ -151,11 +155,10 @@ If you are publishing unsigned macOS builds, also tell users:
 - or use `System Settings > Privacy & Security > Open Anyway`
 
 The receiving user still needs:
-- the SQLite database is created automatically on first sync
 - their own LCR custom report URL
-- Playwright Chromium installed
+- the first sync to run successfully
 
-If they are using the packaged desktop app, StakeOS can install Chromium from the in-app `Settings` diagnostics panel.
+If they are using the packaged desktop app, StakeOS can install Chromium from the in-app setup flow.
 
 ## Packaging Notes
 
@@ -176,8 +179,7 @@ A practical GitHub workflow is:
 4. link users to:
    - the release asset
    - [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
-   - [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)
-   - MCP setup instructions in [README.md](./README.md)
+   - [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md)
 
 ## Not Yet Included
 
