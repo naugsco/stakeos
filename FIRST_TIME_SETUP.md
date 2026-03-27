@@ -50,12 +50,15 @@ StakeOS stores its local data here:
 You do **not** need PostgreSQL.
 You do **not** need a `.env` file.
 You do **not** need to install Node.js to use the packaged desktop app.
+You do **not** need any `Launcher.app` helper from the source repository.
 
 ## Before First Launch
 
 You need one thing ready:
 
 - your stake's **LCR custom report URL**
+
+Nothing else needs to be configured in Terminal first.
 
 If you still need to create that report, use [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md).
 

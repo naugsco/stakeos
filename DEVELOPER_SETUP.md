@@ -37,6 +37,7 @@ Useful development values:
 
 ```env
 NODE_ENV=development
+SQLITE_DB_PATH=/absolute/path/to/dev-stakeos.db
 PLAYWRIGHT_USER_DATA_DIR=.playwright/profile
 PLAYWRIGHT_HEADLESS=false
 LCR_DIRECTORY_URL=https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/YOUR-REPORT-ID
@@ -48,8 +49,11 @@ UNIT_NUMBER=000000
 Notes:
 
 - `LCR_DIRECTORY_URL` is the one value that really matters for first setup
+- `DATABASE_URL` is obsolete and should not be used for the desktop app or source app path
+- `SQLITE_DB_PATH` is optional; omit it unless you want the SQLite file somewhere other than the default Application Support path
 - `PLAYWRIGHT_HEADLESS=false` is recommended while developing sync flows
 - `SMTP_*` values are optional
+- the repo-root `StakeOS Desktop Launcher.app` and `StakeOS Dashboard Launcher.app` are local helper apps only, not release artifacts
 
 ## Common Commands
 

@@ -21,6 +21,13 @@ Normal install path:
 
 Use the `.zip` only if the `.dmg` does not work for you.
 
+You do **not** need:
+
+- Node.js
+- PostgreSQL
+- a `.env` file
+- any of the local launcher apps in this repository
+
 If macOS blocks the app on first launch because Apple cannot confirm it is free of malware:
 
 1. right-click `StakeOS Desktop.app`
@@ -87,6 +94,12 @@ If macOS blocks the app on first launch because Apple cannot confirm it is free 
 ## Source Setup
 
 If you are developing StakeOS from source, use [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md).
+
+Important for developers:
+
+- the app path is SQLite-first
+- `DATABASE_URL` is no longer used
+- use `SQLITE_DB_PATH` only if you want to override the default SQLite file location
 
 ## Running StakeOS
 
@@ -209,6 +222,8 @@ Then restart Claude Desktop.
 7. Optionally enable Claude Desktop MCP from StakeOS Settings
 
 ## Useful Commands
+
+These are source-development commands, not end-user install steps.
 
 ```bash
 npm run typecheck
