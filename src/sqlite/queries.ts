@@ -1955,8 +1955,9 @@ export const loadSqliteSpikeCallingsList = async () => {
       c.title AS callingTitle,
       c.organization_name AS organizationName,
       c.lcr_member_id AS lcrMemberId,
+      m.primary_email AS email,
       COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
-      COALESCE(NULLIF(c.unit_name, ''), NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), 'Unknown') AS unitName,
+      COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
       c.sustained_on AS sustainedOn,
       c.is_current AS isCurrent
     FROM callings c
@@ -1965,6 +1966,7 @@ export const loadSqliteSpikeCallingsList = async () => {
       callingTitle: string;
       organizationName: string | null;
       lcrMemberId: string | null;
+      email: string | null;
       fullName: string | null;
       unitName: string;
       sustainedOn: string | null;
@@ -1973,11 +1975,12 @@ export const loadSqliteSpikeCallingsList = async () => {
 
     const byKey = new Map<string, {
       callingTitle: string;
-      organizationName: string | null;
-      lcrMemberId: string | null;
-      fullName: string | null;
-      unitName: string;
-      isLeadership: boolean;
+        organizationName: string | null;
+        lcrMemberId: string | null;
+        email: string | null;
+        fullName: string | null;
+        unitName: string;
+        isLeadership: boolean;
       sustainedOn: string | null;
       isCurrent: boolean;
       rawTitle: string;

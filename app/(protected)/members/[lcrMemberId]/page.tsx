@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EmailListInline, PhoneListInline } from "@/components/contact-links";
+import { AddressMapLinks, DirectionsAddressLink, EmailListInline, OpenAddressLink, PhoneListInline } from "@/components/contact-links";
 import { loadMemberDetailPageDataBySource } from "@/lib/dashboardData";
 
 interface MemberDetailPageProps {
@@ -18,6 +18,11 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   if (!member) {
     notFound();
   }
+
+  const fullAddress =
+    [member.addressLine1, member.addressLine2, member.city, member.stateOrProvince, member.postalCode, member.country]
+      .filter(Boolean)
+      .join(", ") || null;
 
   return (
     <div className="space-y-6">
@@ -70,9 +75,11 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
           <div className="space-y-2 text-sm">
             <p>
               <span className="text-slate-500">Address:</span>{" "}
-              {[member.addressLine1, member.addressLine2, member.city, member.stateOrProvince, member.postalCode, member.country]
-                .filter(Boolean)
-                .join(", ") || "-"}
+              <OpenAddressLink address={fullAddress} />
+            </p>
+            <p>
+              <span className="text-slate-500">Map:</span>{" "}
+              <AddressMapLinks parts={[member.addressLine1, member.addressLine2, member.city, member.stateOrProvince, member.postalCode, member.country]} />
             </p>
             <p>
               <span className="text-slate-500">Emails:</span> <EmailListInline emails={member.emails} />
@@ -183,6 +190,12 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold">Household</h2>
+        {fullAddress ? (
+          <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+            <OpenAddressLink address={fullAddress} label="View on Map" />
+            <DirectionsAddressLink address={fullAddress} />
+          </div>
+        ) : null}
         {member.householdMembers.length === 0 ? (
           <p className="text-sm text-slate-600">No household members found.</p>
         ) : (

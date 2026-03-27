@@ -121,3 +121,73 @@ export function PhoneListInline({ phones }: { phones: string[] }) {
     </div>
   );
 }
+
+const compactAddress = (parts: Array<string | null | undefined>) =>
+  parts.map((part) => part?.trim() ?? "").filter(Boolean).join(", ");
+
+export function OpenAddressLink({
+  address,
+  className = emailClassName,
+  label
+}: {
+  address: string | null | undefined;
+  className?: string;
+  label?: string;
+}) {
+  const trimmed = address?.trim();
+  if (!trimmed) {
+    return <>-</>;
+  }
+
+  const query = encodeURIComponent(trimmed);
+  return (
+    <a href={`https://www.google.com/maps/search/?api=1&query=${query}`} target="_blank" rel="noreferrer" className={className}>
+      {label ?? trimmed}
+    </a>
+  );
+}
+
+export function DirectionsAddressLink({
+  address,
+  className = emailClassName
+}: {
+  address: string | null | undefined;
+  className?: string;
+}) {
+  const trimmed = address?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const destination = encodeURIComponent(trimmed);
+  return (
+    <a
+      href={`https://www.google.com/maps/dir/?api=1&destination=${destination}`}
+      target="_blank"
+      rel="noreferrer"
+      className={className}
+    >
+      Directions
+    </a>
+  );
+}
+
+export function AddressMapLinks({
+  parts,
+  className = emailClassName
+}: {
+  parts: Array<string | null | undefined>;
+  className?: string;
+}) {
+  const address = compactAddress(parts);
+  if (!address) {
+    return <>-</>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <OpenAddressLink address={address} className={className} />
+      <DirectionsAddressLink address={address} className={className} />
+    </div>
+  );
+}

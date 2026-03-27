@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { EmailAddressLink } from "@/components/contact-links";
 
 type CallingRow = {
   callingTitle: string;
   organizationName: string | null;
   lcrMemberId: string | null;
+  email: string | null;
   fullName: string | null;
   unitName: string;
   isLeadership: boolean;
@@ -53,7 +55,15 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
-export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
+const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
+
+export function CallingsBrowser({
+  callings,
+  availableUnits
+}: {
+  callings: CallingRow[];
+  availableUnits: string[];
+}) {
   const [callingFilter, setCallingFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
   const [leadershipOnly, setLeadershipOnly] = useState(false);
@@ -61,11 +71,11 @@ export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const unitOptions = useMemo(() => {
-    const units = Array.from(new Set(callings.map((item) => item.unitName).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b)
-    );
+    const units = Array.from(
+      new Set([...availableUnits.filter(Boolean), ...callings.map((item) => item.unitName).filter(Boolean)])
+    ).sort((a, b) => a.localeCompare(b));
     return ["all", ...units];
-  }, [callings]);
+  }, [availableUnits, callings]);
 
   const filteredCallings = useMemo(() => {
     const needle = callingFilter.trim().toLowerCase();
@@ -84,6 +94,24 @@ export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
 
   const currentCount = filteredCallings.filter((calling) => calling.isCurrent).length;
   const leadershipCount = filteredCallings.filter((calling) => calling.isLeadership).length;
+  const visibleEmailList = useMemo(() => {
+    return Array.from(
+      new Set(
+        filteredCallings
+          .map((calling) => calling.email?.trim() ?? "")
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [filteredCallings]);
+  const emailVisibleHref = useMemo(() => {
+    if (visibleEmailList.length === 0) {
+      return null;
+    }
+
+    const recipients = visibleEmailList.join(",");
+    const subject = unitFilter === "all" ? "StakeOS filtered callings" : `StakeOS callings - ${unitFilter}`;
+    return `mailto:?bcc=${encodeMailtoValue(recipients)}&subject=${encodeMailtoValue(subject)}`;
+  }, [unitFilter, visibleEmailList]);
   const groupedByUnit = useMemo(() => {
     const grouped = new Map<string, CallingRow[]>();
     for (const calling of filteredCallings) {
@@ -185,6 +213,33 @@ export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
         </div>
       </section>
 
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+        <div>
+          <p className="text-slate-500">Visible Calling Emails</p>
+          <p className="font-semibold text-slate-900">{visibleEmailList.length}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {visibleEmailList.length > 0 ? (
+            <div className="hidden max-w-[28rem] text-xs text-slate-500 md:block">
+              {visibleEmailList.slice(0, 3).join(", ")}
+              {visibleEmailList.length > 3 ? ` + ${visibleEmailList.length - 3} more` : ""}
+            </div>
+          ) : null}
+          {emailVisibleHref ? (
+            <a
+              href={emailVisibleHref}
+              className="rounded-full bg-teal-700 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-teal-800"
+            >
+              Email Filtered Callings
+            </a>
+          ) : (
+            <div className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-400">
+              No visible emails
+            </div>
+          )}
+        </div>
+      </section>
+
       {groupedByUnit.length === 0 ? (
         <section className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
           No callings match the current filters.
@@ -235,9 +290,12 @@ export function CallingsBrowser({ callings }: { callings: CallingRow[] }) {
                   <td className="px-4 py-3">{calling.isLeadership ? "Yes" : "No"}</td>
                   <td className="px-4 py-3 text-slate-700">
                     {calling.fullName && calling.lcrMemberId ? (
-                      <Link href={`/members/${encodeURIComponent(calling.lcrMemberId)}`} className="hover:underline">
-                        {calling.fullName}
-                      </Link>
+                      <div className="space-y-1">
+                        <Link href={`/members/${encodeURIComponent(calling.lcrMemberId)}`} className="hover:underline">
+                          {calling.fullName}
+                        </Link>
+                        {calling.email ? <div className="text-xs"><EmailAddressLink email={calling.email} /></div> : null}
+                      </div>
                     ) : (
                       "Vacant"
                     )}

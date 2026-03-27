@@ -74,16 +74,26 @@ export function MembersTable({
   const [sortKey, setSortKey] = useState<SortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchTerm, setSearchTerm] = useState("");
+  const [unitFilter, setUnitFilter] = useState("all");
+
+  const unitOptions = useMemo(() => {
+    const units = Array.from(new Set(members.map((member) => member.unitName?.trim() ?? "").filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    return ["all", ...units];
+  }, [members]);
 
   const visibleRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    const filtered = query
-      ? members.filter((member) => member.fullName.toLowerCase().includes(query))
-      : members;
+    const filtered = members.filter((member) => {
+      const searchMatch = !query || member.fullName.toLowerCase().includes(query);
+      const unitMatch = unitFilter === "all" || (member.unitName ?? "") === unitFilter;
+      return searchMatch && unitMatch;
+    });
     const copy = [...filtered];
     copy.sort((left, right) => compareValues(left[sortKey], right[sortKey], sortDirection));
     return copy;
-  }, [members, searchTerm, sortKey, sortDirection]);
+  }, [members, searchTerm, sortKey, sortDirection, unitFilter]);
 
   const updateSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -97,17 +107,38 @@ export function MembersTable({
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-search">
-          Search Members by Name
-        </label>
-        <input
-          id="member-search"
-          type="search"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Start typing a member name..."
-          className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-amber-300 transition focus:ring-2"
-        />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-search">
+              Search Members by Name
+            </label>
+            <input
+              id="member-search"
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Start typing a member name..."
+              className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-amber-300 transition focus:ring-2"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-unit-filter">
+              Filter Unit
+            </label>
+            <select
+              id="member-unit-filter"
+              value={unitFilter}
+              onChange={(event) => setUnitFilter(event.target.value)}
+              className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-amber-300 transition focus:ring-2"
+            >
+              {unitOptions.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit === "all" ? "Entire Stake" : unit}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
       <table className="sticky-pane min-w-full divide-y divide-slate-200 text-sm">
         <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">

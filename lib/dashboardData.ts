@@ -77,7 +77,10 @@ export const loadMemberDetailPageDataBySource = async (lcrMemberId: string) =>
   loadSqliteSpikeMemberDetail(lcrMemberId);
 
 export const loadCallingsPageDataBySource = async () =>
-  ({ callings: await loadSqliteSpikeCallingsList() });
+  ({
+    callings: await loadSqliteSpikeCallingsList(),
+    availableUnits: await loadSqliteSpikeAvailableUnits()
+  });
 
 export const loadCommitteesPageDataBySource = async () =>
   loadSqliteSpikeCommitteesPageData();

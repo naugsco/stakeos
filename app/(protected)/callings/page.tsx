@@ -4,7 +4,7 @@ import { CallingsBrowser } from "@/components/callings-browser";
 import { loadCallingsPageDataBySource } from "@/lib/dashboardData";
 
 export default async function CallingsPage() {
-  const { callings } = await loadCallingsPageDataBySource();
+  const { callings, availableUnits } = await loadCallingsPageDataBySource();
 
   return (
     <div className="space-y-6">
@@ -14,7 +14,7 @@ export default async function CallingsPage() {
           <p className="text-sm text-slate-600">Current calling assignments grouped by unit with leadership and sustain-date context.</p>
         </div>
       </header>
-      <CallingsBrowser callings={callings} />
+      <CallingsBrowser callings={callings} availableUnits={availableUnits} />
     </div>
   );
 }
