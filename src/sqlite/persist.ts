@@ -847,7 +847,7 @@ export const persistSqliteSpikeCallingsSnapshot = async (
 };
 
 export const seedSqliteSpikeSnapshotsFromCurrentState = async (
-  syncType = "sqlite_spike_baseline_seed"
+  syncType = "sqlite_baseline_seed"
 ): Promise<PersistResult> => {
   const db = openSqliteSpikeDb();
   ensureSqliteSpikeSchema(db);

@@ -13,7 +13,7 @@ For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GIT
 - SQLite (better-sqlite3)
 - Next.js + Tailwind + Recharts (dashboard)
 - MCP server for Claude Desktop
-- Nodemailer email delivery
+- Nodemailer email delivery (optional MCP/email workflows)
 - dotenv configuration
 
 ## Services
@@ -50,7 +50,7 @@ For maintainers publishing GitHub binaries, use [GitHub Release Checklist](./GIT
   - `/stake-overview`
 - Charts include:
   - leadership turnover
-  - calling vacancies
+  - calling coverage
   - mission eligibility
   - youth progression
   - recent convert growth
@@ -71,8 +71,9 @@ cp .env.example .env
 ```
 
 Update `.env` values:
-- `SMTP_*` values (for email tools)
+- `LCR_DIRECTORY_URL`
 - `STAKE_*` metadata and report recipients
+- `SMTP_*` values only if you plan to use advanced email workflows
 
 ### 3. Initialize database
 
@@ -159,6 +160,14 @@ npm run mcp:start
 
 ### Claude Desktop configuration
 
+Preferred path:
+- in StakeOS Desktop, open `Settings`
+- go to the `Claude Desktop MCP` section
+- use `Enable StakeOS MCP In Claude Desktop`
+- then fully restart Claude Desktop
+
+Manual fallback:
+
 On macOS, edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
 
 ```json
@@ -210,7 +219,6 @@ npm run desktop:release
 ## Project Structure
 
 - `src/sync/*` - Playwright sync engine + normalization + persistence
-- `src/db/pool.ts` - PostgreSQL connection (MCP server, transitional)
 - `src/sqlite/*` - SQLite database, schema, sync, and queries
 - `src/services/*` - intelligence, reports, email, WhatsApp data services
 - `src/mcp/server.ts` - MCP server/tool definitions

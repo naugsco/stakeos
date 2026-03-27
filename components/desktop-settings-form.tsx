@@ -261,7 +261,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     }
 
     const latest = syncStatus.latest;
-    if (latest.status !== "success" || latest.syncType !== "sqlite_spike_full_sync") {
+    if (latest.status !== "success" || !["sqlite_full_sync", "sqlite_spike_full_sync"].includes(latest.syncType)) {
       return;
     }
 

@@ -1,7 +1,4 @@
-import { query } from "@/src/db/pool";
 import type { VisualOrgAssignedPerson, VisualOrgMeetingRoster, VisualOrgPayload, VisualOrgRoleAssignment } from "@/src/types/visualOrg";
-
-const fullNameExpr = `TRIM(CONCAT_WS(' ', NULLIF(m.first_name, ''), NULLIF(m.middle_name, ''), NULLIF(m.last_name, '')))`; 
 
 export type VisualOrgSourceRow = {
   lcrMemberId: string;
@@ -121,9 +118,6 @@ const MEETING_ROLE_IDS: Record<string, { title: string; attendeeRoleIds: string[
   stakePriesthoodLeadership: { title: "Stake PH Leadership", attendeeRoleIds: ["stakePresident", "highCouncilor", "stakeRS"] }
 };
 
-const BROAD_CALLING_PATTERN =
-  "(stake|bishop|branch president|branch presidency|clerk|executive secretary|elders quorum|relief society|young women|primary|sunday school|mission leader|temple and family history)";
-
 export const normalizeVisualOrgUnit = (unit?: string | null) => {
   const trimmed = unit?.trim();
   if (!trimmed || /^entire stake$/i.test(trimmed) || /^all units$/i.test(trimmed)) {
@@ -154,49 +148,6 @@ const dedupePeople = (rows: VisualOrgAssignedPerson[]) => {
     seen.add(key);
     return true;
   });
-};
-
-export const getVisualOrgData = async (unit?: string | null): Promise<VisualOrgPayload> => {
-  const selectedUnit = normalizeVisualOrgUnit(unit);
-  const result = await query<VisualOrgSourceRow>(
-    `
-    SELECT
-      m.lcr_member_id AS "lcrMemberId",
-      ${fullNameExpr} AS "fullName",
-      COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') AS "unitName",
-      c.title AS "callingTitle",
-      e.email,
-      p.phone_number AS "phoneNumber"
-    FROM current_callings_dedup c
-    JOIN members m ON c.member_id = m.id
-    LEFT JOIN units u ON m.unit_id = u.id
-    LEFT JOIN LATERAL (
-      SELECT email
-      FROM emails
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) e ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT phone_number
-      FROM phone_numbers
-      WHERE member_id = m.id
-      ORDER BY is_primary DESC, updated_at DESC
-      LIMIT 1
-    ) p ON TRUE
-    WHERE c.title ~* $1
-      AND (
-        $2::text IS NULL
-        OR COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown') = $2
-        OR c.title ~* '^Stake '
-      )
-      AND (m.member_status IS NULL OR m.member_status ILIKE 'active%')
-    ORDER BY COALESCE(NULLIF(m.unit_name, ''), u.name, m.unit_abbreviation, 'Unknown'), c.title, m.last_name, m.first_name
-    `,
-    [BROAD_CALLING_PATTERN, selectedUnit]
-  );
-
-  return buildVisualOrgPayload(result.rows, selectedUnit);
 };
 
 export const buildVisualOrgPayload = (

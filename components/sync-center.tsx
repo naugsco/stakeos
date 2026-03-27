@@ -34,12 +34,15 @@ const cardClassName =
 
 const formatSyncType = (value: string) => {
   switch (value) {
+    case "sqlite_full_sync":
     case "sqlite_spike_full_sync":
     case "nightly_full_directory_sync":
       return "Full Directory Sync";
+    case "sqlite_calling_sync":
     case "sqlite_spike_calling_sync":
     case "hourly_calling_sync":
       return "Calling Sync";
+    case "sqlite_baseline_seed":
     case "sqlite_spike_baseline_seed":
       return "Baseline Seed";
     default:

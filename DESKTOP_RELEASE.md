@@ -152,7 +152,9 @@ If you are publishing unsigned macOS builds, also tell users:
 The receiving user still needs:
 - the SQLite database is created automatically on first sync
 - their own LCR custom report URL
-- Playwright Chromium installed if they are running from source
+- Playwright Chromium installed
+
+If they are using the packaged desktop app, StakeOS can install Chromium from the in-app `Settings` diagnostics panel.
 
 ## Packaging Notes
 
@@ -181,6 +183,6 @@ A practical GitHub workflow is:
 These are not done yet:
 - automated signing identity discovery guidance inside the app
 - notarization verification UI inside the repo tooling
-- automatic Playwright/Chromium installation inside the packaged app
+- fully automatic first-run Chromium installation without the user clicking the in-app setup action
 
 Those are the next packaging-quality steps after this release baseline.

@@ -237,80 +237,165 @@ function createSplashWindow() {
           body {
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: linear-gradient(180deg, #fffdf8 0%, #f4efe3 100%);
+            background:
+              radial-gradient(circle at top left, rgba(15,118,110,0.16), transparent 38%),
+              radial-gradient(circle at bottom right, rgba(245,158,11,0.18), transparent 36%),
+              linear-gradient(180deg, #fffdf8 0%, #f4efe3 100%);
             color: #1f2937;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            overflow: hidden;
           }
           .shell {
-            width: 340px;
-            padding: 28px 28px 24px;
-            border: 1px solid #d9d2c3;
-            border-radius: 24px;
-            background: rgba(255, 253, 248, 0.96);
-            box-shadow: 0 24px 64px rgba(15, 23, 42, 0.08);
+            width: 408px;
+            padding: 30px 30px 26px;
+            border: 1px solid rgba(149, 123, 79, 0.18);
+            border-radius: 30px;
+            background: rgba(255, 252, 246, 0.94);
+            box-shadow:
+              0 28px 80px rgba(15, 23, 42, 0.10),
+              inset 0 1px 0 rgba(255,255,255,0.7);
+            backdrop-filter: blur(18px);
+          }
+          .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 18px;
+          }
+          .mark {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            background:
+              linear-gradient(145deg, rgba(15,118,110,0.18), rgba(245,158,11,0.16)),
+              #fff;
+            border: 1px solid rgba(15,118,110,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.75);
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f766e;
           }
           .eyebrow {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.16em;
             text-transform: uppercase;
             color: #0f766e;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
           }
           h1 {
-            font-size: 28px;
-            line-height: 1.1;
-            margin: 0 0 10px;
+            font-size: 30px;
+            line-height: 1.02;
+            margin: 0;
+            font-family: "Iowan Old Style", "Palatino Linotype", serif;
           }
           p {
             font-size: 13px;
-            line-height: 1.5;
+            line-height: 1.55;
             color: #64748b;
             margin: 0 0 18px;
           }
           .status {
+            min-height: 48px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            border: 1px solid rgba(15,118,110,0.12);
+            background: rgba(255,255,255,0.74);
             font-size: 14px;
             font-weight: 600;
             color: #334155;
-            min-height: 22px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+          }
+          .substatus {
+            margin-top: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748b;
+          }
+          .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 18px 0 16px;
+          }
+          .chip {
+            padding: 8px 11px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(255,255,255,0.74);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #475569;
           }
           .bar {
-            margin-top: 14px;
-            height: 8px;
+            margin-top: 16px;
+            height: 10px;
             border-radius: 999px;
             overflow: hidden;
-            background: #e7e0d1;
+            background: rgba(215, 207, 190, 0.72);
           }
           .bar::after {
             content: '';
             display: block;
             height: 100%;
-            width: 38%;
+            width: 36%;
             border-radius: 999px;
             background: linear-gradient(90deg, #0f766e 0%, #f59e0b 100%);
             animation: pulse 1.6s ease-in-out infinite;
           }
+          .footer {
+            margin-top: 16px;
+            font-size: 11px;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+          }
           @keyframes pulse {
-            0% { transform: translateX(-20%); width: 30%; }
-            50% { transform: translateX(90%); width: 45%; }
-            100% { transform: translateX(-20%); width: 30%; }
+            0% { transform: translateX(-18%); width: 28%; }
+            50% { transform: translateX(95%); width: 42%; }
+            100% { transform: translateX(-18%); width: 28%; }
           }
         </style>
       </head>
       <body>
         <div class="shell">
-          <div class="eyebrow">StakeOS Desktop</div>
-          <h1>Launching StakeOS</h1>
-          <p>The desktop shell is starting the local StakeOS dashboard and services.</p>
-          <div id="status" class="status">Preparing application shell...</div>
+          <div class="brand">
+            <div class="mark">S</div>
+            <div>
+              <div class="eyebrow">StakeOS Desktop</div>
+              <h1>Launching StakeOS</h1>
+            </div>
+          </div>
+          <p>The desktop shell is loading the local dashboard, SQLite data store, browser automation runtime, and MCP services.</p>
+          <div class="chips">
+            <div class="chip">Local Dashboard</div>
+            <div class="chip">SQLite Data</div>
+            <div class="chip">Playwright</div>
+            <div class="chip">MCP Ready</div>
+          </div>
+          <div id="status" class="status">
+            Preparing application shell...
+            <div class="substatus">StakeOS is checking local artifacts and starting the internal server.</div>
+          </div>
           <div class="bar"></div>
+          <div class="footer">
+            <span>Private local data</span>
+            <span>Manual LCR login</span>
+          </div>
         </div>
         <script>
           window.__setStatus = (message) => {
-            document.getElementById('status').textContent = message;
+            const statusEl = document.getElementById('status');
+            statusEl.innerHTML = message + '<div class="substatus">StakeOS stays local on this Mac and uses your existing browser session for LCR.</div>';
           };
         </script>
       </body>

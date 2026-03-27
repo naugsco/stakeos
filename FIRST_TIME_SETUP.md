@@ -152,7 +152,7 @@ UNIT_NUMBER=000000
 Notes:
 - `PLAYWRIGHT_HEADLESS=false` is recommended for first sync so you can log in manually.
 - `LCR_DIRECTORY_URL` should be your stake's LCR custom report URL.
-- SMTP settings can be left blank until you are ready to use email features.
+- `SMTP_*` settings can stay blank unless you plan to use advanced email workflows.
 
 ## 6. LCR Custom Report Specification
 
@@ -358,6 +358,8 @@ npm run sqlite:init
 
 This creates the SQLite database and schema automatically.
 
+If you are using StakeOS Desktop instead of the source workflow, the Settings page can also initialize the local store for you.
+
 ## 8. Run the First Full Sync
 
 Run:
@@ -416,6 +418,14 @@ npm run mcp:start
 ```
 
 ## 12. Connect StakeOS to Claude Desktop
+
+Preferred desktop-app path:
+- open `Settings` in StakeOS Desktop
+- find `Claude Desktop MCP`
+- click `Enable StakeOS MCP In Claude Desktop`
+- then fully restart Claude Desktop
+
+Manual fallback:
 
 On macOS, edit:
 

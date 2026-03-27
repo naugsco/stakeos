@@ -5,7 +5,7 @@ import { persistSqliteSpikeCallingsSnapshot } from "@/src/sqlite/persist";
 const main = async () => {
   const scraper = new LcrScraper();
   const snapshot = await scraper.scrapeDirectory();
-  const result = await persistSqliteSpikeCallingsSnapshot("sqlite_spike_calling_sync", snapshot);
+  const result = await persistSqliteSpikeCallingsSnapshot("sqlite_calling_sync", snapshot);
   console.log(`SQLite calling sync completed. Records processed: ${result.recordsProcessed}`);
   console.log(`SQLite database: ${getSqliteSpikeDbPath()}`);
 };

@@ -8,7 +8,6 @@ import { z } from "zod";
 import { getClaudeDesktopMcpStatus } from "@/src/setup/mcpSetup";
 
 const desktopConfigSchema = z.object({
-  DATABASE_URL: z.string().optional(),
   SQLITE_DB_PATH: z.string().optional(),
   LCR_DIRECTORY_URL: z.string().optional(),
   PLAYWRIGHT_USER_DATA_DIR: z.string().optional(),
@@ -364,7 +363,7 @@ const inspectDatabase = async (): Promise<DatabaseInspection> => {
              completed_at AS completedAt
            FROM sync_logs
            WHERE status = 'success'
-             AND sync_type = 'sqlite_spike_full_sync'
+             AND sync_type IN ('sqlite_full_sync', 'sqlite_spike_full_sync')
              AND completed_at IS NOT NULL
            ORDER BY completed_at DESC, id DESC
            LIMIT 1`
@@ -476,7 +475,6 @@ export const getDesktopConfigSnapshot = async () => {
     configExists: existsSync(getDesktopConfigPath()),
     storedConfig,
     effectiveConfig: {
-      DATABASE_URL: effectiveEnv.DATABASE_URL || "",
       LCR_DIRECTORY_URL: effectiveEnv.LCR_DIRECTORY_URL || "",
       PLAYWRIGHT_USER_DATA_DIR: effectiveEnv.PLAYWRIGHT_USER_DATA_DIR || "",
       PLAYWRIGHT_HEADLESS: effectiveEnv.PLAYWRIGHT_HEADLESS || "",
