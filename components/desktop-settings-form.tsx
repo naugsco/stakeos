@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LcrReportHelper } from "@/components/lcr-report-helper";
 
 type DiagnosticActionKey = "initialize_local_store" | "install_chromium" | "configure_mcp";
 
@@ -95,7 +96,7 @@ type SyncLogPayload = {
   message?: string;
 };
 
-type SetupStep = "welcome" | "required" | "diagnostics" | "firstSync" | "optional" | "finish";
+type SetupStep = "required" | "diagnostics" | "firstSync" | "optional" | "finish";
 
 const fieldClassName =
   "mt-2 w-full rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20";
@@ -105,10 +106,9 @@ const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 
 const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
-  { id: "welcome", label: "Welcome", description: "See how the first-run flow works before starting." },
-  { id: "required", label: "Report URL", description: "Paste the LCR custom report URL for this stake." },
+  { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
   { id: "diagnostics", label: "Checks", description: "Prepare the local store and browser runtime." },
-  { id: "firstSync", label: "First Sync", description: "Populate the local SQLite store with the first sync." },
+  { id: "firstSync", label: "First Sync", description: "Log in through Playwright and populate the local SQLite store." },
   { id: "optional", label: "Optional", description: "Optional MCP setup and reusable communication lists." },
   { id: "finish", label: "Finish", description: "Open the app once local data is ready." }
 ];
@@ -135,7 +135,7 @@ const getWizardStepFromSnapshot = (snapshot: ConfigSnapshot, initialSetup: boole
   }
 
   if (!snapshot.status.requiredComplete) {
-    return "welcome";
+    return "required";
   }
 
   if (restartRequired) {
@@ -185,6 +185,20 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const requiredFieldLooksComplete = useMemo(() => {
     const lcrUrl = `${form.LCR_DIRECTORY_URL || ""}`.trim();
     return Boolean(lcrUrl) && !lcrUrl.includes("YOUR-REPORT-ID");
+  }, [form.LCR_DIRECTORY_URL]);
+
+  const lcrUrlLooksValid = useMemo(() => {
+    const value = `${form.LCR_DIRECTORY_URL || ""}`.trim();
+    if (!value) {
+      return false;
+    }
+
+    try {
+      const parsed = new URL(value);
+      return parsed.hostname === "lcr.churchofjesuschrist.org" && /\/mlt\/report\//.test(parsed.pathname);
+    } catch {
+      return false;
+    }
   }, [form.LCR_DIRECTORY_URL]);
 
   const runtimeCriticalChanged = useMemo(
@@ -531,15 +545,52 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
   const renderRequiredSettings = () => (
     <div className="space-y-5">
-      <label className="block text-sm font-medium text-slate-700">
-        LCR Custom Report URL
-        <input className={fieldClassName} value={form.LCR_DIRECTORY_URL || ""} onChange={(event) => handleChange("LCR_DIRECTORY_URL", event.target.value)} placeholder="https://lcr.churchofjesuschrist.org/mlt/report/..." />
-      </label>
-      <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
-        <p>That is the only value StakeOS needs before the first sync.</p>
-        <p className="mt-2">The local SQLite file is created automatically, and units populate from the member rows returned by your LCR report.</p>
-        <p className="mt-2">Playwright profile location, browser mode, and stake metadata use app defaults unless you change them later.</p>
+      <div className="rounded-[28px] border border-amber-900/10 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-serif text-2xl text-slate-900">Paste The Stake Report URL</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              StakeOS only needs the stake&apos;s LCR custom report URL before the first sync. The local SQLite store is created automatically, and units populate from the report rows.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={importFromEnv}
+            disabled={saving || restarting}
+            className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving || restarting ? "Importing..." : "Import From .env"}
+          </button>
+        </div>
+        <label className="mt-5 block text-sm font-medium text-slate-700">
+          LCR Custom Report URL
+          <input
+            className={fieldClassName}
+            value={form.LCR_DIRECTORY_URL || ""}
+            onChange={(event) => handleChange("LCR_DIRECTORY_URL", event.target.value)}
+            placeholder="https://lcr.churchofjesuschrist.org/mlt/report/..."
+          />
+        </label>
+        <div className={`mt-4 rounded-2xl border px-4 py-4 text-sm ${lcrUrlLooksValid ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+          <div className="font-semibold">{lcrUrlLooksValid ? "URL format looks valid." : "Paste the full LCR custom report URL."}</div>
+          <div className="mt-1">
+            StakeOS expects an LCR report-details URL under <code className="rounded bg-white/70 px-1 py-0.5 text-xs">lcr.churchofjesuschrist.org/mlt/report/...</code>.
+          </div>
+        </div>
       </div>
+
+      <div className="rounded-[28px] border border-amber-900/10 bg-white p-5 shadow-sm">
+        <h3 className="font-serif text-2xl text-slate-900">First Install Checklist</h3>
+        <p className="mt-2 text-sm text-slate-600">This is the shortest path to a working desktop install.</p>
+        <ol className="mt-4 space-y-3 text-sm text-slate-700">
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">1. Paste the stake&apos;s LCR custom report URL.</li>
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">2. Install Chromium if StakeOS says it is missing.</li>
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">3. Run the first full sync and complete the LCR sign-in in the Playwright browser window.</li>
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">4. Review the sync summary, then open the dashboard.</li>
+        </ol>
+      </div>
+
+      <LcrReportHelper />
     </div>
   );
 
@@ -851,30 +902,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <p className="mt-2 text-sm text-slate-600">{activeStep.description}</p>
 
           <div className="mt-6">
-            {wizardStep === "welcome" ? (
-              <div className="space-y-4 text-sm text-slate-600">
-                <p>
-                  StakeOS Desktop never captures or stores LCR credentials. It opens a Playwright-managed browser that you control, then uses your manual LCR login session to sync the custom report into a local SQLite store.
-                </p>
-                <p>
-                  For a normal first install, the app should only ask for the stake&apos;s LCR report URL, verify Chromium and the local store, and then walk through the first sync. Unit names and organizations populate from the synced report data.
-                </p>
-                <p>
-                  If this repo is already configured in <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">.env</code>, import those values now. StakeOS will restart itself automatically.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={importFromEnv}
-                    disabled={saving || restarting}
-                    className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {saving || restarting ? "Importing And Restarting..." : "Import Current .env And Restart"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
             {wizardStep === "required" ? renderRequiredSettings() : null}
             {wizardStep === "diagnostics" ? renderDiagnostics() : null}
             {wizardStep === "firstSync" ? renderFirstSync() : null}
@@ -898,7 +925,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               {!snapshot.status.requiredComplete ? `Missing required values: ${missingLabel || "LCR_DIRECTORY_URL"}` : restartRequired ? "Restart required before using the app." : "Required values are present."}
             </div>
             <div className="flex flex-wrap gap-3">
-              {wizardStep !== "welcome" ? (
+              {wizardStep !== "required" ? (
                 <button type="button" onClick={goBack} className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
                   Back
                 </button>

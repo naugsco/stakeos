@@ -64,6 +64,7 @@ export function SyncCenter() {
   const [action, setAction] = useState<"full" | "callings" | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [logAction, setLogAction] = useState<"open" | "reveal" | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const logRef = useRef<HTMLPreElement | null>(null);
 
@@ -219,12 +220,12 @@ export function SyncCenter() {
         ) : null}
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-6">
           <div className={cardClassName}>
             <h2 className="font-serif text-2xl text-slate-900">Run Sync</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Start one sync at a time. StakeOS will block duplicate launches while a sync is starting or running.
+              Start one sync at a time. StakeOS blocks duplicate launches while a sync is starting or running.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -247,9 +248,9 @@ export function SyncCenter() {
           </div>
 
           <div className={cardClassName}>
-            <h2 className="font-serif text-2xl text-slate-900">Current Status</h2>
+            <h2 className="font-serif text-2xl text-slate-900">Sync Snapshot</h2>
             <p className="mt-2 text-sm text-slate-600">{runStateDescription}</p>
-            <div className="mt-6 grid gap-3 md:grid-cols-4">
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phase</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">{phaseLabel}</div>
@@ -265,48 +266,16 @@ export function SyncCenter() {
                 </div>
               </div>
               <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Launcher PID</div>
-                <div className="mt-1 text-base font-semibold text-slate-900">{status?.activeJob?.pid ?? "—"}</div>
-              </div>
-              <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Elapsed</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">{elapsedLabel}</div>
               </div>
             </div>
-            {status?.activeJob ? (
-              <div className="mt-4 rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-600">
-                <div>
-                  <span className="font-semibold text-slate-900">Started:</span> {new Date(status.activeJob.startedAt).toLocaleString()}
-                </div>
-                <div className="mt-1 break-all">
-                  <span className="font-semibold text-slate-900">Log:</span> {status.activeJob.logFile}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className={cardClassName}>
-            <h2 className="font-serif text-2xl text-slate-900">Latest Completed Sync</h2>
-            {status?.latest ? (
-              <div className="mt-6 space-y-2 text-sm text-slate-700">
-                <div><span className="font-semibold text-slate-900">Type:</span> {formatSyncType(status.latest.syncType)}</div>
-                <div><span className="font-semibold text-slate-900">Status:</span> {status.latest.status}</div>
-                <div><span className="font-semibold text-slate-900">Started:</span> {new Date(status.latest.startedAt).toLocaleString()}</div>
-                <div><span className="font-semibold text-slate-900">Completed:</span> {status.latest.completedAt ? new Date(status.latest.completedAt).toLocaleString() : "—"}</div>
-                <div><span className="font-semibold text-slate-900">Records:</span> {status.latest.recordsProcessed}</div>
-                {status.latest.errorMessage ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">{status.latest.errorMessage}</div>
-                ) : null}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-600">No sync has been recorded yet.</p>
-            )}
           </div>
 
           <div className={cardClassName}>
             <h2 className="font-serif text-2xl text-slate-900">Latest Full Sync Summary</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Use this as the post-sync confirmation screen. It shows the current local import footprint after the latest successful full sync.
+              Use this as the post-sync confirmation view. It shows the current local import footprint after the latest successful full sync.
             </p>
             {status?.latestSuccessfulFullSyncSummary ? (
               <>
@@ -341,6 +310,56 @@ export function SyncCenter() {
                 No successful full sync has been recorded yet.
               </div>
             )}
+          </div>
+
+          <div className={cardClassName}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-2xl text-slate-900">Advanced Details</h2>
+                <p className="mt-2 text-sm text-slate-600">Open this only when you need the exact process metadata or a deeper troubleshooting view.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((current) => !current)}
+                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                {showAdvanced ? "Hide Advanced" : "Show Advanced"}
+              </button>
+            </div>
+            {showAdvanced ? (
+              <div className="mt-6 space-y-6">
+                {status?.activeJob ? (
+                  <div className="rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-600">
+                    <div>
+                      <span className="font-semibold text-slate-900">Started:</span> {new Date(status.activeJob.startedAt).toLocaleString()}
+                    </div>
+                    <div className="mt-1">
+                      <span className="font-semibold text-slate-900">Launcher PID:</span> {status.activeJob.pid}
+                    </div>
+                    <div className="mt-1 break-all">
+                      <span className="font-semibold text-slate-900">Log:</span> {status.activeJob.logFile}
+                    </div>
+                  </div>
+                ) : null}
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Latest Completed Sync</h3>
+                  {status?.latest ? (
+                    <div className="mt-4 space-y-2 text-sm text-slate-700">
+                      <div><span className="font-semibold text-slate-900">Type:</span> {formatSyncType(status.latest.syncType)}</div>
+                      <div><span className="font-semibold text-slate-900">Status:</span> {status.latest.status}</div>
+                      <div><span className="font-semibold text-slate-900">Started:</span> {new Date(status.latest.startedAt).toLocaleString()}</div>
+                      <div><span className="font-semibold text-slate-900">Completed:</span> {status.latest.completedAt ? new Date(status.latest.completedAt).toLocaleString() : "—"}</div>
+                      <div><span className="font-semibold text-slate-900">Records:</span> {status.latest.recordsProcessed}</div>
+                      {status.latest.errorMessage ? (
+                        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">{status.latest.errorMessage}</div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-slate-600">No sync has been recorded yet.</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
