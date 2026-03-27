@@ -16,10 +16,43 @@ const runDir = path.join(projectRoot, ".run");
 
 const shell = process.platform === "win32" ? "cmd.exe" : "zsh";
 const isWindows = process.platform === "win32";
+const isPackagedRuntime = process.env.STAKEOS_PACKAGED === "1";
 
 const stateFilePath = path.join(runDir, "sync-state.json");
 
+const quoteArg = (value: string) => {
+  if (isWindows) {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+};
+
+const getPackagedNodeCommand = (scriptName: string) => {
+  const scriptPath = path.join(projectRoot, "dist", "sqlite", scriptName);
+  if (!existsSync(scriptPath)) {
+    throw new Error(`Packaged sync script not found: ${scriptPath}`);
+  }
+
+  return `${quoteArg(process.execPath)} ${quoteArg(scriptPath)}`;
+};
+
 const getCommandForKind = (kind: SyncJobKind) => {
+  if (isPackagedRuntime) {
+    if (kind === "full") {
+      return [
+        getPackagedNodeCommand("init.cjs"),
+        getPackagedNodeCommand("runFullSync.cjs"),
+        getPackagedNodeCommand("seedSyncSnapshots.cjs")
+      ].join(" && ");
+    }
+
+    return [
+      getPackagedNodeCommand("init.cjs"),
+      getPackagedNodeCommand("runCallingSync.cjs")
+    ].join(" && ");
+  }
+
   if (kind === "full") {
     return "npm run sqlite:init && npm run sqlite:sync && npm run sqlite:seed-baseline";
   }
@@ -101,7 +134,11 @@ export const launchSyncJob = (kind: SyncJobKind) => {
   const child = spawn(shell, isWindows ? ["/c", shellCommand] : ["-lc", shellCommand], {
     cwd: projectRoot,
     detached: true,
-    stdio: "ignore"
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      ...(isPackagedRuntime ? { ELECTRON_RUN_AS_NODE: "1" } : {})
+    }
   });
 
   const state: SyncLaunchState = {
