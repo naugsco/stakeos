@@ -112,7 +112,7 @@ function getInitialDesktopRoute() {
           SELECT completed_at AS completedAt
           FROM sync_logs
           WHERE status = 'success'
-            AND sync_type = 'sqlite_spike_full_sync'
+            AND sync_type IN ('sqlite_full_sync', 'sqlite_spike_full_sync')
             AND completed_at IS NOT NULL
           ORDER BY completed_at DESC, id DESC
           LIMIT 1

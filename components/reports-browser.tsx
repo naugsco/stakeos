@@ -448,7 +448,7 @@ export function ReportsBrowser({
 
   return (
     <div className="space-y-8">
-      <section className="space-y-4">
+      <section id="temple-and-covenants" className="scroll-mt-24 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Temple And Covenants</h2>
           <p className="text-sm text-slate-600">Temple status, expiration risk, and covenant progression belong together because they describe the same recommend and ordinance stewardship.</p>
@@ -677,7 +677,7 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section className="space-y-4">
+      <section id="youth-and-formation" className="scroll-mt-24 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Youth And Formation</h2>
           <p className="text-sm text-slate-600">Seminary and institute participation, plus the institute follow-up list, should stay together because they support the same formation discussion.</p>
@@ -783,7 +783,7 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section className="space-y-4">
+      <section id="ministering-and-household-care" className="scroll-mt-24 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Ministering And Household Care</h2>
           <p className="text-sm text-slate-600">These lists are immediate pastoral follow-up queues: move-ins, missing ministering coverage, and households that need contact.</p>
@@ -956,7 +956,7 @@ export function ReportsBrowser({
         </section>
       </section>
 
-      <section className="space-y-4">
+      <section id="growth-and-leadership" className="scroll-mt-24 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Growth And Leadership</h2>
           <p className="text-sm text-slate-600">Unit-level health, baptisms, leadership tenure, strengthening, and priesthood progression are the broader leadership review lists.</p>

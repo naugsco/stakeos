@@ -105,7 +105,7 @@ export function RecentBaptismStageChart({
               boxShadow: "0 4px 18px rgba(15,23,42,0.08)"
             }}
           />
-          <Legend formatter={(value) => (value === "positiveCount" ? "Meets Stage" : "Not Yet")} />
+          <Legend />
           <Bar dataKey="positiveCount" name="Meets Stage" stackId="stage" fill="#0f766e" radius={[10, 0, 0, 10]} barSize={22} />
           <Bar dataKey="remainingCount" name="Not Yet" stackId="stage" fill="#cbd5e1" radius={[0, 10, 10, 0]} barSize={22} />
         </BarChart>
