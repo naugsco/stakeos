@@ -589,14 +589,18 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <h3 className="font-serif text-2xl text-slate-900">First Install Checklist</h3>
         <p className="mt-2 text-sm text-slate-600">This is the shortest path to a working desktop install.</p>
         <ol className="mt-4 space-y-3 text-sm text-slate-700">
-          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">1. Paste the stake&apos;s LCR custom report URL.</li>
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            1. Paste the stake&apos;s LCR custom report URL. If you still need to build the report, see the{" "}
+            <a href="#lcr-report-helper" className="font-semibold text-teal-700 underline underline-offset-2">
+              LCR Report Helper
+            </a>{" "}
+            below for the fields that give StakeOS the most useful data.
+          </li>
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">2. If StakeOS says the browser helper is missing, install it here. You should not need Node.js or Homebrew for that step.</li>
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">3. Run the first full sync and complete the LCR sign-in in the Playwright browser window.</li>
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">4. Review the sync summary, then open the dashboard.</li>
         </ol>
       </div>
-
-      <LcrReportHelper />
     </div>
   );
 
@@ -823,20 +827,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
   const renderOptionalSettings = () => (
     <div className="grid gap-6">
-      <div className={sectionClassName}>
-        <h3 className="font-serif text-2xl text-slate-900">Saved Leadership Email Lists</h3>
-        <p className="mt-2 text-sm text-slate-600">Optional. These are only used if you want StakeOS to prepare quick leadership email groups.</p>
-        <div className="mt-6 space-y-5">
-          <label className="block text-sm font-medium text-slate-700">
-            Stake Presidency Emails
-            <textarea className={`${fieldClassName} min-h-24`} value={form.STAKE_PRESIDENCY_EMAILS || ""} onChange={(event) => handleChange("STAKE_PRESIDENCY_EMAILS", event.target.value)} placeholder="person1@example.com, person2@example.com" />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Stake Council Emails
-            <textarea className={`${fieldClassName} min-h-24`} value={form.STAKE_COUNCIL_EMAILS || ""} onChange={(event) => handleChange("STAKE_COUNCIL_EMAILS", event.target.value)} placeholder="person1@example.com, person2@example.com" />
-          </label>
-        </div>
-      </div>
       <div className={sectionClassName}>
         <h3 className="font-serif text-2xl text-slate-900">Optional Claude Desktop Integration</h3>
         <p className="mt-2 text-sm text-slate-600">
@@ -1087,6 +1077,10 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       {renderOptionalSettings()}
 
       {renderAdvancedRuntimeSettings()}
+
+      <section id="lcr-report-helper" className={sectionClassName}>
+        <LcrReportHelper />
+      </section>
 
       <div className="flex items-center justify-between rounded-[28px] border border-amber-900/10 bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div>
