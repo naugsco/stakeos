@@ -146,7 +146,7 @@ function startControlServer() {
     return;
   }
 
-  controlServer = http.createServer((request, response) => {
+  const server = http.createServer((request, response) => {
     response.setHeader('Access-Control-Allow-Origin', '*');
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -191,9 +191,32 @@ function startControlServer() {
     response.end(JSON.stringify({ ok: false, error: 'Not found.' }));
   });
 
-  controlServer.listen(Number(CONTROL_PORT), '127.0.0.1', () => {
+  server.on('error', (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error && typeof error === 'object' && error.code === 'EADDRINUSE') {
+      appendLog(
+        'desktop-shell.log',
+        `Desktop control port ${CONTROL_PORT} is already in use. Continuing without a local control server.`,
+      );
+    } else {
+      appendLog('desktop-shell.log', `Desktop control server error: ${message}`);
+    }
+
+    if (controlServer === server) {
+      controlServer = null;
+    }
+
+    try {
+      server.close();
+    } catch {}
+  });
+
+  server.listen(Number(CONTROL_PORT), '127.0.0.1', () => {
+    controlServer = server;
     appendLog('desktop-shell.log', `Desktop control server ready on http://127.0.0.1:${CONTROL_PORT}`);
   });
+
+  controlServer = server;
 }
 
 async function stopControlServer() {

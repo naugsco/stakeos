@@ -115,7 +115,7 @@ const setupSteps: Array<{ id: SetupStep; label: string; description: string }> =
   { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
   { id: "diagnostics", label: "Prepare App", description: "Make sure StakeOS can open the report and save local data." },
   { id: "firstSync", label: "Sync Data", description: "Run the first sync and bring your stake data into the app." },
-  { id: "optional", label: "Optional", description: "Optional Claude Desktop connection and saved leadership lists." },
+  { id: "optional", label: "Optional", description: "Optional Claude Desktop connection." },
   { id: "finish", label: "Open App", description: "Review the first sync result and move into the dashboard." }
 ];
 
@@ -306,6 +306,25 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       cancelled = true;
     };
   }, [initialSetup, refreshSnapshot, syncStatus?.latest, wizardStep]);
+
+  useEffect(() => {
+    if (!initialSetup || wizardStep !== "diagnostics") {
+      return;
+    }
+
+    if (!snapshot.status.requiredComplete || !snapshot.status.prerequisitesReady) {
+      return;
+    }
+
+    setMessage("App checks passed. Continue with the first full sync.");
+    setWizardStep(snapshot.status.firstSyncCompleted ? "optional" : "firstSync");
+  }, [
+    initialSetup,
+    snapshot.status.firstSyncCompleted,
+    snapshot.status.prerequisitesReady,
+    snapshot.status.requiredComplete,
+    wizardStep
+  ]);
 
   const handleChange = (key: string, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -643,6 +662,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       chromiumCheck.status === "fail" &&
       chromiumCheck.actionKey === "install_chromium"
     );
+    const readyForFirstSync = snapshot.status.requiredComplete && snapshot.status.prerequisitesReady;
 
     return (
     <div className="space-y-4">
@@ -683,6 +703,24 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               className="rounded-full bg-teal-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {setupAction === "install_chromium" ? "Installing Chromium..." : "Install Chromium And Continue"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {readyForFirstSync ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          <div className="font-semibold">StakeOS is ready for the first sync.</div>
+          <div className="mt-1">
+            The report URL is saved and the app checks passed. Move to the sync step now so StakeOS can open the browser helper and bring in the first stake snapshot.
+          </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setWizardStep(snapshot.status.firstSyncCompleted ? "optional" : "firstSync")}
+              className="rounded-full bg-teal-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800"
+            >
+              Continue To First Sync
             </button>
           </div>
         </div>
@@ -747,6 +785,13 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <p className="mt-2">After the first full sync succeeds, the dashboard, reports, and optional Claude tools will all have local stake data available.</p>
       </div>
 
+      <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-4 text-sm text-teal-900">
+        <div className="font-semibold">Start here: run the first full sync.</div>
+        <div className="mt-1">
+          Clicking the button below should launch the StakeOS browser helper. Sign in to LCR there if prompted and leave the sync log open until it finishes.
+        </div>
+      </div>
+
       {syncStatus?.latestSuccessfulFullSyncSummary ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           <div className="text-xs font-semibold uppercase tracking-[0.16em]">Latest Full Sync Summary</div>
@@ -782,7 +827,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           disabled={Boolean(syncStatus?.running) || syncAction !== null}
           className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {syncAction === "full" ? "Starting First Sync..." : "Run First Full Sync"}
+          {syncAction === "full" ? "Starting First Full Sync..." : "Run First Full Sync Now"}
         </button>
         <button
           type="button"
@@ -970,7 +1015,15 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
                   }
                   className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {wizardStep === "required" ? (saving || restarting ? "Applying Configuration..." : "Save, Restart, And Continue") : wizardStep === "diagnostics" ? "Continue To First Sync" : wizardStep === "firstSync" ? "Continue" : "Continue"}
+                  {wizardStep === "required"
+                    ? (saving || restarting ? "Applying Configuration..." : "Save Report URL And Continue")
+                    : wizardStep === "diagnostics"
+                      ? "Continue To First Sync"
+                      : wizardStep === "firstSync"
+                        ? "Sync Must Finish Before Continuing"
+                        : wizardStep === "optional"
+                          ? "Review Final Step"
+                          : "Continue"}
                 </button>
               ) : (
                 <button
