@@ -130,6 +130,15 @@ const normalizeInput = (config: DesktopConfig): DesktopConfig => {
   return desktopConfigSchema.parse(Object.fromEntries(normalizedEntries));
 };
 
+const resolveSupportPathSetting = (value: string | undefined, fallbackAbsolutePath: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return fallbackAbsolutePath;
+  }
+
+  return path.isAbsolute(trimmed) ? trimmed : path.resolve(getDesktopConfigDir(), trimmed);
+};
+
 export const saveDesktopConfig = (config: DesktopConfig) => {
   ensureDesktopConfigDir();
   const normalized = normalizeInput(config);
@@ -146,15 +155,29 @@ export const importProjectEnvIntoDesktopConfig = () => {
   });
 };
 
-export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env) => ({
-  ...baseEnv,
-  PLAYWRIGHT_USER_DATA_DIR: baseEnv.PLAYWRIGHT_USER_DATA_DIR || getDefaultPlaywrightProfileDir(),
-  PLAYWRIGHT_BROWSERS_PATH: baseEnv.PLAYWRIGHT_BROWSERS_PATH || getDefaultPlaywrightBrowsersPath(),
-  PLAYWRIGHT_HEADLESS: baseEnv.PLAYWRIGHT_HEADLESS || "false",
-  STAKE_NAME: baseEnv.STAKE_NAME || "StakeOS Stake",
-  UNIT_NUMBER: baseEnv.UNIT_NUMBER || "000000",
-  ...loadDesktopConfig()
-});
+export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env) => {
+  const merged = {
+    ...baseEnv,
+    PLAYWRIGHT_USER_DATA_DIR: baseEnv.PLAYWRIGHT_USER_DATA_DIR || getDefaultPlaywrightProfileDir(),
+    PLAYWRIGHT_BROWSERS_PATH: baseEnv.PLAYWRIGHT_BROWSERS_PATH || getDefaultPlaywrightBrowsersPath(),
+    PLAYWRIGHT_HEADLESS: baseEnv.PLAYWRIGHT_HEADLESS || "false",
+    STAKE_NAME: baseEnv.STAKE_NAME || "StakeOS Stake",
+    UNIT_NUMBER: baseEnv.UNIT_NUMBER || "000000",
+    ...loadDesktopConfig()
+  };
+
+  return {
+    ...merged,
+    PLAYWRIGHT_USER_DATA_DIR: resolveSupportPathSetting(
+      merged.PLAYWRIGHT_USER_DATA_DIR,
+      getDefaultPlaywrightProfileDir()
+    ),
+    PLAYWRIGHT_BROWSERS_PATH: resolveSupportPathSetting(
+      merged.PLAYWRIGHT_BROWSERS_PATH,
+      getDefaultPlaywrightBrowsersPath()
+    )
+  };
+};
 
 const isValidLcrUrl = (value?: string) => {
   if (!value) {
