@@ -3,5 +3,5 @@ on run
 	set projectDir to do shell script "dirname " & quoted form of appPath
 	set launcherPath to projectDir & "/scripts/launchers/Launch StakeOS Desktop.command"
 	set shellCommand to "cd " & quoted form of projectDir & " && mkdir -p .run && chmod +x " & quoted form of launcherPath & " && " & quoted form of launcherPath & " >> .run/desktop-app.log 2>&1 &"
-	do shell script "/bin/zsh -lc " & quoted form of shellCommand
+	do shell script "/bin/zsh -c " & quoted form of shellCommand
 end run

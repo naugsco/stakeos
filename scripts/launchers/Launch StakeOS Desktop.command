@@ -35,6 +35,18 @@ if [ ! -d "node_modules" ]; then
   fi
 fi
 
+echo "[$(date)] Checking local SQLite native module..." >> "$LOG_FILE"
+if ! node -e "const Database=require('better-sqlite3'); new Database(':memory:').close()" >> "$LOG_FILE" 2>&1; then
+  echo "[$(date)] Rebuilding better-sqlite3 for local Node runtime..." >> "$LOG_FILE"
+  if ! npm rebuild better-sqlite3 --build-from-source >> "$LOG_FILE" 2>&1; then
+    osascript -e 'display alert "StakeOS Desktop Launcher" message "better-sqlite3 rebuild failed. Check .run/desktop-launcher.log for details." as critical'
+    exit 1
+  fi
+fi
+
+echo "[$(date)] Clearing stale local build output..." >> "$LOG_FILE"
+rm -rf .next dist
+
 echo "[$(date)] Building local StakeOS source..." >> "$LOG_FILE"
 if ! npm run build >> "$LOG_FILE" 2>&1; then
   osascript -e 'display alert "StakeOS Desktop Launcher" message "Local build failed. Check .run/desktop-launcher.log for details." as critical'
@@ -45,4 +57,4 @@ kill_stakeos_desktop_processes
 rm -f "$SHELL_LOG" "$NEXT_LOG"
 
 echo "[$(date)] Launching local StakeOS desktop..." >> "$LOG_FILE"
-nohup npm run desktop:start >> "$LOG_FILE" 2>&1 &
+exec npm run desktop:start >> "$LOG_FILE" 2>&1
