@@ -2,7 +2,11 @@ import dotenv from "dotenv";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
-import { loadDesktopConfig } from "@/src/config/desktopConfig";
+import {
+  getDefaultPlaywrightBrowsersPath,
+  getDefaultPlaywrightProfileDir,
+  loadDesktopConfig
+} from "@/src/config/desktopConfig";
 
 const loadEnv = () => {
   const entry = process.argv[1] ? resolve(process.argv[1]) : "";
@@ -41,7 +45,8 @@ const emptyStringToUndefined = (value: unknown) => {
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   SQLITE_DB_PATH: z.string().optional(),
-  PLAYWRIGHT_USER_DATA_DIR: z.string().default(".playwright/profile"),
+  PLAYWRIGHT_USER_DATA_DIR: z.string().default(getDefaultPlaywrightProfileDir()),
+  PLAYWRIGHT_BROWSERS_PATH: z.string().default(getDefaultPlaywrightBrowsersPath()),
   PLAYWRIGHT_HEADLESS: z
     .string()
     .optional()
@@ -73,6 +78,9 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(effectiveProcessEnv);
+
+process.env.PLAYWRIGHT_USER_DATA_DIR = env.PLAYWRIGHT_USER_DATA_DIR;
+process.env.PLAYWRIGHT_BROWSERS_PATH = env.PLAYWRIGHT_BROWSERS_PATH;
 
 export const splitEmails = (value?: string): string[] => {
   if (!value) {

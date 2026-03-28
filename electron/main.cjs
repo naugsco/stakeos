@@ -457,6 +457,22 @@ function createMainWindow() {
     }
   });
 
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const editMenu = Menu.buildFromTemplate([
+      { role: 'undo', enabled: params.editFlags.canUndo },
+      { role: 'redo', enabled: params.editFlags.canRedo },
+      { type: 'separator' },
+      { role: 'cut', enabled: params.editFlags.canCut },
+      { role: 'copy', enabled: params.editFlags.canCopy },
+      { role: 'paste', enabled: params.editFlags.canPaste },
+      { role: 'selectAll' },
+    ]);
+
+    if (params.isEditable || params.selectionText) {
+      editMenu.popup({ window: mainWindow });
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -945,6 +961,20 @@ function buildApplicationMenu() {
         { label: 'Sync Center', click: () => navigateTo('/sync-center') },
         { type: 'separator' },
         { label: 'Quit StakeOS', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { role: 'selectAll' },
       ],
     },
     {

@@ -11,6 +11,7 @@ const desktopConfigSchema = z.object({
   SQLITE_DB_PATH: z.string().optional(),
   LCR_DIRECTORY_URL: z.string().optional(),
   PLAYWRIGHT_USER_DATA_DIR: z.string().optional(),
+  PLAYWRIGHT_BROWSERS_PATH: z.string().optional(),
   PLAYWRIGHT_HEADLESS: z.string().optional(),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().optional(),
@@ -53,6 +54,10 @@ const getDesktopConfigDir = () => {
       return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "StakeOS");
   }
 };
+
+export const getDefaultPlaywrightProfileDir = () => path.join(getDesktopConfigDir(), "playwright-profile");
+
+export const getDefaultPlaywrightBrowsersPath = () => path.join(getDesktopConfigDir(), "playwright-browsers");
 
 const getSqliteDbPath = () => {
   const configured = loadDesktopConfig().SQLITE_DB_PATH?.trim();
@@ -143,7 +148,8 @@ export const importProjectEnvIntoDesktopConfig = () => {
 
 export const getEffectiveDesktopEnv = (baseEnv: NodeJS.ProcessEnv = process.env) => ({
   ...baseEnv,
-  PLAYWRIGHT_USER_DATA_DIR: baseEnv.PLAYWRIGHT_USER_DATA_DIR || ".playwright/profile",
+  PLAYWRIGHT_USER_DATA_DIR: baseEnv.PLAYWRIGHT_USER_DATA_DIR || getDefaultPlaywrightProfileDir(),
+  PLAYWRIGHT_BROWSERS_PATH: baseEnv.PLAYWRIGHT_BROWSERS_PATH || getDefaultPlaywrightBrowsersPath(),
   PLAYWRIGHT_HEADLESS: baseEnv.PLAYWRIGHT_HEADLESS || "false",
   STAKE_NAME: baseEnv.STAKE_NAME || "StakeOS Stake",
   UNIT_NUMBER: baseEnv.UNIT_NUMBER || "000000",
@@ -207,6 +213,8 @@ const commandExists = (command: string) => {
   const result = spawnSync(lookupCommand, [command], { stdio: "ignore" });
   return result.status === 0;
 };
+
+const packagedMode = process.env.STAKEOS_PACKAGED === "1";
 
 const validateLcrUrl = (rawUrl?: string): DiagnosticCheck => {
   const value = rawUrl?.trim();
@@ -292,7 +300,11 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
       key: "playwright_runtime",
       label: "Chromium Runtime",
       status: executablePath ? "pass" : "fail",
-      summary: executablePath ? "Playwright Chromium is available." : "Chromium executable path was not resolved.",
+      summary: executablePath
+        ? packagedMode
+          ? "StakeOS Chromium runtime is available."
+          : "Playwright Chromium is available."
+        : "Chromium executable path was not resolved.",
       detail: executablePath || undefined,
       action: executablePath ? undefined : "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
       actionKey: executablePath ? undefined : "install_chromium",

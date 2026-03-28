@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { promisify } from "node:util";
+import { getEffectiveDesktopEnv } from "@/src/config/desktopConfig";
 import { ensureSqliteSpikeSchema, getSqliteSpikeDbPath, openSqliteSpikeDb } from "@/src/sqlite/db";
 import { installClaudeDesktopMcp } from "@/src/setup/mcpSetup";
 
@@ -12,12 +13,18 @@ const projectRoot = process.env.STAKEOS_PROJECT_ROOT || process.cwd();
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 const packagedMode = process.env.STAKEOS_PACKAGED === "1";
+const desktopEnv = getEffectiveDesktopEnv();
 
 const runCommand = async (command: string, args: string[]) => {
   const result = await execFileAsync(command, args, {
     cwd: projectRoot,
     timeout: 10 * 60 * 1000,
-    maxBuffer: 10 * 1024 * 1024
+    maxBuffer: 10 * 1024 * 1024,
+    env: {
+      ...process.env,
+      PLAYWRIGHT_BROWSERS_PATH: desktopEnv.PLAYWRIGHT_BROWSERS_PATH,
+      PLAYWRIGHT_USER_DATA_DIR: desktopEnv.PLAYWRIGHT_USER_DATA_DIR
+    }
   });
 
   return {
@@ -33,6 +40,8 @@ const runBundledNodeCommand = async (scriptPath: string, args: string[] = []) =>
     maxBuffer: 10 * 1024 * 1024,
     env: {
       ...process.env,
+      PLAYWRIGHT_BROWSERS_PATH: desktopEnv.PLAYWRIGHT_BROWSERS_PATH,
+      PLAYWRIGHT_USER_DATA_DIR: desktopEnv.PLAYWRIGHT_USER_DATA_DIR,
       ELECTRON_RUN_AS_NODE: "1",
       STAKEOS_PACKAGED: "1",
       STAKEOS_PROJECT_ROOT: projectRoot

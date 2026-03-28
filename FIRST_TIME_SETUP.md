@@ -51,6 +51,8 @@ You do **not** need PostgreSQL.
 You do **not** need a `.env` file.
 You do **not** need to install Node.js to use the packaged desktop app.
 You do **not** need any `Launcher.app` helper from the source repository.
+You do **not** need Homebrew.
+StakeOS may still download its own browser helper during setup, but the app should handle that for you.
 
 ## Before First Launch
 

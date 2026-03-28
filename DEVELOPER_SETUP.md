@@ -54,6 +54,7 @@ Notes:
 - `PLAYWRIGHT_HEADLESS=false` is recommended while developing sync flows
 - `SMTP_*` values are optional
 - the repo-root `StakeOS Desktop Launcher.app` and `StakeOS Dashboard Launcher.app` are local helper apps only, not release artifacts
+- source development may still need a local browser install via `npx playwright install chromium`; the packaged desktop release bundles that browser for end users
 
 ## Common Commands
 

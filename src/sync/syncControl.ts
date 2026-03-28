@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export type SyncJobKind = "full" | "callings";
@@ -28,29 +28,17 @@ const quoteArg = (value: string) => {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 };
 
-const getPackagedNodeCommand = (scriptName: string) => {
+const getPackagedScriptPath = (scriptName: string) => {
   const scriptPath = path.join(projectRoot, "dist", "sqlite", scriptName);
   if (!existsSync(scriptPath)) {
     throw new Error(`Packaged sync script not found: ${scriptPath}`);
   }
-
-  return `${quoteArg(process.execPath)} ${quoteArg(scriptPath)}`;
+  return scriptPath;
 };
 
 const getCommandForKind = (kind: SyncJobKind) => {
   if (isPackagedRuntime) {
-    if (kind === "full") {
-      return [
-        getPackagedNodeCommand("init.cjs"),
-        getPackagedNodeCommand("runFullSync.cjs"),
-        getPackagedNodeCommand("seedSyncSnapshots.cjs")
-      ].join(" && ");
-    }
-
-    return [
-      getPackagedNodeCommand("init.cjs"),
-      getPackagedNodeCommand("runCallingSync.cjs")
-    ].join(" && ");
+    return null;
   }
 
   if (kind === "full") {
@@ -126,20 +114,40 @@ export const launchSyncJob = (kind: SyncJobKind) => {
   ensureRunDir();
 
   const logFile = path.join(runDir, getLogFileName(kind));
-  const syncCommand = getCommandForKind(kind);
-  const shellCommand = isWindows
-    ? `cd /d "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`
-    : `cd "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`;
+  let child;
 
-  const child = spawn(shell, isWindows ? ["/c", shellCommand] : ["-lc", shellCommand], {
-    cwd: projectRoot,
-    detached: true,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      ...(isPackagedRuntime ? { ELECTRON_RUN_AS_NODE: "1" } : {})
-    }
-  });
+  if (isPackagedRuntime) {
+    const runnerPath = getPackagedScriptPath("runSyncJob.cjs");
+    child = spawn(process.execPath, [runnerPath, kind], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        STAKEOS_PACKAGED: "1",
+        STAKEOS_PROJECT_ROOT: projectRoot
+      }
+    });
+
+    const logStream = createWriteStream(logFile, { flags: "a" });
+    child.stdout?.pipe(logStream);
+    child.stderr?.pipe(logStream);
+  } else {
+    const syncCommand = getCommandForKind(kind);
+    const shellCommand = isWindows
+      ? `cd /d "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`
+      : `cd "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`;
+
+    child = spawn(shell, isWindows ? ["/c", shellCommand] : ["-lc", shellCommand], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env
+      }
+    });
+  }
 
   const state: SyncLaunchState = {
     kind,

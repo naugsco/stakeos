@@ -27,6 +27,9 @@ You do **not** need:
 - PostgreSQL
 - a `.env` file
 - any of the local launcher apps in this repository
+- Homebrew
+
+StakeOS may still download its Chromium browser helper on first setup, but the app should do that itself. Normal users should not need Homebrew or Node.js for that step.
 
 If macOS blocks the app on first launch because Apple cannot confirm it is free of malware:
 

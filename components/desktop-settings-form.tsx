@@ -590,7 +590,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <p className="mt-2 text-sm text-slate-600">This is the shortest path to a working desktop install.</p>
         <ol className="mt-4 space-y-3 text-sm text-slate-700">
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">1. Paste the stake&apos;s LCR custom report URL.</li>
-          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">2. Install Chromium if StakeOS says it is missing.</li>
+          <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">2. If StakeOS says the browser helper is missing, install it here. You should not need Node.js or Homebrew for that step.</li>
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">3. Run the first full sync and complete the LCR sign-in in the Playwright browser window.</li>
           <li className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">4. Review the sync summary, then open the dashboard.</li>
         </ol>
