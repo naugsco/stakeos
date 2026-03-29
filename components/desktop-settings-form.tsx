@@ -108,6 +108,7 @@ const fieldClassName =
   "mt-2 w-full rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20";
 
 const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
+const releasesUrl = "https://github.com/naugsco/stakeos/releases";
 
 const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
 
@@ -925,6 +926,16 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <div className="mt-1"><span className="font-semibold text-slate-900">Managed local server:</span> {shellStatus?.managedNextProcess ? "Yes" : "No / reused"}</div>
         <div className="mt-1"><span className="font-semibold text-slate-900">First successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
         {shellStatus?.error ? <div className="mt-1"><span className="font-semibold text-slate-900">Shell error:</span> {shellStatus.error}</div> : null}
+        <div className="mt-3">
+          <a
+            href={releasesUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            Download Or Update StakeOS
+          </a>
+        </div>
       </div>
     </div>
   );

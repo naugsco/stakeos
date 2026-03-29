@@ -13,6 +13,7 @@ type AppUpdatePayload = {
 
 const STORAGE_KEY = "stakeos-app-update-check";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const RELEASES_URL = "https://github.com/naugsco/stakeos/releases";
 
 export function AppUpdateNotice() {
   const [payload, setPayload] = useState<AppUpdatePayload | null>(null);
@@ -69,9 +70,17 @@ export function AppUpdateNotice() {
               rel="noreferrer"
               className="rounded-full border border-amber-900/10 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
             >
-              View Release
+              Download Update
             </a>
           ) : null}
+          <a
+            href={RELEASES_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full border border-amber-900/10 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
+          >
+            All Releases
+          </a>
           <button
             type="button"
             onClick={() => setDismissed(true)}
