@@ -20,6 +20,7 @@ export type ClaudeDesktopMcpStatus = {
   configExists: boolean;
   launcherPath: string;
   launcherExists: boolean;
+  launcherMatchesExpected: boolean;
   serverPath: string | null;
   serverExists: boolean;
   configured: boolean;
@@ -68,7 +69,31 @@ const getMcpLauncherPath = () => {
   return path.join(launcherDir, fileName);
 };
 
+const getPackagedProjectRootCandidates = () => {
+  const configured = process.env.STAKEOS_PROJECT_ROOT?.trim();
+  const candidates = [
+    configured ? path.resolve(configured) : null,
+    process.resourcesPath ? path.join(process.resourcesPath, "app") : null,
+    path.resolve(path.dirname(process.execPath), "..", "Resources", "app"),
+    path.resolve(process.cwd())
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(candidates));
+};
+
 const getProjectRoot = () => {
+  const packagedMode = process.env.STAKEOS_PACKAGED === "1";
+
+  if (packagedMode) {
+    const candidate = getPackagedProjectRootCandidates().find((root) =>
+      existsSync(path.join(root, "dist", "server.cjs")) || existsSync(path.join(root, "package.json"))
+    );
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
   const configured = process.env.STAKEOS_PROJECT_ROOT?.trim();
   if (configured) {
     return path.resolve(configured);
@@ -118,6 +143,18 @@ const readClaudeDesktopConfig = (configPath: string): ClaudeDesktopConfig => {
   }
 };
 
+const readLauncherText = (launcherPath: string) => {
+  if (!existsSync(launcherPath)) {
+    return "";
+  }
+
+  try {
+    return readFileSync(launcherPath, "utf8");
+  } catch {
+    return "";
+  }
+};
+
 const writeMcpLauncher = (spec: MpcCommandSpec, launcherPath: string) => {
   mkdirSync(path.dirname(launcherPath), { recursive: true });
 
@@ -152,10 +189,20 @@ export const getClaudeDesktopMcpStatus = (): ClaudeDesktopMcpStatus => {
 
   let serverPath: string | null = null;
   let serverExists = false;
+  let launcherMatchesExpected = false;
   try {
     const spec = getMcpCommandSpec();
     serverPath = spec.serverPath;
     serverExists = true;
+    const launcherText = readLauncherText(launcherPath);
+    launcherMatchesExpected = spec.packagedMode
+      ? launcherText.includes(spec.serverPath) &&
+        launcherText.includes(spec.projectRoot) &&
+        launcherText.includes("STAKEOS_PACKAGED=1") &&
+        launcherText.includes("ELECTRON_RUN_AS_NODE=1")
+      : launcherText.includes(spec.serverPath) &&
+        launcherText.includes(spec.projectRoot) &&
+        launcherText.includes(spec.executablePath);
   } catch {}
 
   const config = readClaudeDesktopConfig(configPath);
@@ -164,15 +211,17 @@ export const getClaudeDesktopMcpStatus = (): ClaudeDesktopMcpStatus => {
     | undefined;
 
   const configured = Boolean(existingEntry);
-  const matchesExpected = configured && existingEntry?.command === launcherPath;
+  const matchesExpected = configured && existingEntry?.command === launcherPath && launcherMatchesExpected;
 
   let detail = "Claude Desktop MCP is not configured yet.";
   if (!configExists) {
     detail = "Claude Desktop config file does not exist yet. StakeOS can create it.";
   } else if (!configured) {
     detail = "Claude Desktop config exists, but StakeOS is not registered as an MCP server.";
-  } else if (!matchesExpected) {
-    detail = "StakeOS MCP is configured, but it does not match the current launcher path.";
+  } else if (existingEntry?.command !== launcherPath) {
+    detail = "StakeOS MCP is configured, but Claude Desktop is pointing to a different launcher path.";
+  } else if (!launcherMatchesExpected) {
+    detail = "StakeOS MCP launcher exists, but it still points to an older runtime and needs refresh.";
   } else {
     detail = "StakeOS MCP is configured in Claude Desktop.";
   }
@@ -182,6 +231,7 @@ export const getClaudeDesktopMcpStatus = (): ClaudeDesktopMcpStatus => {
     configExists,
     launcherPath,
     launcherExists,
+    launcherMatchesExpected,
     serverPath,
     serverExists,
     configured,
