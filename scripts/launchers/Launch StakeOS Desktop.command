@@ -7,6 +7,8 @@ RUN_DIR="$PROJECT_DIR/.run"
 LOG_FILE="$RUN_DIR/desktop-launcher.log"
 SHELL_LOG="$RUN_DIR/desktop-shell.log"
 NEXT_LOG="$RUN_DIR/desktop-next.log"
+LOCK_DIR="$RUN_DIR/desktop-launch.lock"
+LOCK_PID_FILE="$LOCK_DIR/pid"
 
 mkdir -p "$RUN_DIR"
 cd "$PROJECT_DIR"
@@ -35,6 +37,37 @@ resolve_binary() {
 
 NODE_BIN="$(resolve_binary node /usr/local/bin/node /opt/homebrew/bin/node)" || true
 NPM_BIN="$(resolve_binary npm /usr/local/bin/npm /opt/homebrew/bin/npm)" || true
+
+cleanup_lock() {
+  rm -f "$LOCK_PID_FILE" >/dev/null 2>&1 || true
+  rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
+}
+
+acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK_PID_FILE"
+    trap cleanup_lock EXIT
+    return 0
+  fi
+
+  local existing_pid=""
+  if [[ -f "$LOCK_PID_FILE" ]]; then
+    existing_pid="$(cat "$LOCK_PID_FILE" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" >/dev/null 2>&1; then
+    echo "[$(date)] Local desktop launch already in progress (pid $existing_pid)." >> "$LOG_FILE"
+    osascript -e 'display alert "StakeOS Desktop Launcher" message "StakeOS Desktop Launcher is already building or starting. Wait a moment and try again." as warning'
+    exit 0
+  fi
+
+  rm -rf "$LOCK_DIR"
+  mkdir "$LOCK_DIR"
+  printf '%s\n' "$$" > "$LOCK_PID_FILE"
+  trap cleanup_lock EXIT
+}
+
+acquire_lock
 
 kill_stakeos_desktop_processes() {
   local pid
