@@ -814,12 +814,6 @@ function getCurrentAppRoute() {
   try {
     const currentUrl = new URL(mainWindow.webContents.getURL());
     if (currentUrl.origin === BASE_URL) {
-      if (currentUrl.pathname === '/settings' && currentUrl.search.includes('setup=1')) {
-        const initialRoute = getInitialDesktopRoute();
-        if (initialRoute === '/dashboard') {
-          return initialRoute;
-        }
-      }
       return `${currentUrl.pathname}${currentUrl.search}`;
     }
   } catch {

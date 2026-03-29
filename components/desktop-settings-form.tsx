@@ -110,7 +110,7 @@ const fieldClassName =
 const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 const releasesUrl = "https://github.com/naugsco/stakeos/releases";
 
-const runtimeCriticalKeys = ["LCR_DIRECTORY_URL", "PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
+const runtimeCriticalKeys = ["PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
   { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
@@ -513,10 +513,11 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     const next = setupSteps[currentIndex + 1];
 
     if (wizardStep === "required") {
-      const saved = await saveSettings({ restart: true });
+      const saved = await saveSettings({ restart: false });
       if (!saved) {
         return;
       }
+      setWizardStep(getWizardStepFromSnapshot(saved, initialSetup, false));
       return;
     }
 
@@ -1149,7 +1150,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       <div className="flex items-center justify-between rounded-[28px] border border-amber-900/10 bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div>
           <div className="text-sm font-semibold text-slate-900">Save Desktop Settings</div>
-          <div className="mt-1 text-sm text-slate-600">Changes to the report URL or browser settings automatically restart StakeOS Desktop. Optional settings save without restart.</div>
+          <div className="mt-1 text-sm text-slate-600">Browser runtime changes automatically restart StakeOS Desktop. Report URL and optional settings save without restart.</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" onClick={() => void saveSettings()} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
