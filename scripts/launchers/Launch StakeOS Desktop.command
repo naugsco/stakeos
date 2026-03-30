@@ -9,11 +9,16 @@ SHELL_LOG="$RUN_DIR/desktop-shell.log"
 NEXT_LOG="$RUN_DIR/desktop-next.log"
 LOCK_DIR="$RUN_DIR/desktop-launch.lock"
 LOCK_PID_FILE="$LOCK_DIR/pid"
+PLAYWRIGHT_BROWSERS_DIR="$HOME/Library/Application Support/StakeOS/playwright-browsers"
+PLAYWRIGHT_PROFILE_DIR="$HOME/Library/Application Support/StakeOS/playwright-profile"
 
 mkdir -p "$RUN_DIR"
+mkdir -p "$PLAYWRIGHT_BROWSERS_DIR" "$(dirname "$PLAYWRIGHT_PROFILE_DIR")"
 cd "$PROJECT_DIR"
 
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+export PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_DIR"
+export PLAYWRIGHT_USER_DATA_DIR="$PLAYWRIGHT_PROFILE_DIR"
 
 resolve_binary() {
   local binary_name="$1"
@@ -98,6 +103,15 @@ if ! "$NODE_BIN" -e "const Database=require('better-sqlite3'); new Database(':me
   echo "[$(date)] Rebuilding better-sqlite3 for local Node runtime..." >> "$LOG_FILE"
   if ! "$NPM_BIN" rebuild better-sqlite3 --build-from-source >> "$LOG_FILE" 2>&1; then
     osascript -e 'display alert "StakeOS Desktop Launcher" message "better-sqlite3 rebuild failed. Check .run/desktop-launcher.log for details." as critical'
+    exit 1
+  fi
+fi
+
+echo "[$(date)] Checking Playwright Chromium runtime..." >> "$LOG_FILE"
+if ! "$NODE_BIN" -e "const { chromium } = require('playwright'); const fs = require('fs'); const p = chromium.executablePath(); process.exit(p && fs.existsSync(p) ? 0 : 1)" >> "$LOG_FILE" 2>&1; then
+  echo "[$(date)] Installing Playwright Chromium runtime..." >> "$LOG_FILE"
+  if ! "$NPM_BIN" exec playwright install chromium >> "$LOG_FILE" 2>&1; then
+    osascript -e 'display alert "StakeOS Desktop Launcher" message "Playwright Chromium install failed. Check .run/desktop-launcher.log for details." as critical'
     exit 1
   fi
 fi
