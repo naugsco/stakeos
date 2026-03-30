@@ -319,19 +319,20 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
   try {
     const playwright = await import("playwright");
     const executablePath = playwright.chromium.executablePath();
+    const browserExists = Boolean(executablePath) && existsSync(executablePath);
     checks.push({
       key: "playwright_runtime",
       label: "Chromium Runtime",
-      status: executablePath ? "pass" : "fail",
-      summary: executablePath
+      status: browserExists ? "pass" : "fail",
+      summary: browserExists
         ? packagedMode
           ? "StakeOS Chromium runtime is available."
           : "Playwright Chromium is available."
-        : "Chromium executable path was not resolved.",
+        : "Chromium is not installed yet.",
       detail: executablePath || undefined,
-      action: executablePath ? undefined : "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
-      actionKey: executablePath ? undefined : "install_chromium",
-      actionLabel: executablePath ? undefined : "Install Chromium"
+      action: browserExists ? undefined : "Install Chromium for Playwright so StakeOS can automate the LCR browser session.",
+      actionKey: browserExists ? undefined : "install_chromium",
+      actionLabel: browserExists ? undefined : "Install Chromium"
     });
   } catch (error) {
     checks.push({

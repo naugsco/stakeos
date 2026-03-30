@@ -493,6 +493,23 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     setMessage(null);
 
     try {
+      const refreshed = await refreshSnapshot();
+      const chromiumCheck = refreshed.status.diagnostics.find((check) => check.key === "playwright_runtime");
+      const chromiumNeedsInstall = Boolean(
+        chromiumCheck &&
+        chromiumCheck.status === "fail" &&
+        chromiumCheck.actionKey === "install_chromium"
+      );
+
+      if (chromiumNeedsInstall) {
+        setMessage("StakeOS is installing Chromium before the first sync.");
+        const installed = await runDiagnosticAction("install_chromium");
+        if (!installed?.status.prerequisitesReady) {
+          throw new Error("Chromium installation did not complete. Try the install step again.");
+        }
+        setMessage("Chromium installed. Starting the first full sync now.");
+      }
+
       const response = await fetch("/api/sync/full", { method: "POST" });
       const payload = await response.json();
       if (!response.ok) {

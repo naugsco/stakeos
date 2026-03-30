@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { existsSync } from "node:fs";
+import { chromium } from "playwright";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { getActiveSyncLaunchState, launchSyncJob } from "@/src/sync/syncControl";
 
@@ -6,6 +8,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const executablePath = chromium.executablePath();
+  if (!executablePath || !existsSync(executablePath)) {
+    return NextResponse.json(
+      {
+        started: false,
+        message: "Chromium is not installed yet. Install it in setup before running the first full sync."
+      },
+      { status: 412 }
+    );
+  }
+
   let runningCount = 0;
 
   const db = openSqliteSpikeDb();
