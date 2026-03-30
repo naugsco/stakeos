@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { openSqliteSpikeDb } from "@/src/sqlite/db";
+import { ensureSqliteSpikeSchema, openSqliteSpikeDb } from "@/src/sqlite/db";
 import { clearSyncLaunchState, getActiveSyncLaunchState, readSyncLaunchState } from "@/src/sync/syncControl";
 
 export const runtime = "nodejs";
@@ -25,6 +25,8 @@ export async function GET() {
 
   const db = openSqliteSpikeDb();
   try {
+    ensureSqliteSpikeSchema(db);
+
     const running = db.prepare(`SELECT COUNT(*) AS count FROM sync_logs WHERE status = 'running'`).get() as { count: number };
     const latestRow = db.prepare(
       `

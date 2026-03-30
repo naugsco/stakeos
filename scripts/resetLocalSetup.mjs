@@ -19,12 +19,14 @@ const getDesktopConfigDir = () => {
 
 const desktopDir = getDesktopConfigDir();
 const keepBrowsers = !process.argv.includes("--remove-browsers");
+const projectRunDir = path.resolve(process.cwd(), ".run");
 
 const targets = [
   path.join(desktopDir, "config.json"),
   path.join(desktopDir, "stakeos.db"),
   path.join(desktopDir, "playwright-profile"),
-  path.join(desktopDir, ".run")
+  path.join(desktopDir, ".run"),
+  projectRunDir
 ];
 
 if (!keepBrowsers) {
