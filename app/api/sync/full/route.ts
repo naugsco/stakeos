@@ -2,21 +2,27 @@ import { NextResponse } from "next/server";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
+import { runSetupAction } from "@/src/setup/setupActions";
 import { getActiveSyncLaunchState, launchSyncJob } from "@/src/sync/syncControl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const executablePath = chromium.executablePath();
+  let executablePath = chromium.executablePath();
   if (!executablePath || !existsSync(executablePath)) {
-    return NextResponse.json(
-      {
-        started: false,
-        message: "Chromium is not installed yet. Install it in setup before running the first full sync."
-      },
-      { status: 412 }
-    );
+    await runSetupAction("install_chromium");
+    executablePath = chromium.executablePath();
+
+    if (!executablePath || !existsSync(executablePath)) {
+      return NextResponse.json(
+        {
+          started: false,
+          message: "Chromium could not be installed automatically. Install it in setup and try again."
+        },
+        { status: 412 }
+      );
+    }
   }
 
   let runningCount = 0;
