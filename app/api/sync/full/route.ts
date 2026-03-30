@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "node:fs";
-import { chromium } from "playwright";
+import { getEffectiveDesktopEnv } from "@/src/config/desktopConfig";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { runSetupAction } from "@/src/setup/setupActions";
 import { getActiveSyncLaunchState, launchSyncJob } from "@/src/sync/syncControl";
@@ -9,9 +9,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const desktopEnv = getEffectiveDesktopEnv();
+  process.env.PLAYWRIGHT_BROWSERS_PATH = desktopEnv.PLAYWRIGHT_BROWSERS_PATH;
+  process.env.PLAYWRIGHT_USER_DATA_DIR = desktopEnv.PLAYWRIGHT_USER_DATA_DIR;
+
+  const { chromium } = await import("playwright");
   let executablePath = chromium.executablePath();
   if (!executablePath || !existsSync(executablePath)) {
     await runSetupAction("install_chromium");
+
+    process.env.PLAYWRIGHT_BROWSERS_PATH = desktopEnv.PLAYWRIGHT_BROWSERS_PATH;
+    process.env.PLAYWRIGHT_USER_DATA_DIR = desktopEnv.PLAYWRIGHT_USER_DATA_DIR;
     executablePath = chromium.executablePath();
 
     if (!executablePath || !existsSync(executablePath)) {

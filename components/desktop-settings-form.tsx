@@ -102,7 +102,7 @@ type SyncLogPayload = {
   message?: string;
 };
 
-type SetupStep = "required" | "diagnostics" | "firstSync" | "optional" | "finish";
+type SetupStep = "required" | "diagnostics" | "firstSync" | "finish";
 
 const fieldClassName =
   "mt-2 w-full rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20";
@@ -116,7 +116,6 @@ const setupSteps: Array<{ id: SetupStep; label: string; description: string }> =
   { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
   { id: "diagnostics", label: "Prepare App", description: "Make sure StakeOS can open the report and save local data." },
   { id: "firstSync", label: "Sync Data", description: "Run the first sync and bring your stake data into the app." },
-  { id: "optional", label: "Optional", description: "Optional Claude Desktop connection." },
   { id: "finish", label: "Open App", description: "Review the first sync result and move into the dashboard." }
 ];
 
@@ -157,7 +156,7 @@ const getWizardStepFromSnapshot = (snapshot: ConfigSnapshot, initialSetup: boole
     return "firstSync";
   }
 
-  return "optional";
+  return "finish";
 };
 
 export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, restartRequired = false }: DesktopSettingsFormProps) {
@@ -182,7 +181,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const [autoScrollLog, setAutoScrollLog] = useState(true);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const logRef = useRef<HTMLPreElement | null>(null);
-  const autoRedirectAfterSyncRef = useRef(false);
 
   const missingLabel = useMemo(
     () => snapshot.status.missing.map((field) => field.replaceAll("_", " ")).join(", "),
@@ -286,46 +284,14 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       return;
     }
 
-    let cancelled = false;
     void (async () => {
       const refreshed = await refreshSnapshot().catch(() => null);
-      if (!cancelled && refreshed?.status.firstSyncCompleted) {
-        if (autoRedirectAfterSyncRef.current) {
-          return;
-        }
-
-        autoRedirectAfterSyncRef.current = true;
-        setOpeningDashboard(true);
-        setMessage("First full sync completed. Opening the dashboard now.");
-        window.setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 1200);
+      if (refreshed?.status.firstSyncCompleted) {
+        setMessage("First full sync completed. Review the summary below, then open the dashboard.");
+        setWizardStep("finish");
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [initialSetup, refreshSnapshot, syncStatus?.latest, wizardStep]);
-
-  useEffect(() => {
-    if (!initialSetup || wizardStep !== "diagnostics") {
-      return;
-    }
-
-    if (!snapshot.status.requiredComplete || !snapshot.status.prerequisitesReady) {
-      return;
-    }
-
-    setMessage("App checks passed. Continue with the first full sync.");
-    setWizardStep(snapshot.status.firstSyncCompleted ? "optional" : "firstSync");
-  }, [
-    initialSetup,
-    snapshot.status.firstSyncCompleted,
-    snapshot.status.prerequisitesReady,
-    snapshot.status.requiredComplete,
-    wizardStep
-  ]);
 
   const handleChange = (key: string, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -482,7 +448,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
     }
 
     if (refreshed.status.prerequisitesReady) {
-      setWizardStep(refreshed.status.firstSyncCompleted ? "optional" : "firstSync");
+      setWizardStep(refreshed.status.firstSyncCompleted ? "finish" : "firstSync");
       setMessage("Chromium is installed. Continuing to the next setup step.");
     }
   };
@@ -550,7 +516,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         setMessage("Resolve the failing prerequisite checks before continuing.");
         return;
       }
-      setWizardStep(refreshed.status.firstSyncCompleted ? "optional" : "firstSync");
+      setWizardStep(refreshed.status.firstSyncCompleted ? "finish" : "firstSync");
       return;
     }
 
@@ -563,13 +529,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         setMessage("Run a successful full sync before continuing.");
         return;
       }
-      setOpeningDashboard(true);
-      setMessage("First full sync completed. Opening the dashboard now.");
-      window.location.href = "/dashboard";
-      return;
-    }
-
-    if (wizardStep === "optional") {
+      setMessage("First full sync completed. Review the summary, then open the dashboard.");
       setWizardStep("finish");
       return;
     }
@@ -597,14 +557,16 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               StakeOS only needs the stake&apos;s LCR custom report URL before the first sync. The local SQLite store is created automatically, and units populate from the report rows.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={importFromEnv}
-            disabled={saving || restarting}
-            className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving || restarting ? "Importing..." : "Import From .env"}
-          </button>
+          {!initialSetup ? (
+            <button
+              type="button"
+              onClick={importFromEnv}
+              disabled={saving || restarting}
+              className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving || restarting ? "Importing..." : "Import From .env"}
+            </button>
+          ) : null}
         </div>
         <label className="mt-5 block text-sm font-medium text-slate-700">
           LCR Custom Report URL
@@ -736,7 +698,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="mt-3">
             <button
               type="button"
-              onClick={() => setWizardStep(snapshot.status.firstSyncCompleted ? "optional" : "firstSync")}
+              onClick={() => setWizardStep(snapshot.status.firstSyncCompleted ? "finish" : "firstSync")}
               className="rounded-full bg-teal-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-teal-800"
             >
               Continue To First Sync
@@ -859,15 +821,17 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         >
           Refresh First Sync Status
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href = "/sync-center";
-          }}
-          className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-        >
-          Open Sync Center
-        </button>
+        {!initialSetup ? (
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/sync-center";
+            }}
+            className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            Open Sync Center
+          </button>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-amber-900/10 bg-slate-950 text-slate-100 shadow-inner">
@@ -961,16 +925,41 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
   const renderSetupWizard = () => {
     const activeStep = setupSteps.find((step) => step.id === wizardStep)!;
     const stepIndex = setupSteps.findIndex((step) => step.id === wizardStep);
+    const statusCards = [
+      {
+        label: "Report URL",
+        value: snapshot.status.requiredComplete ? "Saved" : "Needed",
+        tone: statusTone(snapshot.status.requiredComplete),
+      },
+      {
+        label: "App Check",
+        value: snapshot.status.prerequisitesReady ? "Ready" : "Needs review",
+        tone: statusTone(snapshot.status.prerequisitesReady),
+      },
+      {
+        label: "First Sync",
+        value: snapshot.status.firstSyncCompleted ? "Completed" : "Pending",
+        tone: statusTone(snapshot.status.firstSyncCompleted),
+      },
+    ];
 
     return (
-      <div className="space-y-8">
+      <div className="mx-auto max-w-4xl space-y-6">
         <section className="rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">First-Run Setup</p>
-          <h1 className="mt-3 font-serif text-4xl text-slate-900">StakeOS Desktop Setup</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            Paste the stake&apos;s LCR report URL, let StakeOS prepare the app, run the first sync, and then move straight into the dashboard.
-          </p>
-          <div className="mt-6 grid gap-3 md:grid-cols-6">
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <h1 className="font-serif text-4xl text-slate-900">StakeOS Desktop Setup</h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                This setup has one job: save the report URL, verify the local app checks, run the first sync, and then hand you into the dashboard.
+              </p>
+            </div>
+            <div className="rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">
+              Current Step: {activeStep.label}
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 md:grid-cols-4">
             {setupSteps.map((step, index) => {
               const current = index === stepIndex;
               const complete = index < stepIndex;
@@ -991,6 +980,28 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               );
             })}
           </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {statusCards.map((card) => (
+              <div key={card.label} className={`rounded-2xl border px-4 py-3 text-sm ${card.tone}`}>
+                <div className="text-xs font-semibold uppercase tracking-wide">{card.label}</div>
+                <div className="mt-1 font-semibold">{card.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              1. Save the stake&apos;s LCR report URL and confirm the report columns with the helper below.
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              2. Let StakeOS install its browser helper if Chromium is missing.
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              3. Run the first full sync and finish the LCR sign-in in the opened browser window.
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              4. Review the import summary, then open the dashboard.
+            </div>
+          </div>
           {message ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div> : null}
           {error ? <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         </section>
@@ -1003,7 +1014,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             {wizardStep === "required" ? renderRequiredSettings() : null}
             {wizardStep === "diagnostics" ? renderDiagnostics() : null}
             {wizardStep === "firstSync" ? renderFirstSync() : null}
-            {wizardStep === "optional" ? renderOptionalSettings() : null}
             {wizardStep === "finish" ? (
               <div className="space-y-4 text-sm text-slate-600">
                 <p>StakeOS is ready. The report URL is saved, the app checks passed, and the first full sync is recorded.</p>
@@ -1011,7 +1021,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
                   <div><span className="font-semibold text-slate-900">Report URL:</span> {snapshot.status.requiredComplete ? "Ready" : "Still incomplete"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">App checks:</span> {snapshot.status.prerequisitesReady ? "Ready" : "Needs attention"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">First sync:</span> {snapshot.status.firstSyncCompleted ? "Completed" : "Missing"}</div>
-                  <div className="mt-1"><span className="font-semibold text-slate-900">Claude Desktop integration:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : "Optional and not configured"}</div>
+                  <div className="mt-1"><span className="font-semibold text-slate-900">Claude Desktop integration:</span> Optional. Configure it later from Settings.</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">Last successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
                 </div>
               </div>
@@ -1045,14 +1055,12 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
                   className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {wizardStep === "required"
-                    ? (saving || restarting ? "Applying Configuration..." : "Save Report URL And Continue")
+                    ? (saving || restarting ? "Saving Report URL..." : "Save Report URL")
                     : wizardStep === "diagnostics"
                       ? "Continue To First Sync"
                       : wizardStep === "firstSync"
                         ? "Sync Must Finish Before Continuing"
-                        : wizardStep === "optional"
-                          ? "Review Final Step"
-                          : "Continue"}
+                        : "Continue"}
                 </button>
               ) : (
                 <button

@@ -42,6 +42,9 @@ let relaunchRequested = false;
 let controlServer = null;
 let restartingServer = false;
 
+const APP_WINDOW_BOUNDS = { width: 1540, height: 980, minWidth: 1180, minHeight: 760 };
+const SETUP_WINDOW_BOUNDS = { width: 1120, height: 880, minWidth: 980, minHeight: 760 };
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -434,12 +437,50 @@ function createSplashWindow() {
   splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(splashHtml)}`);
 }
 
-function createMainWindow() {
+function isSetupRoute(routeOrUrl) {
+  if (!routeOrUrl) {
+    return false;
+  }
+
+  try {
+    const parsed = routeOrUrl.startsWith('http')
+      ? new URL(routeOrUrl)
+      : new URL(routeOrUrl, BASE_URL);
+    return parsed.pathname === '/settings' && parsed.searchParams.get('setup') === '1';
+  } catch {
+    return String(routeOrUrl).startsWith('/settings?setup=1');
+  }
+}
+
+function getWindowBoundsForRoute(routeOrUrl) {
+  return isSetupRoute(routeOrUrl) ? SETUP_WINDOW_BOUNDS : APP_WINDOW_BOUNDS;
+}
+
+function applyWindowMode(routeOrUrl) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const bounds = getWindowBoundsForRoute(routeOrUrl);
+  const currentBounds = mainWindow.getBounds();
+  const needsResize =
+    currentBounds.width !== bounds.width ||
+    currentBounds.height !== bounds.height;
+
+  mainWindow.setMinimumSize(bounds.minWidth, bounds.minHeight);
+  if (needsResize) {
+    mainWindow.setSize(bounds.width, bounds.height, true);
+    mainWindow.center();
+  }
+}
+
+function createMainWindow(initialRoute = '/dashboard') {
+  const initialBounds = getWindowBoundsForRoute(initialRoute);
   mainWindow = new BrowserWindow({
-    width: 1540,
-    height: 980,
-    minWidth: 1180,
-    minHeight: 760,
+    width: initialBounds.width,
+    height: initialBounds.height,
+    minWidth: initialBounds.minWidth,
+    minHeight: initialBounds.minHeight,
     show: false,
     backgroundColor: '#f8f4ea',
     title: 'StakeOS',
@@ -463,6 +504,8 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', revealMainWindow);
   mainWindow.webContents.once('did-finish-load', revealMainWindow);
+  mainWindow.webContents.on('did-navigate', (_event, url) => applyWindowMode(url));
+  mainWindow.webContents.on('did-navigate-in-page', (_event, url) => applyWindowMode(url));
   setTimeout(revealMainWindow, 5000);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -944,6 +987,7 @@ async function restartStakeosServer(routeOverride) {
     startManagedNextServer();
     await waitForServerReady();
     if (mainWindow && !mainWindow.isDestroyed()) {
+      applyWindowMode(routeToRestore);
       await mainWindow.loadURL(`${BASE_URL}${routeToRestore}`);
       mainWindow.focus();
     }
@@ -956,6 +1000,7 @@ function navigateTo(route) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
+  applyWindowMode(route);
   mainWindow.loadURL(`${BASE_URL}${route}`);
 }
 
@@ -1025,7 +1070,7 @@ async function bootstrap() {
   startControlServer();
   createSplashWindow();
   buildApplicationMenu();
-  createMainWindow();
+  createMainWindow(getInitialDesktopRoute());
 
   if (APP_ICON && process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(APP_ICON);
@@ -1033,6 +1078,7 @@ async function bootstrap() {
 
   await ensureStakeosReady();
   const initialRoute = await resolveStartupRoute();
+  applyWindowMode(initialRoute);
   updateSplashStatus(initialRoute.startsWith('/settings') ? 'Opening StakeOS setup...' : 'Opening StakeOS dashboard...');
   await mainWindow.loadURL(`${BASE_URL}${initialRoute}`);
 }

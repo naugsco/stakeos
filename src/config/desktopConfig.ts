@@ -317,6 +317,13 @@ const validatePlaywright = async (effectiveEnv: Record<string, string | undefine
   }
 
   try {
+    if (effectiveEnv.PLAYWRIGHT_BROWSERS_PATH) {
+      process.env.PLAYWRIGHT_BROWSERS_PATH = effectiveEnv.PLAYWRIGHT_BROWSERS_PATH;
+    }
+    if (effectiveEnv.PLAYWRIGHT_USER_DATA_DIR) {
+      process.env.PLAYWRIGHT_USER_DATA_DIR = effectiveEnv.PLAYWRIGHT_USER_DATA_DIR;
+    }
+
     const playwright = await import("playwright");
     const executablePath = playwright.chromium.executablePath();
     const browserExists = Boolean(executablePath) && existsSync(executablePath);
