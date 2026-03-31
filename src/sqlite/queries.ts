@@ -505,6 +505,23 @@ type SqliteContactSnapshotRow = {
   snapshotData: Record<string, unknown>;
 };
 
+type SqliteSpikeLeadershipTrainingAlert = {
+  lcrMemberId: string;
+  fullName: string;
+  unitName: string;
+  callingTitle: string;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  sustainedOn: string | null;
+  setApartOn: string | null;
+  recentDateLabel: "Sustained" | "Set Apart";
+  recentDate: string;
+  daysAgo: number;
+  pendingSetApart: boolean;
+  trainerGroup: "stake_presidency" | "high_council" | "stake_rs" | "stake_yw" | "stake_primary" | "stake_ss";
+  trainerGroupLabel: string;
+};
+
 export type SqliteSpikeSyncDiffReport = {
   latestSync: SqliteSnapshotLogRow | null;
   previousSync: SqliteSnapshotLogRow | null;
@@ -2149,7 +2166,7 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
 
   const missionEligible: MissionEligibleRow[] = members.filter((member) => {
     const age = actualAge(member);
-    return age !== null && age >= 18 && age <= 25 && isActiveMember(member.memberStatus) && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
+    return age !== null && age >= 18 && age <= 25 && isUnmarried(member) && isActiveMember(member.memberStatus) && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
   }).map((member) => ({
     lcrMemberId: member.lcrMemberId ?? '',
     fullName: member.fullName ?? member.preferredName ?? `${member.firstName} ${member.lastName}`,
@@ -2169,7 +2186,7 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
 
   const missionYouthPipeline: MissionYouthPipelineRow[] = members.filter((member) => {
     const age = actualAge(member);
-    return age !== null && age >= 17 && age <= 25 && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
+    return age !== null && age >= 17 && age <= 25 && isUnmarried(member) && !toBool(member.isReturnedMissionary) && !String(member.missionStatus ?? '').trim() && !String(member.missionCountry ?? '').trim();
   }).map((member) => {
     const hasActiveRecommend = isActiveTempleRecommendStatus(member.templeRecommendStatus);
     const inReligiousClass = toBool(member.isAttendingSeminary) || toBool(member.isAttendingInstitute);
@@ -2381,6 +2398,139 @@ const loadSqlitePhoneSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, sync
     ...(row as Omit<SqliteContactSnapshotRow, "snapshotData"> & { snapshotData: string }),
     snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
   })) as SqliteContactSnapshotRow[];
+
+const getLeadershipTrainingGroup = (callingTitle: string) => {
+  const title = normalizeCallingTitleKey(callingTitle);
+
+  if (
+    /(^| )(bishop|branch president|bishopric first counselor|bishopric second counselor|branch presidency first counselor|branch presidency second counselor|ward clerk|branch clerk|executive secretary)( |$)/.test(title)
+  ) {
+    return {
+      key: "stake_presidency" as const,
+      label: "Stake Presidency"
+    };
+  }
+
+  if (/(^| )elders quorum president( |$)/.test(title)) {
+    return {
+      key: "high_council" as const,
+      label: "High Council"
+    };
+  }
+
+  if (/(^| )relief society president( |$)/.test(title)) {
+    return {
+      key: "stake_rs" as const,
+      label: "Stake Relief Society"
+    };
+  }
+
+  if (/(^| )young women president( |$)/.test(title)) {
+    return {
+      key: "stake_yw" as const,
+      label: "Stake Young Women"
+    };
+  }
+
+  if (/(^| )primary president( |$)/.test(title)) {
+    return {
+      key: "stake_primary" as const,
+      label: "Stake Primary"
+    };
+  }
+
+  if (/(^| )sunday school president( |$)/.test(title)) {
+    return {
+      key: "stake_ss" as const,
+      label: "Stake Sunday School"
+    };
+  }
+
+  return null;
+};
+
+const loadSqliteLeadershipTrainingAlerts = (db: ReturnType<typeof openSqliteSpikeDb>): SqliteSpikeLeadershipTrainingAlert[] => {
+  const today = startOfToday();
+  const threshold = daysAgoThreshold(60);
+  const currentLeadershipRows = db.prepare(
+    `SELECT
+      c.lcr_member_id AS lcrMemberId,
+      c.title AS callingTitle,
+      c.sustained_on AS sustainedOn,
+      c.set_apart_on AS setApartOn,
+      COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
+      m.preferred_name AS preferredName,
+      m.first_name AS firstName,
+      m.last_name AS lastName,
+      m.primary_email AS primaryEmail,
+      m.primary_phone AS primaryPhone
+     FROM callings c
+     LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id
+     WHERE c.is_current = 1
+       AND c.lcr_member_id IS NOT NULL`
+  ).all() as Array<{
+    lcrMemberId: string;
+    callingTitle: string;
+    sustainedOn: string | null;
+    setApartOn: string | null;
+    unitName: string;
+    preferredName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    primaryEmail: string | null;
+    primaryPhone: string | null;
+  }>;
+
+  return currentLeadershipRows
+    .map((row) => {
+      const trainerGroup = getLeadershipTrainingGroup(row.callingTitle);
+      if (!trainerGroup) {
+        return null;
+      }
+
+      const setApartDate = safeDate(row.setApartOn);
+      const sustainedDate = safeDate(row.sustainedOn);
+      const recentSetApart = setApartDate && setApartDate <= today && setApartDate >= threshold ? setApartDate : null;
+      const recentSustained = sustainedDate && sustainedDate <= today && sustainedDate >= threshold ? sustainedDate : null;
+      const recentDate = recentSetApart ?? recentSustained;
+
+      if (!recentDate) {
+        return null;
+      }
+
+      const fullName = collapseWhitespace(
+        row.preferredName?.trim() || `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Unknown"
+      );
+
+      return {
+        lcrMemberId: row.lcrMemberId,
+        fullName,
+        unitName: row.unitName || "Unknown",
+        callingTitle: cleanCallingTitle(row.callingTitle),
+        primaryEmail: row.primaryEmail,
+        primaryPhone: row.primaryPhone,
+        sustainedOn: row.sustainedOn,
+        setApartOn: row.setApartOn,
+        recentDateLabel: recentSetApart ? "Set Apart" : "Sustained",
+        recentDate: recentDate.toISOString(),
+        daysAgo: daysBetween(today, recentDate),
+        pendingSetApart: Boolean(recentSustained && !setApartDate),
+        trainerGroup: trainerGroup.key,
+        trainerGroupLabel: trainerGroup.label
+      } satisfies SqliteSpikeLeadershipTrainingAlert;
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      const first = left as SqliteSpikeLeadershipTrainingAlert;
+      const second = right as SqliteSpikeLeadershipTrainingAlert;
+      return (
+        first.trainerGroupLabel.localeCompare(second.trainerGroupLabel) ||
+        first.daysAgo - second.daysAgo ||
+        first.unitName.localeCompare(second.unitName) ||
+        first.callingTitle.localeCompare(second.callingTitle)
+      );
+    }) as SqliteSpikeLeadershipTrainingAlert[];
+};
 
 export const getSqliteSpikeSyncDiffReport = async (options: { limit?: number } = {}): Promise<SqliteSpikeSyncDiffReport> => {
   const safeLimit = Math.max(1, Math.min(options.limit ?? 30, 200));
@@ -2777,7 +2927,8 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
       turnover: [],
       converts: [],
       syncDiff,
-      unitHealthRadar: [] as UnitHealthRadarRow[]
+      unitHealthRadar: [] as UnitHealthRadarRow[],
+      newLeadershipAlerts: [] as SqliteSpikeLeadershipTrainingAlert[]
     };
   }
   const db = openSqliteSpikeDb();
@@ -2787,6 +2938,9 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
     const syncRow = db.prepare(`SELECT sync_type AS syncType, status, completed_at AS completedAt FROM sync_logs WHERE status = 'success' ORDER BY completed_at DESC LIMIT 1`).get() as { syncType: string; status: string; completedAt: string | null } | undefined;
     const callings = allCallings.filter((calling) => !selectedUnit || (calling.unitName ?? "Unknown") === selectedUnit);
     const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
+    const newLeadershipAlerts = loadSqliteLeadershipTrainingAlerts(db).filter(
+      (row) => !selectedUnit || row.unitName === selectedUnit
+    );
 
     const membersWithCurrentCalling = new Set(callings.filter(c => c.isCurrent === 1 && c.lcrMemberId).map(c => c.lcrMemberId!)).size;
     const overview = {
@@ -2851,7 +3005,8 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
       turnover: monthKeys.map((month) => ({ month, sustained: sustainedMap.get(month) ?? 0, released: releasedMap.get(month) ?? 0 })),
       converts: monthKeys.map((month) => ({ month, converts: convertMap.get(month) ?? 0 })),
       syncDiff,
-      unitHealthRadar
+      unitHealthRadar,
+      newLeadershipAlerts
     };
   } finally {
     db.close();

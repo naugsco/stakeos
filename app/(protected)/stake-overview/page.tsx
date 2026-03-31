@@ -1,11 +1,47 @@
 export const dynamic = "force-dynamic";
 
 import { LineTrendChart } from "@/components/charts/line-trend-chart";
+import { ContactMethodsInline } from "@/components/contact-links";
 import { StatCard } from "@/components/stat-card";
 import { UnitHealthRadarPanel } from "@/components/unit-health-radar-panel";
 import { loadStakeOverviewPageDataBySource } from "@/lib/dashboardData";
 
 const formatChangedFields = (changedFields: string[]) => (changedFields.length > 0 ? changedFields.join(", ") : "-");
+const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
+const buildTrainingMailto = ({
+  recipients,
+  subject,
+  body
+}: {
+  recipients: string[];
+  subject: string;
+  body: string;
+}) => {
+  const parts = [];
+  if (recipients.length > 0) {
+    parts.push(`to=${encodeMailtoValue(recipients.join(","))}`);
+  }
+  parts.push(`subject=${encodeMailtoValue(subject)}`);
+  parts.push(`body=${encodeMailtoValue(body)}`);
+  return `mailto:?${parts.join("&")}`;
+};
+
+const formatLeadershipDate = (value: string | null) =>
+  value ? new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—";
+
+const formatDaysAgo = (daysAgo: number, label: "Sustained" | "Set Apart") =>
+  daysAgo === 0 ? `${label} today` : `${label} ${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`;
+
+const trainingGreeting = (groupLabel: string) => {
+  switch (groupLabel) {
+    case "Stake Presidency":
+      return "Brethren";
+    case "High Council":
+      return "Brethren";
+    default:
+      return "Dear leaders";
+  }
+};
 
 const syncCoverageHint = (status: string, readyLabel: string) => {
   if (status === "ready") {
@@ -19,6 +55,22 @@ const syncCoverageHint = (status: string, readyLabel: string) => {
 
 export default async function StakeOverviewPage() {
   const data = await loadStakeOverviewPageDataBySource();
+  const trainerGroupMeta = {
+    stake_presidency: { label: "Stake Presidency", recipients: data.trainingEmailRecipients.stakePresidency },
+    high_council: { label: "High Council", recipients: data.trainingEmailRecipients.highCouncil },
+    stake_rs: { label: "Stake Relief Society", recipients: data.trainingEmailRecipients.stakeReliefSociety },
+    stake_yw: { label: "Stake Young Women", recipients: data.trainingEmailRecipients.stakeYoungWomen },
+    stake_primary: { label: "Stake Primary", recipients: data.trainingEmailRecipients.stakePrimary },
+    stake_ss: { label: "Stake Sunday School", recipients: data.trainingEmailRecipients.stakeSundaySchool }
+  } as const;
+  const groupedLeadershipAlerts = Object.entries(trainerGroupMeta)
+    .map(([groupKey, meta]) => ({
+      groupKey,
+      ...meta,
+      rows: data.newLeadershipAlerts.filter((row) => row.trainerGroup === groupKey)
+    }))
+    .filter((group) => group.rows.length > 0);
+  const pendingSetApartCount = data.newLeadershipAlerts.filter((row) => row.pendingSetApart).length;
   const contactCoverageReady = data.syncDiff
     ? data.syncDiff.coverage.emails.ready || data.syncDiff.coverage.phones.ready
     : false;
@@ -58,6 +110,131 @@ export default async function StakeOverviewPage() {
       <section>
         <h2 className="mb-2 text-lg font-semibold">Unit Health Radar</h2>
         <UnitHealthRadarPanel rows={data.unitHealthRadar} />
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Recent Leadership Training Queue</h2>
+            <p className="text-sm text-slate-600">
+              Current ward and branch leaders sustained or set apart in the last 60 days, grouped by the stake training group that should follow up.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard label="Recent Leadership Calls" value={data.newLeadershipAlerts.length} hint="Current leaders sustained or set apart in the last 60 days." />
+          <StatCard label="Training Groups Active" value={groupedLeadershipAlerts.length} hint="Groups with at least one recent follow-up item." />
+          <StatCard label="Sustained, Not Set Apart" value={pendingSetApartCount} hint="Recent callings still missing a set-apart date." />
+        </div>
+
+        {groupedLeadershipAlerts.length > 0 ? (
+          <div className="space-y-4 rounded-2xl border border-slate-200 bg-[#fffaf0] p-4 shadow-sm">
+            <div className="border-b border-amber-900/10 pb-3">
+              <h3 className="text-base font-semibold text-slate-900">Training Group Follow-Up</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Each section below prepares an email draft for the stake leaders responsible to train these newly called ward or branch leaders.
+              </p>
+            </div>
+          {groupedLeadershipAlerts.map((group) => {
+            const notifyHref = buildTrainingMailto({
+              recipients: group.recipients,
+              subject: `Recent leadership follow-up for ${group.label}`,
+              body: [
+                trainingGreeting(group.label) + ",",
+                "",
+                `Stake Leadership have identified several recent callings that would benefit from a warm introduction and early follow-up from ${group.label}.`,
+                "",
+                "Would you please reach out as soon as you can to welcome these leaders, introduce yourself as a resource, and help them feel supported as they begin in their new responsibilities?",
+                "",
+                "A brief call, text, or email would be a good first step, followed by any training that seems helpful.",
+                "",
+                "Recent leadership follow-up items:",
+                "",
+                ...group.rows.map((row) =>
+                  [
+                    `- ${row.fullName}`,
+                    `  Calling: ${row.callingTitle}`,
+                    `  Unit: ${row.unitName}`,
+                    `  Sustained: ${formatLeadershipDate(row.sustainedOn)}`,
+                    `  Set apart: ${formatLeadershipDate(row.setApartOn)}`,
+                    `  Status: ${row.pendingSetApart ? "Sustained, not set apart" : formatDaysAgo(row.daysAgo, row.recentDateLabel)}`,
+                    `  Email: ${row.primaryEmail ?? "None listed"}`,
+                    `  Phone: ${row.primaryPhone ?? "None listed"}`
+                  ].join("\n")
+                ),
+                "",
+                "Thank you for helping these leaders feel supported from the start."
+              ].join("\n")
+            });
+
+            return (
+              <div key={group.groupKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                  <div>
+                    <h3 className="text-base font-semibold">{group.label}</h3>
+                    <p className="text-sm text-slate-600">
+                      {group.rows.length} recent calling{group.rows.length === 1 ? "" : "s"}.
+                      {" "}
+                      {group.recipients.length > 0 ? `${group.recipients.length} current trainer recipient(s) will be prefilled from the local stake data.` : "No current trainer recipients were found in the local stake data, so the draft will open without prefilled recipients."}
+                    </p>
+                  </div>
+                  <a
+                    href={notifyHref}
+                    className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  >
+                    Draft Email
+                  </a>
+                </header>
+                <div className="max-h-80 overflow-auto">
+                  <table className="sticky-pane min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      <tr>
+                        <th className="px-4 py-2">Leader</th>
+                        <th className="px-4 py-2">Unit</th>
+                        <th className="px-4 py-2">Calling</th>
+                        <th className="px-4 py-2">Sustained</th>
+                        <th className="px-4 py-2">Set Apart</th>
+                        <th className="px-4 py-2">How Long Ago</th>
+                        <th className="px-4 py-2">Contact</th>
+                        <th className="px-4 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {group.rows.map((row) => (
+                        <tr key={`${row.trainerGroup}-${row.unitName}-${row.callingTitle}-${row.lcrMemberId}`} className="hover:bg-slate-50">
+                          <td className="px-4 py-2 font-medium text-slate-900">{row.fullName}</td>
+                          <td className="px-4 py-2">{row.unitName}</td>
+                          <td className="px-4 py-2">{row.callingTitle}</td>
+                          <td className="px-4 py-2">{formatLeadershipDate(row.sustainedOn)}</td>
+                          <td className="px-4 py-2">{formatLeadershipDate(row.setApartOn)}</td>
+                          <td className="px-4 py-2">{formatDaysAgo(row.daysAgo, row.recentDateLabel)}</td>
+                          <td className="px-4 py-2"><ContactMethodsInline email={row.primaryEmail} phone={row.primaryPhone} /></td>
+                          <td className="px-4 py-2">
+                            {row.pendingSetApart ? (
+                              <span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                                Sustained, not set apart
+                              </span>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-teal-100 px-2 py-1 text-xs font-semibold text-teal-800">
+                                {row.recentDateLabel}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-sm text-slate-500 shadow-sm">
+            No current ward or branch leadership callings were sustained or set apart in the last 60 days.
+          </div>
+        )}
       </section>
 
       {data.syncDiff ? (

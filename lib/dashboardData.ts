@@ -1,6 +1,8 @@
 import {
   getMissionGenderBreakdown
 } from "@/src/services/intelligenceService";
+import { getEffectiveDesktopEnv } from "@/src/config/desktopConfig";
+import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import {
   loadSqliteSpikeCallingsList,
   loadSqliteSpikeAvailableUnits,
@@ -14,6 +16,90 @@ import {
   loadSqliteSpikeYouthPageData
 } from "@/src/sqlite/queries";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
+
+const splitConfiguredEmails = (value?: string | null) =>
+  (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const dedupeEmails = (items: Array<string | null | undefined>) =>
+  Array.from(new Set(items.map((item) => item?.trim() || "").filter(Boolean)));
+
+const loadDynamicTrainingEmailRecipients = () => {
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(
+      `SELECT
+        lower(trim(c.title)) AS title,
+        lower(trim(coalesce(c.organization_name, ''))) AS organizationName,
+        m.primary_email AS email
+       FROM callings c
+       JOIN members m ON m.lcr_member_id = c.lcr_member_id
+       WHERE c.is_current = 1
+         AND m.primary_email IS NOT NULL`
+    ).all() as Array<{ title: string; organizationName: string; email: string }>;
+
+    const lists = {
+      stakePresidency: [] as string[],
+      highCouncil: [] as string[],
+      stakeReliefSociety: [] as string[],
+      stakeYoungWomen: [] as string[],
+      stakePrimary: [] as string[],
+      stakeSundaySchool: [] as string[]
+    };
+
+    for (const row of rows) {
+      const title = row.title;
+      const organizationName = row.organizationName;
+      if (
+        title === "stake president" ||
+        title.includes("stake presidency")
+      ) {
+        lists.stakePresidency.push(row.email);
+        continue;
+      }
+
+      if (title === "stake high councilor" || title === "high councilor") {
+        lists.highCouncil.push(row.email);
+        continue;
+      }
+
+      if (/^stake relief society (president|first counselor|second counselor)$/.test(title)) {
+        lists.stakeReliefSociety.push(row.email);
+        continue;
+      }
+
+      if (/^stake young women (president|first counselor|second counselor)$/.test(title)) {
+        lists.stakeYoungWomen.push(row.email);
+        continue;
+      }
+
+      if (/^stake primary (president|first counselor|second counselor)$/.test(title)) {
+        lists.stakePrimary.push(row.email);
+        continue;
+      }
+
+      if (
+        /^stake sunday school (president|first counselor|second counselor)$/.test(title) ||
+        organizationName.includes("stake sunday school")
+      ) {
+        lists.stakeSundaySchool.push(row.email);
+      }
+    }
+
+    return {
+      stakePresidency: dedupeEmails(lists.stakePresidency),
+      highCouncil: dedupeEmails(lists.highCouncil),
+      stakeReliefSociety: dedupeEmails(lists.stakeReliefSociety),
+      stakeYoungWomen: dedupeEmails(lists.stakeYoungWomen),
+      stakePrimary: dedupeEmails(lists.stakePrimary),
+      stakeSundaySchool: dedupeEmails(lists.stakeSundaySchool)
+    };
+  } finally {
+    db.close();
+  }
+};
 
 export const loadDashboardOverviewMetrics = async (
   unit?: string | null
@@ -109,4 +195,40 @@ export const loadYouthPageDataBySource = async () =>
   loadSqliteSpikeYouthPageData();
 
 export const loadStakeOverviewPageDataBySource = async () =>
-  loadSqliteSpikeStakeOverviewPageData();
+  {
+    const data = await loadSqliteSpikeStakeOverviewPageData();
+    const desktopEnv = getEffectiveDesktopEnv();
+    const dynamicRecipients = loadDynamicTrainingEmailRecipients();
+    return {
+      ...data,
+      trainingEmailRecipients: {
+        stakePresidency: dedupeEmails([...dynamicRecipients.stakePresidency, ...splitConfiguredEmails(desktopEnv.STAKE_PRESIDENCY_EMAILS)]),
+        stakeCouncil: dedupeEmails([
+          ...dynamicRecipients.stakePresidency,
+          ...dynamicRecipients.highCouncil,
+          ...dynamicRecipients.stakeReliefSociety,
+          ...dynamicRecipients.stakeYoungWomen,
+          ...dynamicRecipients.stakePrimary,
+          ...dynamicRecipients.stakeSundaySchool,
+          ...splitConfiguredEmails(desktopEnv.STAKE_COUNCIL_EMAILS)
+        ]),
+        highCouncil: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)]),
+        stakeReliefSociety: dedupeEmails([
+          ...(dynamicRecipients.stakeReliefSociety.length > 0 ? dynamicRecipients.stakeReliefSociety : dynamicRecipients.stakePresidency),
+          ...splitConfiguredEmails(desktopEnv.STAKE_RELIEF_SOCIETY_EMAILS)
+        ]),
+        stakeYoungWomen: dedupeEmails([
+          ...(dynamicRecipients.stakeYoungWomen.length > 0 ? dynamicRecipients.stakeYoungWomen : dynamicRecipients.stakePresidency),
+          ...splitConfiguredEmails(desktopEnv.STAKE_YOUNG_WOMEN_EMAILS)
+        ]),
+        stakePrimary: dedupeEmails([
+          ...(dynamicRecipients.stakePrimary.length > 0 ? dynamicRecipients.stakePrimary : dynamicRecipients.stakePresidency),
+          ...splitConfiguredEmails(desktopEnv.STAKE_PRIMARY_EMAILS)
+        ]),
+        stakeSundaySchool: dedupeEmails([
+          ...(dynamicRecipients.stakeSundaySchool.length > 0 ? dynamicRecipients.stakeSundaySchool : dynamicRecipients.stakePresidency),
+          ...splitConfiguredEmails(desktopEnv.STAKE_SUNDAY_SCHOOL_EMAILS)
+        ])
+      }
+    };
+  };

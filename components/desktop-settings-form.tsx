@@ -1167,7 +1167,6 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       {renderOptionalSettings()}
 
       {renderAdvancedRuntimeSettings()}
-
       <section id="lcr-report-helper" className={sectionClassName}>
         <LcrReportHelper />
       </section>
