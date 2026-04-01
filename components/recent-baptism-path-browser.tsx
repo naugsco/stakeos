@@ -106,8 +106,8 @@ export function RecentBaptismPathBrowser({
                 { key: "fullName", label: "Member" },
                 { key: "templeRecommendStatus", label: "Recommend" },
                 { key: "hasCurrentCalling", label: "Calling" },
-                { key: "ministeringAssigned", label: "Assigned Ministers" },
-                { key: "assignedAsMinisterLabel", label: "Assigned As Minister" }
+                { key: "ministeringAssigned", label: "Has Assigned Ministers" },
+                { key: "assignedAsMinisterLabel", label: "Serving As Minister" }
               ].map((column) => {
                 const key = column.key as
                   | "baptismDate"

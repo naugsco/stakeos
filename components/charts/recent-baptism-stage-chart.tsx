@@ -50,7 +50,7 @@ export function RecentBaptismStageChart({
       positivePct: 0
     },
     {
-      stage: "Assigned Ministers",
+      stage: "Has Assigned Ministers",
       positiveLabel: "Assigned",
       positiveCount: rows.filter((row) => row.ministeringAssigned).length,
       remainingLabel: "Not Assigned",
@@ -58,7 +58,7 @@ export function RecentBaptismStageChart({
       positivePct: 0
     },
     {
-      stage: "Assigned as Minister",
+      stage: "Serving as Minister",
       positiveLabel: "Assigned",
       positiveCount: rows.filter((row) => row.assignedAsMinister === true).length,
       remainingLabel: "Not Assigned",
