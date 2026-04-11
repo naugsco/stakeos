@@ -42,6 +42,7 @@ If macOS blocks the app on first launch because Apple cannot confirm it is free 
 - Normal users installing StakeOS Desktop: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
 - Creating the LCR custom report: [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md)
 - Developers running StakeOS from source: [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md)
+- Technical users running the browser dashboard from source on Windows: [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md)
 - Maintainers building the desktop app: [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md)
 - Maintainers publishing a GitHub release: [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)
 
@@ -98,6 +99,8 @@ If macOS blocks the app on first launch because Apple cannot confirm it is free 
 
 If you are developing StakeOS from source, use [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md).
 
+If you want to run only the browser dashboard from source on Windows, use [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md).
+
 Important for developers:
 
 - the app path is SQLite-first
@@ -149,6 +152,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
+
+For a Windows source-run workflow with launcher scripts, use [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md).
 
 ### Build everything
 

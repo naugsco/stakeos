@@ -1,4 +1,5 @@
 import { getSqliteSpikeStatus, openSqliteSpikeDb } from "@/src/sqlite/db";
+import { getEffectiveDesktopEnv, parseHighCouncilUnitAssignments } from "@/src/config/desktopConfig";
 import type {
   CommitteeMemberRow,
   CommitteeRoster,
@@ -446,7 +447,24 @@ export interface SqliteSpikeMemberRow {
   gender: string | null;
   email: string | null;
   phoneNumber: string | null;
+  householdId: number | null;
+  householdPosition: string | null;
+  memberStatus: string | null;
+  isMarried: boolean | null;
+  isSingle: boolean | null;
+  marriageStatus: string | null;
+  missionStatus: string | null;
+  missionCountry: string | null;
+  isReturnedMissionary: boolean | null;
+  priesthoodType: string | null;
+  priesthoodOffice: string | null;
 }
+
+type RawSqliteSpikeMemberRow = Omit<SqliteSpikeMemberRow, "isMarried" | "isSingle" | "isReturnedMissionary"> & {
+  isMarried: number | boolean | null;
+  isSingle: number | boolean | null;
+  isReturnedMissionary: number | boolean | null;
+};
 
 export interface SqliteSpikeReportsShellData {
   overview: {
@@ -881,14 +899,31 @@ export const loadSqliteSpikeMemberList = async (): Promise<SqliteSpikeMemberRow[
         age,
         gender,
         primary_email AS email,
-        primary_phone AS phoneNumber
+        primary_phone AS phoneNumber,
+        household_id AS householdId,
+        household_position AS householdPosition,
+        member_status AS memberStatus,
+        is_married AS isMarried,
+        is_single AS isSingle,
+        marriage_status AS marriageStatus,
+        mission_status AS missionStatus,
+        mission_country AS missionCountry,
+        is_returned_missionary AS isReturnedMissionary,
+        priesthood_type AS priesthoodType,
+        priesthood_office AS priesthoodOffice
        FROM members
        ORDER BY last_name, first_name`
-    ).all() as SqliteSpikeMemberRow[];
+    ).all() as RawSqliteSpikeMemberRow[];
 
     return rows.map((row) => ({
       ...row,
-      unitName: row.unitName === "Unknown" ? null : row.unitName
+      unitName: row.unitName === "Unknown" ? null : row.unitName,
+      isMarried: row.isMarried === null || row.isMarried === undefined ? null : row.isMarried === 1 || row.isMarried === true,
+      isSingle: row.isSingle === null || row.isSingle === undefined ? null : row.isSingle === 1 || row.isSingle === true,
+      isReturnedMissionary:
+        row.isReturnedMissionary === null || row.isReturnedMissionary === undefined
+          ? null
+          : row.isReturnedMissionary === 1 || row.isReturnedMissionary === true
     }));
   } finally {
     db.close();
@@ -2080,7 +2115,31 @@ export const loadSqliteSpikeVisualOrgData = async (selectedUnitArg?: string | nu
       ORDER BY unitName, c.title, m.last_name, m.first_name`
     ).all(selectedUnit, selectedUnit) as VisualOrgSourceRow[];
 
-    return buildVisualOrgPayload(rows, selectedUnit);
+    const highCouncilAssignments = parseHighCouncilUnitAssignments(getEffectiveDesktopEnv().HIGH_COUNCIL_UNIT_ASSIGNMENTS);
+    const assignedHighCouncilorId = selectedUnit ? highCouncilAssignments[selectedUnit] : undefined;
+    const assignedHighCouncilorRow =
+      assignedHighCouncilorId
+        ? rows.find(
+            (row) =>
+              row.lcrMemberId === assignedHighCouncilorId &&
+              /^\s*(stake high councilor|high councilor)\s*$/i.test(row.callingTitle)
+          ) ?? null
+        : null;
+
+    return buildVisualOrgPayload(rows, selectedUnit, {
+      highCouncilor: assignedHighCouncilorRow
+        ? {
+            roleId: "highCouncilor",
+            roleTitle: "Assigned High Councilor",
+            lcrMemberId: assignedHighCouncilorRow.lcrMemberId ?? "",
+            fullName: assignedHighCouncilorRow.fullName,
+            unitName: assignedHighCouncilorRow.unitName,
+            callingTitle: assignedHighCouncilorRow.callingTitle,
+            email: assignedHighCouncilorRow.email,
+            phoneNumber: assignedHighCouncilorRow.phoneNumber
+          }
+        : null
+    });
   } finally {
     db.close();
   }

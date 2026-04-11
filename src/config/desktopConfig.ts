@@ -24,6 +24,7 @@ const desktopConfigSchema = z.object({
   STAKE_PRESIDENCY_EMAILS: z.string().optional(),
   STAKE_COUNCIL_EMAILS: z.string().optional(),
   HIGH_COUNCIL_EMAILS: z.string().optional(),
+  HIGH_COUNCIL_UNIT_ASSIGNMENTS: z.string().optional(),
   STAKE_RELIEF_SOCIETY_EMAILS: z.string().optional(),
   STAKE_YOUNG_WOMEN_EMAILS: z.string().optional(),
   STAKE_PRIMARY_EMAILS: z.string().optional(),
@@ -72,6 +73,18 @@ export interface DiagnosticCheck {
   actionKey?: "initialize_local_store" | "install_chromium" | "configure_mcp";
   actionLabel?: string;
 }
+
+export type HighCouncilUnitAssignmentMap = Record<string, string>;
+
+export type HighCouncilAssignmentMetadata = {
+  availableUnits: string[];
+  highCouncilors: Array<{
+    lcrMemberId: string;
+    fullName: string;
+    email: string | null;
+  }>;
+  assignments: HighCouncilUnitAssignmentMap;
+};
 
 const REQUIRED_FIELDS = ["LCR_DIRECTORY_URL"] as const;
 
@@ -161,6 +174,68 @@ const normalizeInput = (config: DesktopConfig): DesktopConfig => {
     .filter(([, value]) => value !== undefined);
 
   return desktopConfigSchema.parse(Object.fromEntries(normalizedEntries));
+};
+
+export const parseHighCouncilUnitAssignments = (value?: string | null): HighCouncilUnitAssignmentMap => {
+  if (!value?.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && entry[0].trim().length > 0 && typeof entry[1] === "string" && entry[1].trim().length > 0)
+        .map(([key, assignment]) => [key.trim(), assignment.trim()])
+    );
+  } catch {
+    return {};
+  }
+};
+
+const loadHighCouncilAssignmentMetadata = (): HighCouncilAssignmentMetadata => {
+  const db = openSqliteConfigDb();
+
+  try {
+    const availableUnits = db.prepare(
+      `SELECT DISTINCT COALESCE(NULLIF(unit_name, ''), NULLIF(unit_abbreviation, ''), 'Unknown') AS unitName
+       FROM members
+       ORDER BY unitName`
+    ).all() as Array<{ unitName: string }>;
+
+    const highCouncilors = db.prepare(
+      `SELECT DISTINCT
+         c.lcr_member_id AS lcrMemberId,
+         COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
+         m.primary_email AS email
+       FROM callings c
+       JOIN members m ON m.lcr_member_id = c.lcr_member_id
+       WHERE c.is_current = 1
+         AND lower(trim(c.title)) IN ('stake high councilor', 'high councilor')
+         AND c.lcr_member_id IS NOT NULL
+       ORDER BY fullName`
+    ).all() as Array<{ lcrMemberId: string; fullName: string; email: string | null }>;
+
+    const assignments = parseHighCouncilUnitAssignments(loadDesktopConfig().HIGH_COUNCIL_UNIT_ASSIGNMENTS);
+
+    return {
+      availableUnits: availableUnits.map((row) => row.unitName).filter((unit) => unit && unit !== "Unknown"),
+      highCouncilors,
+      assignments
+    };
+  } catch {
+    return {
+      availableUnits: [],
+      highCouncilors: [],
+      assignments: parseHighCouncilUnitAssignments(loadDesktopConfig().HIGH_COUNCIL_UNIT_ASSIGNMENTS)
+    };
+  } finally {
+    db.close();
+  }
 };
 
 const resolveSupportPathSetting = (value: string | undefined, fallbackAbsolutePath: string) => {
@@ -569,6 +644,7 @@ export const getDesktopConfigSnapshot = async () => {
       STAKE_PRESIDENCY_EMAILS: effectiveEnv.STAKE_PRESIDENCY_EMAILS || "",
       STAKE_COUNCIL_EMAILS: effectiveEnv.STAKE_COUNCIL_EMAILS || "",
       HIGH_COUNCIL_EMAILS: effectiveEnv.HIGH_COUNCIL_EMAILS || "",
+      HIGH_COUNCIL_UNIT_ASSIGNMENTS: effectiveEnv.HIGH_COUNCIL_UNIT_ASSIGNMENTS || "",
       STAKE_RELIEF_SOCIETY_EMAILS: effectiveEnv.STAKE_RELIEF_SOCIETY_EMAILS || "",
       STAKE_YOUNG_WOMEN_EMAILS: effectiveEnv.STAKE_YOUNG_WOMEN_EMAILS || "",
       STAKE_PRIMARY_EMAILS: effectiveEnv.STAKE_PRIMARY_EMAILS || "",
@@ -617,6 +693,7 @@ export const getDesktopConfigSnapshot = async () => {
       setupComplete: missing.length === 0 && prerequisitesReady && database.firstSyncCompleted,
       diagnostics,
       diagnosticSummary
-    }
+    },
+    highCouncilAssignments: loadHighCouncilAssignmentMetadata()
   };
 };

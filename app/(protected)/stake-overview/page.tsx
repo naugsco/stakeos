@@ -55,9 +55,24 @@ const syncCoverageHint = (status: string, readyLabel: string) => {
 
 export default async function StakeOverviewPage() {
   const data = await loadStakeOverviewPageDataBySource();
+  const resolveHighCouncilRecipients = (unitNames: string[]) => {
+    const specificRecipients = Array.from(
+      new Set(
+        unitNames
+          .map((unitName) => data.highCouncilTrainingAssignments.assignments[unitName])
+          .filter(Boolean)
+          .map((memberId) => data.highCouncilTrainingAssignments.availableRecipientsByMemberId[memberId!]?.email ?? null)
+          .filter(Boolean)
+      )
+    ) as string[];
+
+    return specificRecipients.length > 0
+      ? specificRecipients
+      : data.highCouncilTrainingAssignments.fallbackRecipients;
+  };
   const trainerGroupMeta = {
     stake_presidency: { label: "Stake Presidency", recipients: data.trainingEmailRecipients.stakePresidency },
-    high_council: { label: "High Council", recipients: data.trainingEmailRecipients.highCouncil },
+    high_council: { label: "High Council", recipients: [] as string[] },
     stake_rs: { label: "Stake Relief Society", recipients: data.trainingEmailRecipients.stakeReliefSociety },
     stake_yw: { label: "Stake Young Women", recipients: data.trainingEmailRecipients.stakeYoungWomen },
     stake_primary: { label: "Stake Primary", recipients: data.trainingEmailRecipients.stakePrimary },
@@ -68,6 +83,13 @@ export default async function StakeOverviewPage() {
       groupKey,
       ...meta,
       rows: data.newLeadershipAlerts.filter((row) => row.trainerGroup === groupKey)
+    }))
+    .map((group) => ({
+      ...group,
+      recipients:
+        group.groupKey === "high_council"
+          ? resolveHighCouncilRecipients(group.rows.map((row) => row.unitName))
+          : group.recipients
     }))
     .filter((group) => group.rows.length > 0);
   const pendingSetApartCount = data.newLeadershipAlerts.filter((row) => row.pendingSetApart).length;

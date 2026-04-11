@@ -97,6 +97,7 @@ export function VisualOrgBrowser({ availableUnits, initialUnit = null }: VisualO
       <WardGraph
         assignments={data?.assignments ?? {}}
         meetings={data?.meetings ?? {}}
+        unitTrainingAssignments={data?.unitTrainingAssignments ?? { highCouncilor: null }}
         selectedUnit={selectedUnit}
         loading={loading}
       />

@@ -1082,7 +1082,7 @@ function RefLinks({ refs }) {
   );
 }
 
-function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, meetings, selectedUnit, loading, onCopyPhones }) {
+function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, meetings, selectedUnit, unitTrainingAssignments, loading, onCopyPhones }) {
   if (!data) return null;
   const refs = type === "calling" ? (REFS[data.id] || []) : (MEETING_REFS[data.id] || []);
   const respRefs = respFilter ? (RESP_REFS[respFilter] || []) : [];
@@ -1096,6 +1096,7 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
   const meetingPhones = meetingRoster.map(person => person.phoneNumber).filter(Boolean);
   const roleMailto = buildMailtoHref(roleEmails, `${data.title} Follow-Up`);
   const meetingMailto = buildMailtoHref(meetingEmails, `${data.title} Coordination`);
+  const assignedHighCouncilor = data.stakeReport === "highCouncilor" ? unitTrainingAssignments?.highCouncilor ?? null : null;
   return (
     <div style={{ background: "#fffdf8", borderTop: `3px solid ${data.color || "#3b82f6"}`, borderTopLeftRadius: 20, borderTopRightRadius: 20, border: "1px solid #d9d2c3", borderBottom: "none", padding: isMobile ? "14px 16px" : "20px 24px", color: "#1f2937", fontFamily: "'Outfit',sans-serif", animation: "panelSlide 0.3s ease", maxHeight: isMobile ? "60vh" : 480, overflow: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 -8px 24px rgba(15, 23, 42, 0.08)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1121,8 +1122,24 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
               <div style={{ marginBottom: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Training / Support From</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  <span style={{ padding: "2px 8px", borderRadius: 4, background: C[data.stakeReport].color + "20", color: C[data.stakeReport].color, fontSize: 13, fontWeight: 600 }}>↘ {C[data.stakeReport].title}</span>
+                  <span style={{ padding: "2px 8px", borderRadius: 4, background: C[data.stakeReport].color + "20", color: C[data.stakeReport].color, fontSize: 13, fontWeight: 600 }}>
+                    ↘ {assignedHighCouncilor ? assignedHighCouncilor.fullName : C[data.stakeReport].title}
+                  </span>
                 </div>
+                {assignedHighCouncilor ? (
+                  <div style={{ marginTop: 6, padding: 8, borderRadius: 8, background: "#fffaf0", border: "1px solid #d9d2c3" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1f2937" }}>{assignedHighCouncilor.fullName}</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>{assignedHighCouncilor.callingTitle}</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                      {assignedHighCouncilor.email ? (
+                        <a href={`mailto:${assignedHighCouncilor.email}`} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", textDecoration: "none", fontWeight: 600 }}>{assignedHighCouncilor.email}</a>
+                      ) : null}
+                      {assignedHighCouncilor.phoneNumber ? (
+                        <button onClick={() => onCopyPhones([assignedHighCouncilor.phoneNumber], `Copied ${assignedHighCouncilor.phoneNumber}.`)} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "#dcfce7", color: "#166534", textDecoration: "none", fontWeight: 600, border: "none", cursor: "pointer" }}>{assignedHighCouncilor.phoneNumber}</button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
             {data.worksWith && data.worksWith.length > 0 && (
@@ -1268,7 +1285,7 @@ function DetailPanel({ data, type, onClose, respFilter, isMobile, assignments, m
 // MAIN
 // ═══════════════════════════════════════════════════════════════
 
-export default function WardGraph({ assignments = {}, meetings = {}, selectedUnit = null, loading = false }: any) {
+export default function WardGraph({ assignments = {}, meetings = {}, unitTrainingAssignments = { highCouncilor: null }, selectedUnit = null, loading = false }: any) {
   const [view, setView] = useState("calling");
   const [selected, setSelected] = useState(null);
   const [respFilter, setRespFilter] = useState("missionary");
@@ -1358,6 +1375,11 @@ export default function WardGraph({ assignments = {}, meetings = {}, selectedUni
             <div style={{ fontSize: 11, fontWeight: 700, color: "#0f766e", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 3 }}>Visual Structure</div>
             <h1 style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, letterSpacing: -0.6, color: "#1f2937" }}>Ward Organization Graph</h1>
             {!isMobile && <p style={{ fontSize: 12, color: "#64748b" }}>{selectedUnit ? `Showing mapped leadership assignments for ${selectedUnit}.` : "Showing stake-level assignments. Select a unit to populate ward leadership roles and meeting rosters."}</p>}
+            {selectedUnit && unitTrainingAssignments?.highCouncilor ? (
+              <div style={{ marginTop: 6, fontSize: 12, color: "#b45309", fontWeight: 700 }}>
+                Assigned high councilor: {unitTrainingAssignments.highCouncilor.fullName}
+              </div>
+            ) : null}
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {views.map(v => (
@@ -1458,6 +1480,7 @@ export default function WardGraph({ assignments = {}, meetings = {}, selectedUni
           isMobile={dims.w < 600}
           assignments={assignments}
           meetings={meetings}
+          unitTrainingAssignments={unitTrainingAssignments}
           selectedUnit={selectedUnit}
           loading={loading}
           onCopyPhones={handleCopyPhones}

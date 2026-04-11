@@ -152,7 +152,8 @@ const dedupePeople = (rows: VisualOrgAssignedPerson[]) => {
 
 export const buildVisualOrgPayload = (
   rows: VisualOrgSourceRow[],
-  selectedUnit: string | null
+  selectedUnit: string | null,
+  unitTrainingAssignments: VisualOrgPayload["unitTrainingAssignments"] = { highCouncilor: null }
 ): VisualOrgPayload => {
   const assignments = Object.fromEntries(
     ROLE_DEFINITIONS.map((definition) => [
@@ -208,6 +209,7 @@ export const buildVisualOrgPayload = (
   return {
     selectedUnit,
     assignments,
-    meetings
+    meetings,
+    unitTrainingAssignments
   };
 };

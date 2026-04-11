@@ -20,6 +20,15 @@ type ConfigSnapshot = {
   configPath: string;
   configExists: boolean;
   effectiveConfig: Record<string, string>;
+  highCouncilAssignments: {
+    availableUnits: string[];
+    highCouncilors: Array<{
+      lcrMemberId: string;
+      fullName: string;
+      email: string | null;
+    }>;
+    assignments: Record<string, string>;
+  };
   status: {
     requiredComplete: boolean;
     missing: string[];
@@ -111,6 +120,27 @@ const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 
 const releasesUrl = "https://github.com/naugsco/stakeos/releases";
 
 const runtimeCriticalKeys = ["PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
+
+const parseHighCouncilAssignments = (value: string | undefined) => {
+  if (!value?.trim()) {
+    return {} as Record<string, string>;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && entry[0].trim().length > 0 && typeof entry[1] === "string" && entry[1].trim().length > 0)
+        .map(([key, assignment]) => [key.trim(), assignment.trim()])
+    );
+  } catch {
+    return {};
+  }
+};
 
 const setupSteps: Array<{ id: SetupStep; label: string; description: string }> = [
   { id: "required", label: "Report URL", description: "Paste the stake report URL and use the helper to confirm the LCR columns." },
@@ -635,6 +665,75 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
       </div>
     </div>
   );
+
+  const renderHighCouncilAssignments = () => {
+    const assignments = parseHighCouncilAssignments(form.HIGH_COUNCIL_UNIT_ASSIGNMENTS || "");
+    const units = snapshot.highCouncilAssignments.availableUnits;
+    const highCouncilors = snapshot.highCouncilAssignments.highCouncilors;
+
+    const updateAssignment = (unitName: string, lcrMemberId: string) => {
+      const nextAssignments = { ...assignments };
+      if (lcrMemberId) {
+        nextAssignments[unitName] = lcrMemberId;
+      } else {
+        delete nextAssignments[unitName];
+      }
+
+      const normalizedEntries = Object.entries(nextAssignments).sort(([left], [right]) => left.localeCompare(right));
+      handleChange("HIGH_COUNCIL_UNIT_ASSIGNMENTS", normalizedEntries.length > 0 ? JSON.stringify(Object.fromEntries(normalizedEntries)) : "");
+    };
+
+    return (
+      <section className={sectionClassName}>
+        <h2 className="font-serif text-2xl text-slate-900">High Council Unit Assignments</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Assign one High Councilor to each unit. Stake Overview training drafts will use the assigned High Councilor for that unit instead of emailing the full High Council list.
+        </p>
+
+        {units.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+            No units are available yet. Run a full sync first.
+          </div>
+        ) : highCouncilors.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+            No current High Councilor callings were found in the local data yet.
+          </div>
+        ) : (
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 text-sm">
+              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th className="px-4 py-3">Unit</th>
+                  <th className="px-4 py-3">Assigned High Councilor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {units.map((unitName) => (
+                  <tr key={unitName}>
+                    <td className="px-4 py-3 font-medium text-slate-900">{unitName}</td>
+                    <td className="px-4 py-3">
+                      <select
+                        className={fieldClassName.replace("mt-2 ", "")}
+                        value={assignments[unitName] || ""}
+                        onChange={(event) => updateAssignment(unitName, event.target.value)}
+                      >
+                        <option value="">Unassigned</option>
+                        {highCouncilors.map((member) => (
+                          <option key={member.lcrMemberId} value={member.lcrMemberId}>
+                            {member.fullName}{member.email ? ` (${member.email})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    );
+  };
 
   const renderDiagnostics = () => {
     const chromiumCheck = snapshot.status.diagnostics.find((check) => check.key === "playwright_runtime");
@@ -1163,6 +1262,8 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="mt-6">{renderFirstSync()}</div>
         </section>
       ) : null}
+
+      {renderHighCouncilAssignments()}
 
       {renderOptionalSettings()}
 

@@ -4,6 +4,8 @@ This guide is for developers running StakeOS from source.
 
 If you are a normal user installing the app, use [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md) instead.
 
+If you are on Windows and only want the browser dashboard from source, use [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md) instead.
+
 ## Source Install
 
 ```bash
@@ -72,6 +74,7 @@ npm run mcp:start
 ## Docs
 
 - End-user install: [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
+- Windows browser dashboard from source: [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md)
 - LCR report creation: [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md)
 - Desktop release build: [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md)
 - GitHub release publish flow: [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)

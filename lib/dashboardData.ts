@@ -1,7 +1,7 @@
 import {
   getMissionGenderBreakdown
 } from "@/src/services/intelligenceService";
-import { getEffectiveDesktopEnv } from "@/src/config/desktopConfig";
+import { getEffectiveDesktopEnv, parseHighCouncilUnitAssignments } from "@/src/config/desktopConfig";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import {
   loadSqliteSpikeCallingsList,
@@ -31,14 +31,16 @@ const loadDynamicTrainingEmailRecipients = () => {
   try {
     const rows = db.prepare(
       `SELECT
+        c.lcr_member_id AS lcrMemberId,
         lower(trim(c.title)) AS title,
         lower(trim(coalesce(c.organization_name, ''))) AS organizationName,
+        COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
         m.primary_email AS email
        FROM callings c
        JOIN members m ON m.lcr_member_id = c.lcr_member_id
        WHERE c.is_current = 1
          AND m.primary_email IS NOT NULL`
-    ).all() as Array<{ title: string; organizationName: string; email: string }>;
+    ).all() as Array<{ lcrMemberId: string | null; title: string; organizationName: string; fullName: string; email: string }>;
 
     const lists = {
       stakePresidency: [] as string[],
@@ -46,7 +48,8 @@ const loadDynamicTrainingEmailRecipients = () => {
       stakeReliefSociety: [] as string[],
       stakeYoungWomen: [] as string[],
       stakePrimary: [] as string[],
-      stakeSundaySchool: [] as string[]
+      stakeSundaySchool: [] as string[],
+      highCouncilByMemberId: {} as Record<string, { email: string; fullName: string }>
     };
 
     for (const row of rows) {
@@ -62,6 +65,9 @@ const loadDynamicTrainingEmailRecipients = () => {
 
       if (title === "stake high councilor" || title === "high councilor") {
         lists.highCouncil.push(row.email);
+        if (row.lcrMemberId) {
+          lists.highCouncilByMemberId[row.lcrMemberId] = { email: row.email, fullName: row.fullName };
+        }
         continue;
       }
 
@@ -94,7 +100,8 @@ const loadDynamicTrainingEmailRecipients = () => {
       stakeReliefSociety: dedupeEmails(lists.stakeReliefSociety),
       stakeYoungWomen: dedupeEmails(lists.stakeYoungWomen),
       stakePrimary: dedupeEmails(lists.stakePrimary),
-      stakeSundaySchool: dedupeEmails(lists.stakeSundaySchool)
+      stakeSundaySchool: dedupeEmails(lists.stakeSundaySchool),
+      highCouncilByMemberId: lists.highCouncilByMemberId
     };
   } finally {
     db.close();
@@ -199,6 +206,7 @@ export const loadStakeOverviewPageDataBySource = async () =>
     const data = await loadSqliteSpikeStakeOverviewPageData();
     const desktopEnv = getEffectiveDesktopEnv();
     const dynamicRecipients = loadDynamicTrainingEmailRecipients();
+    const highCouncilUnitAssignments = parseHighCouncilUnitAssignments(desktopEnv.HIGH_COUNCIL_UNIT_ASSIGNMENTS);
     return {
       ...data,
       trainingEmailRecipients: {
@@ -229,6 +237,11 @@ export const loadStakeOverviewPageDataBySource = async () =>
           ...(dynamicRecipients.stakeSundaySchool.length > 0 ? dynamicRecipients.stakeSundaySchool : dynamicRecipients.stakePresidency),
           ...splitConfiguredEmails(desktopEnv.STAKE_SUNDAY_SCHOOL_EMAILS)
         ])
+      },
+      highCouncilTrainingAssignments: {
+        assignments: highCouncilUnitAssignments,
+        availableRecipientsByMemberId: dynamicRecipients.highCouncilByMemberId,
+        fallbackRecipients: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)])
       }
     };
   };

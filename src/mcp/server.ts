@@ -8,6 +8,7 @@ import {
   documentCrossReference,
   explainQuery,
   generateActionPacket,
+  getCallingGroupContactList,
   getDataQualityWorkbench,
   getLeadershipGapAlerts,
   getMemberTimeline,
@@ -172,6 +173,23 @@ const tools = [
         sortDirection: { type: "string", enum: ["asc", "desc"] },
         limit: { type: "number" }
       }
+    }
+  },
+  {
+    name: "calling_group_contact_list",
+    description: "Current calling contact list for one or more named StakeOS calling groups.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        groups: {
+          type: "array",
+          items: { type: "string" },
+          description: "Calling group ids such as all_bishops or all_ward_councils."
+        },
+        unit: { type: "string" },
+        limit: { type: "number" }
+      },
+      required: ["groups"]
     }
   },
   {
@@ -591,7 +609,7 @@ const tools = [
       properties: {
         targetType: {
           type: "string",
-          enum: ["calling", "organization", "committee", "cohort", "custom", "people_query"]
+          enum: ["calling", "calling_group", "organization", "committee", "cohort", "custom", "people_query"]
         },
         targetValue: { type: "string" },
         includeSpouses: { type: "boolean" },
@@ -608,7 +626,7 @@ const tools = [
       properties: {
         targetType: {
           type: "string",
-          enum: ["calling", "organization", "committee", "cohort", "custom", "people_query"]
+          enum: ["calling", "calling_group", "organization", "committee", "cohort", "custom", "people_query"]
         },
         targetValue: { type: "string" },
         includeSpouses: { type: "boolean" },
@@ -740,6 +758,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             ? (String(args.sortBy) as "unit_age" | "age" | "unit" | "name")
             : "unit_age",
           sortDirection: args.sortDirection ? (String(args.sortDirection) as "asc" | "desc") : "asc",
+          limit: args.limit ? Number(args.limit) : 500
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "calling_group_contact_list": {
+        const result = await getCallingGroupContactList({
+          groups: Array.isArray(args.groups) ? args.groups.map((group) => String(group)) : [],
+          unit: args.unit ? String(args.unit) : undefined,
           limit: args.limit ? Number(args.limit) : 500
         });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -1009,6 +1035,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await prepareCommunicationCampaign({
           targetType: String(args.targetType ?? "custom") as
             | "calling"
+            | "calling_group"
             | "organization"
             | "committee"
             | "cohort"
@@ -1044,6 +1071,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await sendCommunicationCampaign({
           targetType: payload.targetType as
             | "calling"
+            | "calling_group"
             | "organization"
             | "committee"
             | "cohort"

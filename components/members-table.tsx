@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { CopyPhoneLink, EmailAddressLink } from "@/components/contact-links";
 import { useMemo, useState } from "react";
+import {
+  buildMemberGroupContext,
+  MEMBER_GROUP_DEFINITIONS,
+  type MemberGroupId,
+  matchesMemberGroup
+} from "@/src/members/memberGroups";
 
 type MemberRow = {
   lcrMemberId: string;
@@ -12,6 +18,17 @@ type MemberRow = {
   gender: string | null;
   email: string | null;
   phoneNumber: string | null;
+  householdId: number | null;
+  householdPosition: string | null;
+  memberStatus: string | null;
+  isMarried: boolean | null;
+  isSingle: boolean | null;
+  marriageStatus: string | null;
+  missionStatus: string | null;
+  missionCountry: string | null;
+  isReturnedMissionary: boolean | null;
+  priesthoodType: string | null;
+  priesthoodOffice: string | null;
 };
 
 type SortKey = "fullName" | "unitName" | "age" | "gender" | "email" | "phoneNumber";
@@ -75,6 +92,8 @@ export function MembersTable({
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [searchTerm, setSearchTerm] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
+  const [selectedGroupIds, setSelectedGroupIds] = useState<MemberGroupId[]>([]);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const unitOptions = useMemo(() => {
     const units = Array.from(new Set(members.map((member) => member.unitName?.trim() ?? "").filter(Boolean))).sort((a, b) =>
@@ -83,17 +102,28 @@ export function MembersTable({
     return ["all", ...units];
   }, [members]);
 
+  const memberGroupContext = useMemo(() => buildMemberGroupContext(members), [members]);
+
+  const selectedGroups = useMemo(
+    () => MEMBER_GROUP_DEFINITIONS.filter((group) => selectedGroupIds.includes(group.id)),
+    [selectedGroupIds]
+  );
+
   const visibleRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     const filtered = members.filter((member) => {
       const searchMatch = !query || member.fullName.toLowerCase().includes(query);
       const unitMatch = unitFilter === "all" || (member.unitName ?? "") === unitFilter;
-      return searchMatch && unitMatch;
+      const groupMatch =
+        selectedGroupIds.length === 0 ||
+        selectedGroupIds.includes("all_members") ||
+        selectedGroupIds.some((groupId) => matchesMemberGroup(member, groupId, memberGroupContext));
+      return searchMatch && unitMatch && groupMatch;
     });
     const copy = [...filtered];
     copy.sort((left, right) => compareValues(left[sortKey], right[sortKey], sortDirection));
     return copy;
-  }, [members, searchTerm, sortKey, sortDirection, unitFilter]);
+  }, [memberGroupContext, members, searchTerm, selectedGroupIds, sortKey, sortDirection, unitFilter]);
 
   const updateSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -104,10 +134,23 @@ export function MembersTable({
     setSortDirection("asc");
   };
 
+  const toggleGroup = (groupId: MemberGroupId) => {
+    setSelectedGroupIds((current) => {
+      if (groupId === "all_members") {
+        return current.includes("all_members") ? [] : ["all_members"];
+      }
+
+      const next = current.filter((item) => item !== "all_members");
+      return next.includes(groupId) ? next.filter((item) => item !== groupId) : [...next, groupId];
+    });
+  };
+
+  const clearGroupFilters = () => setSelectedGroupIds([]);
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50/60 px-4 py-3">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(220px,0.8fr)_minmax(260px,1fr)]">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-search">
               Search Members by Name
@@ -137,6 +180,90 @@ export function MembersTable({
                 </option>
               ))}
             </select>
+          </div>
+          <div className="relative">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-group-filter">
+              Member Groups
+            </label>
+            <button
+              id="member-group-filter"
+              type="button"
+              onClick={() => setGroupMenuOpen((current) => !current)}
+              className="mt-2 flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm"
+            >
+              <span className="truncate">
+                {selectedGroups.length === 0 ? "All active members" : selectedGroups.map((group) => group.label).join(", ")}
+              </span>
+              <span aria-hidden="true">{groupMenuOpen ? "▲" : "▼"}</span>
+            </button>
+            {selectedGroups.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {selectedGroups.map((group) => (
+                  <span
+                    key={group.id}
+                    className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800"
+                  >
+                    {group.label}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={clearGroupFilters}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              </div>
+            ) : null}
+            {groupMenuOpen ? (
+              <div className="absolute right-0 z-20 mt-2 w-[44rem] max-w-[calc(100vw-3rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Filter by member groups</div>
+                    <div className="text-xs text-slate-500">Select one or more groups, then close the menu to review the filtered list.</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={clearGroupFilters}
+                      className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGroupMenuOpen(false)}
+                      className="rounded-full bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-800"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
+                  {[1, 2].map((column) => (
+                    <div key={column} className="space-y-1">
+                      {MEMBER_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
+                        const selected = selectedGroupIds.includes(group.id);
+                        return (
+                          <label
+                            key={group.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleGroup(group.id)}
+                              className="mt-1 h-4 w-4"
+                            />
+                            <span className="text-sm text-slate-800">{group.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

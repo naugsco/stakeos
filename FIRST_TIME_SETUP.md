@@ -4,6 +4,8 @@ This guide is for normal users installing StakeOS on a Mac.
 
 If you are trying to run StakeOS from source, use [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md) instead.
 
+If you are on Windows and want to run only the browser dashboard from source, use [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md) instead.
+
 ## What To Download
 
 Do **not** start from the GitHub code page.

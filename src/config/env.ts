@@ -76,6 +76,7 @@ const envSchema = z.object({
   STAKE_PRESIDENCY_EMAILS: z.string().optional(),
   STAKE_COUNCIL_EMAILS: z.string().optional(),
   HIGH_COUNCIL_EMAILS: z.string().optional(),
+  HIGH_COUNCIL_UNIT_ASSIGNMENTS: z.string().optional(),
   STAKE_RELIEF_SOCIETY_EMAILS: z.string().optional(),
   STAKE_YOUNG_WOMEN_EMAILS: z.string().optional(),
   STAKE_PRIMARY_EMAILS: z.string().optional(),

@@ -26,4 +26,7 @@ export interface VisualOrgPayload {
   selectedUnit: string | null;
   assignments: Record<string, VisualOrgRoleAssignment>;
   meetings: Record<string, VisualOrgMeetingRoster>;
+  unitTrainingAssignments?: {
+    highCouncilor: VisualOrgAssignedPerson | null;
+  };
 }

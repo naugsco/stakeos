@@ -5,6 +5,7 @@ import { env } from "@/src/config/env";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { getSqliteSpikeSyncDiffReport } from "@/src/sqlite/queries";
 import { ensureMailer } from "@/src/email/mailer";
+import { CALLING_GROUP_DEFINITIONS, matchesCallingGroup, type CallingGroupId } from "@/src/callings/callingGroups";
 import {
   getCallingMembers,
   getCommitteeContactList,
@@ -78,6 +79,18 @@ interface CampaignResolvedRecipients {
   emails: string[];
   phones: string[];
   lcrMemberIds: string[];
+}
+
+export interface CallingGroupContactRow {
+  lcrMemberId: string | null;
+  fullName: string | null;
+  unitName: string;
+  callingTitle: string;
+  organizationName: string | null;
+  sustainedOn: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  groupLabels: string[];
 }
 
 interface ApprovalGateRecord {
@@ -186,6 +199,92 @@ const parseBool = (value: unknown): boolean | undefined => {
     return false;
   }
   return undefined;
+};
+
+const validCallingGroupIds = new Set<CallingGroupId>(CALLING_GROUP_DEFINITIONS.map((group) => group.id));
+
+const normalizeCallingGroupIds = (value: unknown): CallingGroupId[] => {
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+
+  return Array.from(
+    new Set(
+      rawValues
+        .map((entry) => String(entry).trim())
+        .filter((entry): entry is CallingGroupId => validCallingGroupIds.has(entry as CallingGroupId))
+    )
+  );
+};
+
+export const getCallingGroupContactList = async (input: {
+  groups?: unknown;
+  unit?: string;
+  limit?: number;
+}) => {
+  const groupIds = normalizeCallingGroupIds(input.groups);
+  if (groupIds.length === 0 || (groupIds.length === 1 && groupIds[0] === "all_callings")) {
+    throw new Error("At least one specific calling group is required.");
+  }
+
+  const db = openSqliteSpikeDb();
+  try {
+    const unit = input.unit?.trim();
+    const rows = db.prepare(
+      `
+      SELECT
+        c.lcr_member_id AS lcrMemberId,
+        COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
+        COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), COALESCE(NULLIF(c.unit_name, ''), 'Unknown')) AS unitName,
+        c.title AS callingTitle,
+        c.organization_name AS organizationName,
+        c.sustained_on AS sustainedOn,
+        m.primary_email AS email,
+        m.primary_phone AS phoneNumber
+      FROM callings c
+      LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id
+      WHERE c.is_current = 1
+        AND c.released_on IS NULL
+        AND (? IS NULL OR COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), COALESCE(NULLIF(c.unit_name, ''), 'Unknown')) = ?)
+      ORDER BY unitName, c.title, m.last_name, m.first_name
+      `
+    ).all(unit ?? null, unit ?? null) as Array<{
+      lcrMemberId: string | null;
+      fullName: string | null;
+      unitName: string;
+      callingTitle: string;
+      organizationName: string | null;
+      sustainedOn: string | null;
+      email: string | null;
+      phoneNumber: string | null;
+    }>;
+
+    const filtered = rows
+      .map((row) => {
+        const matchingGroups = groupIds.filter((groupId) =>
+          matchesCallingGroup(
+            {
+              callingTitle: row.callingTitle,
+              organizationName: row.organizationName
+            },
+            groupId
+          )
+        );
+
+        return {
+          ...row,
+          groupLabels: CALLING_GROUP_DEFINITIONS.filter((group) => matchingGroups.includes(group.id)).map((group) => group.label)
+        };
+      })
+      .filter((row) => row.groupLabels.length > 0);
+
+    const limit = typeof input.limit === "number" ? input.limit : Number(input.limit ?? 500);
+    return filtered.slice(0, Math.max(1, limit));
+  } finally {
+    db.close();
+  }
 };
 
 export const peopleContactQuery = async (input: PeopleContactQueryInput = {}): Promise<PeopleContactQueryRow[]> => {
@@ -1015,7 +1114,7 @@ const resolveSpouseRecipients = async (lcrMemberIds: string[]) => {
 };
 
 export const prepareCommunicationCampaign = async (input: {
-  targetType: "calling" | "organization" | "committee" | "cohort" | "custom" | "people_query";
+  targetType: "calling" | "calling_group" | "organization" | "committee" | "cohort" | "custom" | "people_query";
   targetValue?: string;
   includeSpouses?: boolean;
   peopleQuery?: PeopleContactQueryInput;
@@ -1025,6 +1124,13 @@ export const prepareCommunicationCampaign = async (input: {
 
   if (input.targetType === "calling") {
     const rows = await getCallingMembers(input.targetValue ?? "");
+    recipients = {
+      emails: dedupeStrings(rows.map((row) => row.email)),
+      phones: dedupeStrings(rows.map((row) => row.phoneNumber)),
+      lcrMemberIds: dedupeStrings(rows.map((row) => row.lcrMemberId))
+    };
+  } else if (input.targetType === "calling_group") {
+    const rows = await getCallingGroupContactList({ groups: input.targetValue, limit: 5000 });
     recipients = {
       emails: dedupeStrings(rows.map((row) => row.email)),
       phones: dedupeStrings(rows.map((row) => row.phoneNumber)),
@@ -1091,7 +1197,7 @@ export const prepareCommunicationCampaign = async (input: {
 };
 
 export const sendCommunicationCampaign = async (input: {
-  targetType: "calling" | "organization" | "committee" | "cohort" | "custom" | "people_query";
+  targetType: "calling" | "calling_group" | "organization" | "committee" | "cohort" | "custom" | "people_query";
   targetValue?: string;
   includeSpouses?: boolean;
   peopleQuery?: PeopleContactQueryInput;

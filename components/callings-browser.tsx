@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EmailAddressLink } from "@/components/contact-links";
+import { CALLING_GROUP_DEFINITIONS, type CallingGroupId, matchesCallingGroup } from "@/src/callings/callingGroups";
 
 type CallingRow = {
   callingTitle: string;
@@ -57,6 +58,16 @@ const compareValues = (
 
 const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
 
+const summarizeSelectedGroups = (labels: string[]) => {
+  if (labels.length === 0) {
+    return "All current callings";
+  }
+  if (labels.length <= 2) {
+    return labels.join(", ");
+  }
+  return `${labels.slice(0, 2).join(", ")} + ${labels.length - 2} more`;
+};
+
 export function CallingsBrowser({
   callings,
   availableUnits
@@ -66,7 +77,8 @@ export function CallingsBrowser({
 }) {
   const [callingFilter, setCallingFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
-  const [leadershipOnly, setLeadershipOnly] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<CallingGroupId[]>([]);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("callingTitle");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -79,21 +91,37 @@ export function CallingsBrowser({
 
   const filteredCallings = useMemo(() => {
     const needle = callingFilter.trim().toLowerCase();
+    const groupFilterActive = selectedGroupIds.length > 0 && !selectedGroupIds.includes("all_callings");
 
     return callings.filter((calling) => {
       const unitMatch = unitFilter === "all" || calling.unitName === unitFilter;
-      const leadershipMatch = !leadershipOnly || calling.isLeadership;
+      const groupMatch =
+        !groupFilterActive ||
+        selectedGroupIds.some((groupId) =>
+          matchesCallingGroup(
+            {
+              callingTitle: calling.callingTitle,
+              organizationName: calling.organizationName
+            },
+            groupId
+          )
+        );
       const callingMatch =
         !needle ||
         calling.callingTitle.toLowerCase().includes(needle) ||
         (calling.organizationName ?? "").toLowerCase().includes(needle);
 
-      return unitMatch && leadershipMatch && callingMatch;
+      return unitMatch && groupMatch && callingMatch;
     });
-  }, [callings, callingFilter, unitFilter, leadershipOnly]);
+  }, [callings, callingFilter, selectedGroupIds, unitFilter]);
 
   const currentCount = filteredCallings.filter((calling) => calling.isCurrent).length;
   const leadershipCount = filteredCallings.filter((calling) => calling.isLeadership).length;
+  const selectedGroups = useMemo(
+    () => CALLING_GROUP_DEFINITIONS.filter((group) => selectedGroupIds.includes(group.id)),
+    [selectedGroupIds]
+  );
+  const selectedGroupLabels = selectedGroups.map((group) => group.label);
   const visibleEmailList = useMemo(() => {
     return Array.from(
       new Set(
@@ -157,9 +185,22 @@ export function CallingsBrowser({
     setSortDirection("asc");
   };
 
+  const toggleGroup = (groupId: CallingGroupId) => {
+    setSelectedGroupIds((current) => {
+      if (groupId === "all_callings") {
+        return current.includes("all_callings") ? [] : ["all_callings"];
+      }
+
+      const next = current.filter((item) => item !== "all_callings");
+      return next.includes(groupId) ? next.filter((item) => item !== groupId) : [...next, groupId];
+    });
+  };
+
+  const clearGroupFilters = () => setSelectedGroupIds([]);
+
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-3">
+      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1.1fr_0.9fr_1.2fr]">
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Filter Calling</label>
           <input
@@ -185,20 +226,80 @@ export function CallingsBrowser({
           </select>
         </div>
 
-        <div className="flex items-end">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={leadershipOnly}
-              onChange={(event) => setLeadershipOnly(event.target.checked)}
-              className="h-4 w-4"
-            />
-            Leadership only (President, Bishop, High Councilor)
-          </label>
+        <div className="relative">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Calling Groups</label>
+          <button
+            type="button"
+            onClick={() => setGroupMenuOpen((current) => !current)}
+            className="flex w-full items-center justify-between rounded-md border border-slate-300 px-3 py-2 text-left text-sm"
+          >
+            <span className="truncate">{summarizeSelectedGroups(selectedGroupLabels)}</span>
+            <span aria-hidden="true">{groupMenuOpen ? "▲" : "▼"}</span>
+          </button>
+          {selectedGroups.length > 0 ? (
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+              <p className="min-w-0 truncate text-slate-500">
+                {selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active: {selectedGroupLabels.join(", ")}
+              </p>
+              <button
+                type="button"
+                onClick={clearGroupFilters}
+                className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          ) : null}
+          {groupMenuOpen ? (
+            <div className="absolute right-0 z-20 mt-2 w-[44rem] max-w-[calc(100vw-3rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Filter by calling groups</div>
+                  <div className="text-xs text-slate-500">Select one or more groups, then close the menu to review the filtered list.</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearGroupFilters}
+                    className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGroupMenuOpen(false)}
+                    className="rounded-full bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
+                {[1, 2].map((column) => (
+                  <div key={column} className="space-y-1">
+                    {CALLING_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
+                      const selected = selectedGroupIds.includes(group.id);
+                      return (
+                        <label key={group.id} className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleGroup(group.id)}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span className="text-sm text-slate-800">{group.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
           <p className="text-slate-500">Visible Callings</p>
           <p className="text-xl font-semibold text-slate-900">{filteredCallings.length}</p>
@@ -210,6 +311,10 @@ export function CallingsBrowser({
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
           <p className="text-slate-500">Leadership Callings</p>
           <p className="text-xl font-semibold text-slate-900">{leadershipCount}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
+          <p className="text-slate-500">Calling Groups Active</p>
+          <p className="text-xl font-semibold text-slate-900">{selectedGroups.length}</p>
         </div>
       </section>
 
