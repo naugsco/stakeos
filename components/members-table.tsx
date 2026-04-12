@@ -4,6 +4,13 @@ import Link from "next/link";
 import { CopyPhoneLink, EmailAddressLink } from "@/components/contact-links";
 import { useMemo, useState } from "react";
 import {
+  buildAppleContactsVcf,
+  buildContactsFilename,
+  buildGoogleContactsCsv,
+  downloadTextFile,
+  type ExportContact
+} from "@/src/contacts/contactExport";
+import {
   buildMemberGroupContext,
   MEMBER_GROUP_DEFINITIONS,
   type MemberGroupId,
@@ -12,12 +19,20 @@ import {
 
 type MemberRow = {
   lcrMemberId: string;
+  firstName: string | null;
+  lastName: string | null;
   fullName: string;
   unitName: string | null;
   age: number | null;
   gender: string | null;
   email: string | null;
   phoneNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  stateOrProvince: string | null;
+  postalCode: string | null;
+  country: string | null;
   householdId: number | null;
   householdPosition: string | null;
   memberStatus: string | null;
@@ -83,10 +98,32 @@ const compareValues = (
   return direction === "asc" ? result : -result;
 };
 
+const summarizeSelectedGroups = (labels: string[]) => {
+  if (labels.length === 0) {
+    return "All active members";
+  }
+  if (labels.length <= 2) {
+    return labels.join(", ");
+  }
+  return `${labels.slice(0, 2).join(", ")} + ${labels.length - 2} more`;
+};
+
+const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
+
+const copyToClipboard = async (value: string) => {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    throw new Error("Clipboard is unavailable.");
+  }
+
+  await navigator.clipboard.writeText(value);
+};
+
 export function MembersTable({
-  members
+  members,
+  stakeName
 }: {
   members: MemberRow[];
+  stakeName: string;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("fullName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -94,6 +131,7 @@ export function MembersTable({
   const [unitFilter, setUnitFilter] = useState("all");
   const [selectedGroupIds, setSelectedGroupIds] = useState<MemberGroupId[]>([]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [phonesCopied, setPhonesCopied] = useState(false);
 
   const unitOptions = useMemo(() => {
     const units = Array.from(new Set(members.map((member) => member.unitName?.trim() ?? "").filter(Boolean))).sort((a, b) =>
@@ -108,6 +146,7 @@ export function MembersTable({
     () => MEMBER_GROUP_DEFINITIONS.filter((group) => selectedGroupIds.includes(group.id)),
     [selectedGroupIds]
   );
+  const selectedGroupLabels = selectedGroups.map((group) => group.label);
 
   const visibleRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -146,6 +185,82 @@ export function MembersTable({
   };
 
   const clearGroupFilters = () => setSelectedGroupIds([]);
+
+  const exportableContacts = useMemo<ExportContact[]>(() => {
+    return visibleRows
+      .filter((member) => member.email || member.phoneNumber || member.addressLine1 || member.addressLine2)
+      .map((member) => ({
+        fullName: member.fullName,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        email: member.email,
+        phoneNumber: member.phoneNumber,
+        unitName: member.unitName,
+        addressLine1: member.addressLine1,
+        addressLine2: member.addressLine2,
+        city: member.city,
+        stateOrProvince: member.stateOrProvince,
+        postalCode: member.postalCode,
+        country: member.country,
+        notes: [
+          member.unitName ? `Unit: ${member.unitName}` : "",
+          member.memberStatus ? `Member status: ${member.memberStatus}` : "",
+          member.householdPosition ? `Household role: ${member.householdPosition}` : "",
+          `Exported from StakeOS directory`
+        ]
+      }));
+  }, [visibleRows]);
+
+  const visibleEmailList = useMemo(() => {
+    return Array.from(
+      new Set(
+        visibleRows
+          .map((member) => member.email?.trim() ?? "")
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [visibleRows]);
+  const visiblePhoneList = useMemo(() => {
+    return Array.from(
+      new Set(
+        visibleRows
+          .map((member) => member.phoneNumber?.trim() ?? "")
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [visibleRows]);
+
+  const emailVisibleHref = useMemo(() => {
+    if (visibleEmailList.length === 0) {
+      return null;
+    }
+
+    const recipients = visibleEmailList.join(",");
+    const subject = unitFilter === "all" ? "StakeOS filtered members" : `StakeOS members - ${unitFilter}`;
+    return `mailto:?bcc=${encodeMailtoValue(recipients)}&subject=${encodeMailtoValue(subject)}`;
+  }, [unitFilter, visibleEmailList]);
+
+  const exportAppleContacts = () => {
+    if (exportableContacts.length === 0) {
+      return;
+    }
+    downloadTextFile(
+      buildContactsFilename(stakeName, "members-apple-contacts", "vcf"),
+      buildAppleContactsVcf(exportableContacts, stakeName),
+      "text/vcard"
+    );
+  };
+
+  const exportGoogleContacts = () => {
+    if (exportableContacts.length === 0) {
+      return;
+    }
+    downloadTextFile(
+      buildContactsFilename(stakeName, "members-google-contacts", "csv"),
+      buildGoogleContactsCsv(exportableContacts, stakeName),
+      "text/csv"
+    );
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -191,25 +306,18 @@ export function MembersTable({
               onClick={() => setGroupMenuOpen((current) => !current)}
               className="mt-2 flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm"
             >
-              <span className="truncate">
-                {selectedGroups.length === 0 ? "All active members" : selectedGroups.map((group) => group.label).join(", ")}
-              </span>
+              <span className="truncate">{summarizeSelectedGroups(selectedGroupLabels)}</span>
               <span aria-hidden="true">{groupMenuOpen ? "▲" : "▼"}</span>
             </button>
             {selectedGroups.length > 0 ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {selectedGroups.map((group) => (
-                  <span
-                    key={group.id}
-                    className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800"
-                  >
-                    {group.label}
-                  </span>
-                ))}
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                <p className="min-w-0 truncate text-slate-500">
+                  {selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active: {selectedGroupLabels.join(", ")}
+                </p>
                 <button
                   type="button"
                   onClick={clearGroupFilters}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
                 >
                   Clear
                 </button>
@@ -267,6 +375,70 @@ export function MembersTable({
           </div>
         </div>
       </div>
+      <section className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {visibleEmailList.length} emails
+          </span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {visiblePhoneList.length} phones
+          </span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {exportableContacts.length} exportable
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {emailVisibleHref ? (
+            <a
+              href={emailVisibleHref}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+            >
+              Email Filtered Members
+            </a>
+          ) : (
+            <div className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-400">
+              No visible emails
+            </div>
+          )}
+          {visiblePhoneList.length > 0 ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await copyToClipboard(visiblePhoneList.join("\n"));
+                  setPhonesCopied(true);
+                  window.setTimeout(() => setPhonesCopied(false), 1500);
+                } catch {
+                  setPhonesCopied(false);
+                }
+              }}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+            >
+              {phonesCopied ? "Phone Numbers Copied" : "Copy Filtered Phones"}
+            </button>
+          ) : (
+            <div className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-400">
+              No visible phones
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={exportAppleContacts}
+            disabled={exportableContacts.length === 0}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Export Apple Contacts
+          </button>
+          <button
+            type="button"
+            onClick={exportGoogleContacts}
+            disabled={exportableContacts.length === 0}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Export Google Contacts
+          </button>
+        </div>
+      </section>
       <table className="sticky-pane min-w-full divide-y divide-slate-200 text-sm">
         <thead className="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr>

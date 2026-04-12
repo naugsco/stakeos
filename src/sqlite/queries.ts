@@ -441,12 +441,20 @@ export interface SqliteSpikeDashboardData {
 
 export interface SqliteSpikeMemberRow {
   lcrMemberId: string;
+  firstName: string | null;
+  lastName: string | null;
   fullName: string;
   unitName: string | null;
   age: number | null;
   gender: string | null;
   email: string | null;
   phoneNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  stateOrProvince: string | null;
+  postalCode: string | null;
+  country: string | null;
   householdId: number | null;
   householdPosition: string | null;
   memberStatus: string | null;
@@ -894,12 +902,20 @@ export const loadSqliteSpikeMemberList = async (): Promise<SqliteSpikeMemberRow[
     const rows = db.prepare(
       `SELECT
         lcr_member_id AS lcrMemberId,
+        first_name AS firstName,
+        last_name AS lastName,
         COALESCE(NULLIF(preferred_name, ''), TRIM(first_name || ' ' || last_name)) AS fullName,
         COALESCE(NULLIF(unit_name, ''), NULLIF(unit_abbreviation, ''), 'Unknown') AS unitName,
         age,
         gender,
         primary_email AS email,
         primary_phone AS phoneNumber,
+        address_line1 AS addressLine1,
+        address_line2 AS addressLine2,
+        city,
+        state_or_province AS stateOrProvince,
+        postal_code AS postalCode,
+        country,
         household_id AS householdId,
         household_position AS householdPosition,
         member_status AS memberStatus,
@@ -2008,17 +2024,36 @@ export const loadSqliteSpikeCallingsList = async () => {
       c.organization_name AS organizationName,
       c.lcr_member_id AS lcrMemberId,
       m.primary_email AS email,
+      m.primary_phone AS phoneNumber,
+      m.first_name AS firstName,
+      m.last_name AS lastName,
+      COALESCE(m.address_line1, h.address_line1) AS addressLine1,
+      COALESCE(m.address_line2, h.address_line2) AS addressLine2,
+      COALESCE(m.city, h.city) AS city,
+      COALESCE(m.state_or_province, h.state) AS stateOrProvince,
+      COALESCE(m.postal_code, h.postal_code) AS postalCode,
+      COALESCE(m.country, h.country) AS country,
       COALESCE(NULLIF(m.preferred_name, ''), TRIM(m.first_name || ' ' || m.last_name)) AS fullName,
       COALESCE(NULLIF(m.unit_name, ''), NULLIF(m.unit_abbreviation, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
       c.sustained_on AS sustainedOn,
       c.is_current AS isCurrent
     FROM callings c
     LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id
+    LEFT JOIN households h ON h.id = m.household_id
     ORDER BY unitName, c.title`).all() as Array<{
       callingTitle: string;
       organizationName: string | null;
       lcrMemberId: string | null;
       email: string | null;
+      phoneNumber: string | null;
+      firstName: string | null;
+      lastName: string | null;
+      addressLine1: string | null;
+      addressLine2: string | null;
+      city: string | null;
+      stateOrProvince: string | null;
+      postalCode: string | null;
+      country: string | null;
       fullName: string | null;
       unitName: string;
       sustainedOn: string | null;
@@ -2030,6 +2065,15 @@ export const loadSqliteSpikeCallingsList = async () => {
         organizationName: string | null;
         lcrMemberId: string | null;
         email: string | null;
+        phoneNumber: string | null;
+        firstName: string | null;
+        lastName: string | null;
+        addressLine1: string | null;
+        addressLine2: string | null;
+        city: string | null;
+        stateOrProvince: string | null;
+        postalCode: string | null;
+        country: string | null;
         fullName: string | null;
         unitName: string;
         isLeadership: boolean;

@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { EmailAddressLink } from "@/components/contact-links";
+import {
+  buildAppleContactsVcf,
+  buildContactsFilename,
+  buildGoogleContactsCsv,
+  downloadTextFile,
+  type ExportContact
+} from "@/src/contacts/contactExport";
 import { CALLING_GROUP_DEFINITIONS, type CallingGroupId, matchesCallingGroup } from "@/src/callings/callingGroups";
 
 type CallingRow = {
@@ -10,6 +17,15 @@ type CallingRow = {
   organizationName: string | null;
   lcrMemberId: string | null;
   email: string | null;
+  phoneNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  stateOrProvince: string | null;
+  postalCode: string | null;
+  country: string | null;
   fullName: string | null;
   unitName: string;
   isLeadership: boolean;
@@ -58,6 +74,14 @@ const compareValues = (
 
 const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
 
+const copyToClipboard = async (value: string) => {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    throw new Error("Clipboard is unavailable.");
+  }
+
+  await navigator.clipboard.writeText(value);
+};
+
 const summarizeSelectedGroups = (labels: string[]) => {
   if (labels.length === 0) {
     return "All current callings";
@@ -70,10 +94,12 @@ const summarizeSelectedGroups = (labels: string[]) => {
 
 export function CallingsBrowser({
   callings,
-  availableUnits
+  availableUnits,
+  stakeName
 }: {
   callings: CallingRow[];
   availableUnits: string[];
+  stakeName: string;
 }) {
   const [callingFilter, setCallingFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -81,6 +107,7 @@ export function CallingsBrowser({
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("callingTitle");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [phonesCopied, setPhonesCopied] = useState(false);
 
   const unitOptions = useMemo(() => {
     const units = Array.from(
@@ -127,6 +154,15 @@ export function CallingsBrowser({
       new Set(
         filteredCallings
           .map((calling) => calling.email?.trim() ?? "")
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [filteredCallings]);
+  const visiblePhoneList = useMemo(() => {
+    return Array.from(
+      new Set(
+        filteredCallings
+          .map((calling) => calling.phoneNumber?.trim() ?? "")
           .filter(Boolean)
       )
     ).sort((a, b) => a.localeCompare(b));
@@ -197,6 +233,80 @@ export function CallingsBrowser({
   };
 
   const clearGroupFilters = () => setSelectedGroupIds([]);
+
+  const exportableContacts = useMemo<ExportContact[]>(() => {
+    const byKey = new Map<string, ExportContact>();
+
+    for (const calling of filteredCallings) {
+      if (!calling.fullName || !calling.lcrMemberId) {
+        continue;
+      }
+      if (!calling.email && !calling.phoneNumber && !calling.addressLine1 && !calling.addressLine2) {
+        continue;
+      }
+
+      const key = calling.lcrMemberId || `${calling.fullName}:${calling.email || ""}:${calling.phoneNumber || ""}`;
+      const existing = byKey.get(key);
+      const notes = [
+        calling.unitName ? `Unit: ${calling.unitName}` : "",
+        calling.organizationName ? `Organization: ${calling.organizationName}` : "",
+        `Visible calling: ${calling.callingTitle}`,
+        calling.sustainedOn ? `Sustained: ${calling.sustainedOn}` : "",
+        "Exported from StakeOS callings"
+      ].filter(Boolean);
+
+      if (!existing) {
+        byKey.set(key, {
+          fullName: calling.fullName,
+          firstName: calling.firstName,
+          lastName: calling.lastName,
+          email: calling.email,
+          phoneNumber: calling.phoneNumber,
+          unitName: calling.unitName,
+          addressLine1: calling.addressLine1,
+          addressLine2: calling.addressLine2,
+          city: calling.city,
+          stateOrProvince: calling.stateOrProvince,
+          postalCode: calling.postalCode,
+          country: calling.country,
+          title: calling.callingTitle,
+          notes
+        });
+        continue;
+      }
+
+      const nextNotes = new Set([...(existing.notes ?? []), ...notes]);
+      byKey.set(key, {
+        ...existing,
+        title: existing.title || calling.callingTitle,
+        notes: Array.from(nextNotes)
+      });
+    }
+
+    return Array.from(byKey.values()).sort((left, right) => left.fullName.localeCompare(right.fullName));
+  }, [filteredCallings]);
+
+  const exportAppleContacts = () => {
+    if (exportableContacts.length === 0) {
+      return;
+    }
+    downloadTextFile(
+      buildContactsFilename(stakeName, "callings-apple-contacts", "vcf"),
+      buildAppleContactsVcf(exportableContacts, stakeName),
+      "text/vcard"
+    );
+  };
+
+  const exportGoogleContacts = () => {
+    if (exportableContacts.length === 0) {
+      return;
+    }
+    downloadTextFile(
+      buildContactsFilename(stakeName, "callings-google-contacts", "csv"),
+      buildGoogleContactsCsv(exportableContacts, stakeName),
+      "text/csv"
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -319,21 +429,22 @@ export function CallingsBrowser({
       </section>
 
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
-        <div>
-          <p className="text-slate-500">Visible Calling Emails</p>
-          <p className="font-semibold text-slate-900">{visibleEmailList.length}</p>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {visibleEmailList.length} emails
+          </span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {visiblePhoneList.length} phones
+          </span>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+            {exportableContacts.length} exportable
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {visibleEmailList.length > 0 ? (
-            <div className="hidden max-w-[28rem] text-xs text-slate-500 md:block">
-              {visibleEmailList.slice(0, 3).join(", ")}
-              {visibleEmailList.length > 3 ? ` + ${visibleEmailList.length - 3} more` : ""}
-            </div>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-2">
           {emailVisibleHref ? (
             <a
               href={emailVisibleHref}
-              className="rounded-full bg-teal-700 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-teal-800"
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
             >
               Email Filtered Callings
             </a>
@@ -342,6 +453,43 @@ export function CallingsBrowser({
               No visible emails
             </div>
           )}
+          {visiblePhoneList.length > 0 ? (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await copyToClipboard(visiblePhoneList.join("\n"));
+                  setPhonesCopied(true);
+                  window.setTimeout(() => setPhonesCopied(false), 1500);
+                } catch {
+                  setPhonesCopied(false);
+                }
+              }}
+              className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
+            >
+              {phonesCopied ? "Phone Numbers Copied" : "Copy Filtered Phones"}
+            </button>
+          ) : (
+            <div className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-400">
+              No visible phones
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={exportAppleContacts}
+            disabled={exportableContacts.length === 0}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Export Apple Contacts
+          </button>
+          <button
+            type="button"
+            onClick={exportGoogleContacts}
+            disabled={exportableContacts.length === 0}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            Export Google Contacts
+          </button>
         </div>
       </section>
 
