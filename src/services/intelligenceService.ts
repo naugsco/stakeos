@@ -51,6 +51,35 @@ export interface CurrentlyServingMissionaryRow {
   currentCalling: string | null;
 }
 
+export interface MissionaryFamilyMemberRow {
+  lcrMemberId: string;
+  fullName: string;
+  age: number | null;
+  gender: string | null;
+  householdPosition: string | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  missionStatus: string | null;
+  missionCountry: string | null;
+}
+
+export interface MissionaryFamilyInfoResult {
+  missionary: {
+    lcrMemberId: string;
+    fullName: string;
+    missionCountry: string | null;
+    missionStatus: string | null;
+    age: number | null;
+    gender: string | null;
+    unitName: string | null;
+  };
+  householdName: string;
+  householdId: number;
+  emailList: string;
+  phoneList: string;
+  members: MissionaryFamilyMemberRow[];
+}
+
 export type MissionEligibleSortBy = "unit_age" | "age" | "unit" | "name";
 export type MissionEligibleSortDirection = "asc" | "desc";
 
@@ -1010,6 +1039,115 @@ export const getCurrentlyServingMissionaries = async (): Promise<CurrentlyServin
   }
 };
 
+export const getMissionaryFamilyInfo = async (search: string): Promise<MissionaryFamilyInfoResult | null> => {
+  const db = openSqliteSpikeDb();
+  try {
+    const missionary = db.prepare(
+      `
+      SELECT
+        m.id AS memberId,
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        ${unitNameExpr()} AS unitName,
+        m.gender,
+        m.age,
+        m.mission_country AS missionCountry,
+        m.mission_status AS missionStatus,
+        m.household_id AS householdId
+      FROM members m
+      WHERE
+        (
+          NULLIF(TRIM(COALESCE(m.mission_status, '')), '') IS NOT NULL
+          OR (
+            NULLIF(TRIM(COALESCE(m.mission_country, '')), '') IS NOT NULL
+            AND COALESCE(m.is_returned_missionary, 0) = 0
+          )
+        )
+        AND (
+          m.lcr_member_id = ?
+          OR ${fullNameExpr} LIKE ?
+        )
+      ORDER BY m.last_name, m.first_name
+      LIMIT 1
+      `
+    ).get(search.trim(), `%${search.trim()}%`) as {
+      memberId: number;
+      lcrMemberId: string;
+      fullName: string;
+      unitName: string | null;
+      gender: string | null;
+      age: number | null;
+      missionCountry: string | null;
+      missionStatus: string | null;
+      householdId: number | null;
+    } | undefined;
+
+    if (!missionary || !missionary.householdId) {
+      return null;
+    }
+
+    const householdId = missionary.householdId;
+
+    const household = db.prepare(
+      `
+      SELECT
+        h.id AS householdId,
+        COALESCE(NULLIF(h.household_name, ''), NULLIF(m.head_of_house, ''), 'Household') AS householdName
+      FROM households h
+      JOIN members m ON m.household_id = h.id
+      WHERE h.id = ?
+      ORDER BY m.last_name, m.first_name
+      LIMIT 1
+      `
+    ).get(householdId) as { householdId: number; householdName: string } | undefined;
+
+    const members = db.prepare(
+      `
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        ${fullNameExpr} AS fullName,
+        m.age,
+        m.gender,
+        m.household_position AS householdPosition,
+        m.primary_email AS primaryEmail,
+        m.primary_phone AS primaryPhone,
+        m.mission_status AS missionStatus,
+        m.mission_country AS missionCountry
+      FROM members m
+      WHERE m.household_id = ?
+      ORDER BY m.last_name, m.first_name
+      `
+    ).all(householdId) as MissionaryFamilyMemberRow[];
+
+    const contacts = db.prepare(
+      `
+      SELECT
+        COALESCE((SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = ? AND primary_email IS NOT NULL)), '') AS emailList,
+        COALESCE((SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = ? AND primary_phone IS NOT NULL)), '') AS phoneList
+      `
+    ).get(householdId, householdId) as { emailList: string; phoneList: string } | undefined;
+
+    return {
+      missionary: {
+        lcrMemberId: missionary.lcrMemberId,
+        fullName: missionary.fullName,
+        missionCountry: missionary.missionCountry,
+        missionStatus: missionary.missionStatus,
+        age: missionary.age,
+        gender: missionary.gender,
+        unitName: missionary.unitName
+      },
+      householdName: household?.householdName ?? "Household",
+      householdId,
+      emailList: contacts?.emailList ?? "",
+      phoneList: contacts?.phoneList ?? "",
+      members
+    };
+  } finally {
+    db.close();
+  }
+};
+
 const missionEligibleOrderBySqlite: Record<`${MissionEligibleSortBy}_${MissionEligibleSortDirection}`, string> = {
   unit_age_asc:
     `${unitNameExpr()} ASC, ` +
@@ -1424,8 +1562,8 @@ export const getYouthHouseholdContactList = async (options: YouthHouseholdContac
       `
       SELECT
         GROUP_CONCAT(TRIM(pm.first_name || ' ' || pm.last_name), ' | ') AS parentGuardianNames,
-        GROUP_CONCAT(DISTINCT pm.primary_phone, ' | ') AS parentGuardianPhones,
-        GROUP_CONCAT(DISTINCT pm.primary_email, ' | ') AS parentGuardianEmails
+        (SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = ? AND id <> ? AND age >= 18 AND primary_phone IS NOT NULL)) AS parentGuardianPhones,
+        (SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = ? AND id <> ? AND age >= 18 AND primary_email IS NOT NULL)) AS parentGuardianEmails
       FROM members pm
       WHERE pm.household_id = ?
         AND pm.id <> ?
@@ -1440,7 +1578,7 @@ export const getYouthHouseholdContactList = async (options: YouthHouseholdContac
       let parentGuardianEmails = "";
 
       if (youth.householdId) {
-        const guardian = guardianStmt.get(youth.householdId, youth.memberId) as {
+        const guardian = guardianStmt.get(youth.householdId, youth.memberId, youth.householdId, youth.memberId, youth.householdId, youth.memberId) as {
           parentGuardianNames: string | null;
           parentGuardianPhones: string | null;
           parentGuardianEmails: string | null;
@@ -1670,9 +1808,9 @@ export const getHouseholdContactList = async (unit?: string, search?: string): P
         COALESCE(MAX(NULLIF(m.unit_name, '')), 'Unknown') AS unitName,
         MAX(NULLIF(m.head_of_house, '')) AS headOfHouse,
         COUNT(DISTINCT m.id) AS memberCount,
-        GROUP_CONCAT(DISTINCT ${fullNameExpr}, ' | ') AS memberNames,
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_email, ' | '), '') AS emailList,
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_phone, ' | '), '') AS phoneList
+        (SELECT GROUP_CONCAT(n, ' | ') FROM (SELECT DISTINCT TRIM(first_name || ' ' || last_name) AS n FROM members WHERE household_id = h.id)) AS memberNames,
+        COALESCE((SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = h.id AND primary_email IS NOT NULL)), '') AS emailList,
+        COALESCE((SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = h.id AND primary_phone IS NOT NULL)), '') AS phoneList
       FROM households h
       JOIN members m ON m.household_id = h.id
       ${whereClause}
@@ -1726,7 +1864,9 @@ export const getHouseholdMembers = async (search: string) => {
         m.age,
         m.gender,
         m.household_position AS householdPosition,
-        m.spouse_name AS spouseName
+        m.spouse_name AS spouseName,
+        m.mission_status AS missionStatus,
+        m.mission_country AS missionCountry
       FROM members m
       WHERE m.household_id = ?
       ORDER BY m.last_name, m.first_name
@@ -1738,17 +1878,17 @@ export const getHouseholdMembers = async (search: string) => {
       gender: string | null;
       householdPosition: string | null;
       spouseName: string | null;
+      missionStatus: string | null;
+      missionCountry: string | null;
     }>;
 
     const contacts = db.prepare(
       `
       SELECT
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_email, ' | '), '') AS emailList,
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_phone, ' | '), '') AS phoneList
-      FROM members m
-      WHERE m.household_id = ?
+        COALESCE((SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = ? AND primary_email IS NOT NULL)), '') AS emailList,
+        COALESCE((SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = ? AND primary_phone IS NOT NULL)), '') AS phoneList
       `
-    ).get(household.householdId) as { emailList: string; phoneList: string } | undefined;
+    ).get(household.householdId, household.householdId) as { emailList: string; phoneList: string } | undefined;
 
     return {
       ...household,
@@ -1786,8 +1926,8 @@ export const getMarriedCouplesContactList = async (unit?: string): Promise<Marri
           CASE WHEN COALESCE(m.is_married, 0) = 1 OR COALESCE(m.spouse_name, '') <> '' THEN ${fullNameExpr} END,
           ' & '
         ) AS coupleNames,
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_email, ' | '), '') AS emailList,
-        COALESCE(GROUP_CONCAT(DISTINCT m.primary_phone, ' | '), '') AS phoneList
+        COALESCE((SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = h.id AND primary_email IS NOT NULL)), '') AS emailList,
+        COALESCE((SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = h.id AND primary_phone IS NOT NULL)), '') AS phoneList
       FROM households h
       JOIN members m ON m.household_id = h.id
       ${whereClause}
@@ -3960,8 +4100,8 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
         COUNT(DISTINCT CASE WHEN m.baptism_date IS NOT NULL AND m.baptism_date >= datetime('now', '-12 months') THEN m.id END) AS recentBaptismCount,
         COUNT(DISTINCT CASE WHEN m.temple_recommend_expiration_date IS NOT NULL AND m.temple_recommend_expiration_date <= date('now', '+90 days') THEN m.id END) AS recommendRiskCount,
         COUNT(DISTINCT CASE WHEN COALESCE(m.has_ministering_brothers, 0) = 0 AND COALESCE(m.has_ministering_sisters, 0) = 0 THEN m.id END) AS ministeringGapCount,
-        GROUP_CONCAT(DISTINCT m.primary_email, ' | ') AS householdEmails,
-        GROUP_CONCAT(DISTINCT m.primary_phone, ' | ') AS householdPhones
+        (SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = h.id AND primary_email IS NOT NULL)) AS householdEmails,
+        (SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = h.id AND primary_phone IS NOT NULL)) AS householdPhones
       FROM households h
       JOIN members m ON m.household_id = h.id
       GROUP BY h.id, h.household_name

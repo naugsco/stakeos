@@ -24,10 +24,12 @@ import {
 } from "@/src/services/advancedMcpService";
 import {
   getCovenantPathProgressionReport,
+  getCurrentlyServingMissionaries,
   endowmentCandidates,
   generateReport,
   getHouseholdContactList,
   getHouseholdMembers,
+  getMissionaryFamilyInfo,
   getCommitteeContactList,
   getHouseholdOutreachReport,
   getEndowmentReadinessContactList,
@@ -677,6 +679,25 @@ const tools = [
       type: "object",
       properties: {}
     }
+  },
+  {
+    name: "currently_serving_missionaries",
+    description: "List all currently serving missionaries with mission country, status, contact info, and current calling.",
+    inputSchema: {
+      type: "object",
+      properties: {}
+    }
+  },
+  {
+    name: "missionary_family_info",
+    description: "Look up a currently-serving missionary by name or LCR member ID and return their household members and contact info — for contacting parents or siblings.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Missionary name or LCR member ID" }
+      },
+      required: ["search"]
+    }
   }
 ] as const;
 
@@ -1104,6 +1125,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case "task_recommendations": {
         const result = await getTaskRecommendations();
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "currently_serving_missionaries": {
+        const result = await getCurrentlyServingMissionaries();
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "missionary_family_info": {
+        const result = await getMissionaryFamilyInfo(String(args.search ?? ""));
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
       default:
