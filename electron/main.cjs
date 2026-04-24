@@ -463,14 +463,15 @@ function applyWindowMode(routeOrUrl) {
 
   const bounds = getWindowBoundsForRoute(routeOrUrl);
   const currentBounds = mainWindow.getBounds();
+  const nextWidth = Math.max(currentBounds.width, bounds.minWidth);
+  const nextHeight = Math.max(currentBounds.height, bounds.minHeight);
   const needsResize =
-    currentBounds.width !== bounds.width ||
-    currentBounds.height !== bounds.height;
+    currentBounds.width !== nextWidth ||
+    currentBounds.height !== nextHeight;
 
   mainWindow.setMinimumSize(bounds.minWidth, bounds.minHeight);
   if (needsResize) {
-    mainWindow.setSize(bounds.width, bounds.height, true);
-    mainWindow.center();
+    mainWindow.setSize(nextWidth, nextHeight, true);
   }
 }
 

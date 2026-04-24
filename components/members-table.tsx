@@ -102,11 +102,16 @@ const summarizeSelectedGroups = (labels: string[]) => {
   if (labels.length === 0) {
     return "All active members";
   }
-  if (labels.length <= 2) {
+  if (labels.length === 1) {
+    return labels[0];
+  }
+  if (labels.length <= 3) {
     return labels.join(", ");
   }
-  return `${labels.slice(0, 2).join(", ")} + ${labels.length - 2} more`;
+  return `${labels.length} groups selected`;
 };
+
+const normalizePhoneSearch = (value: string | null | undefined) => (value ?? "").replace(/\D+/g, "");
 
 const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
 
@@ -150,8 +155,13 @@ export function MembersTable({
 
   const visibleRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
+    const phoneQuery = normalizePhoneSearch(searchTerm);
     const filtered = members.filter((member) => {
-      const searchMatch = !query || member.fullName.toLowerCase().includes(query);
+      const searchMatch =
+        !query ||
+        member.fullName.toLowerCase().includes(query) ||
+        (member.email ?? "").toLowerCase().includes(query) ||
+        (phoneQuery.length > 0 && normalizePhoneSearch(member.phoneNumber).includes(phoneQuery));
       const unitMatch = unitFilter === "all" || (member.unitName ?? "") === unitFilter;
       const groupMatch =
         selectedGroupIds.length === 0 ||
@@ -268,14 +278,14 @@ export function MembersTable({
         <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(220px,0.8fr)_minmax(260px,1fr)]">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600" htmlFor="member-search">
-              Search Members by Name
+              Search Members
             </label>
             <input
               id="member-search"
               type="search"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Start typing a member name..."
+              placeholder="Start typing a member name, email, or phone..."
               className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none ring-amber-300 transition focus:ring-2"
             />
           </div>
@@ -311,9 +321,7 @@ export function MembersTable({
             </button>
             {selectedGroups.length > 0 ? (
               <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                <p className="min-w-0 truncate text-slate-500">
-                  {selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active: {selectedGroupLabels.join(", ")}
-                </p>
+                <p className="min-w-0 truncate text-slate-500">{selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active</p>
                 <button
                   type="button"
                   onClick={clearGroupFilters}
@@ -347,28 +355,30 @@ export function MembersTable({
                     </button>
                   </div>
                 </div>
-                <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
-                  {[1, 2].map((column) => (
-                    <div key={column} className="space-y-1">
-                      {MEMBER_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
-                        const selected = selectedGroupIds.includes(group.id);
-                        return (
-                          <label
-                            key={group.id}
-                            className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleGroup(group.id)}
-                              className="mt-1 h-4 w-4"
-                            />
-                            <span className="text-sm text-slate-800">{group.label}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ))}
+                <div className="max-h-[24rem] overflow-y-auto pr-1">
+                  <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
+                    {[1, 2].map((column) => (
+                      <div key={column} className="space-y-1">
+                        {MEMBER_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
+                          const selected = selectedGroupIds.includes(group.id);
+                          return (
+                            <label
+                              key={group.id}
+                              className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() => toggleGroup(group.id)}
+                                className="mt-1 h-4 w-4"
+                              />
+                              <span className="text-sm text-slate-800">{group.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : null}

@@ -55,11 +55,16 @@ const isBishopricTitle = (title: string) =>
   isBishopTitle(title) || /^(bishopric|branch presidency) (first|second) counselor$/.test(title);
 const isClerkTitle = (title: string) => /\bclerk\b/.test(title);
 const isExecutiveSecretaryTitle = (title: string) => /\bexecutive secretary\b/.test(title);
-const isEldersQuorumPresidencyTitle = (title: string) => /^(elders quorum) (president|first counselor|second counselor)$/.test(title);
-const isReliefSocietyPresidencyTitle = (title: string) => /^(relief society) (president|first counselor|second counselor)$/.test(title);
-const isYoungWomenPresidencyTitle = (title: string) => /^(young women) (president|first counselor|second counselor)$/.test(title);
-const isSundaySchoolPresidencyTitle = (title: string) => /^(sunday school) (president|first counselor|second counselor)$/.test(title);
-const isPrimaryPresidencyTitle = (title: string) => /^(primary) (president|first counselor|second counselor)$/.test(title);
+const isEldersQuorumPresidencyTitle = (title: string) =>
+  /^(elders quorum) (president|first counselor|second counselor|secretary)$/.test(title);
+const isReliefSocietyPresidencyTitle = (title: string) =>
+  /^(relief society) (president|first counselor|second counselor|secretary)$/.test(title);
+const isYoungWomenPresidencyTitle = (title: string) =>
+  /^(young women) (president|first counselor|second counselor|secretary)$/.test(title);
+const isSundaySchoolPresidencyTitle = (title: string) =>
+  /^(sunday school) (president|first counselor|second counselor|secretary)$/.test(title);
+const isPrimaryPresidencyTitle = (title: string) =>
+  /^(primary) (president|first counselor|second counselor|secretary)$/.test(title);
 const isWardMissionLeaderTitle = (title: string) => /^(ward|branch) mission leader$/.test(title);
 const isWardYsaLeaderTitle = (title: string, organizationName: string) =>
   /young single adult/.test(title) || /young single adult/.test(organizationName);

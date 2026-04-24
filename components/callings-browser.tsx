@@ -35,6 +35,7 @@ type CallingRow = {
 
 type SortKey = "callingTitle" | "isLeadership" | "assigned" | "sustainedOn" | "isCurrent";
 type SortDirection = "asc" | "desc";
+type SustainedWindow = "all" | "last_30_days" | "last_60_days";
 
 const compareValues = (
   a: string | number | boolean | null,
@@ -86,10 +87,28 @@ const summarizeSelectedGroups = (labels: string[]) => {
   if (labels.length === 0) {
     return "All current callings";
   }
-  if (labels.length <= 2) {
+  if (labels.length === 1) {
+    return labels[0];
+  }
+  if (labels.length <= 3) {
     return labels.join(", ");
   }
-  return `${labels.slice(0, 2).join(", ")} + ${labels.length - 2} more`;
+  return `${labels.length} groups selected`;
+};
+
+const isRecentlySustained = (value: string | null, days: number) => {
+  if (!value) {
+    return false;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+
+  const now = new Date();
+  const daysAgo = (now.getTime() - parsed.getTime()) / (1000 * 60 * 60 * 24);
+  return daysAgo >= 0 && daysAgo <= days;
 };
 
 export function CallingsBrowser({
@@ -104,6 +123,7 @@ export function CallingsBrowser({
   const [callingFilter, setCallingFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("all");
   const [selectedGroupIds, setSelectedGroupIds] = useState<CallingGroupId[]>([]);
+  const [sustainedWindow, setSustainedWindow] = useState<SustainedWindow>("all");
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("callingTitle");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -137,10 +157,14 @@ export function CallingsBrowser({
         !needle ||
         calling.callingTitle.toLowerCase().includes(needle) ||
         (calling.organizationName ?? "").toLowerCase().includes(needle);
+      const sustainedMatch =
+        sustainedWindow === "all" ||
+        (sustainedWindow === "last_30_days" && isRecentlySustained(calling.sustainedOn, 30)) ||
+        (sustainedWindow === "last_60_days" && isRecentlySustained(calling.sustainedOn, 60));
 
-      return unitMatch && groupMatch && callingMatch;
+      return unitMatch && groupMatch && callingMatch && sustainedMatch;
     });
-  }, [callings, callingFilter, selectedGroupIds, unitFilter]);
+  }, [callings, callingFilter, selectedGroupIds, sustainedWindow, unitFilter]);
 
   const currentCount = filteredCallings.filter((calling) => calling.isCurrent).length;
   const leadershipCount = filteredCallings.filter((calling) => calling.isLeadership).length;
@@ -310,7 +334,7 @@ export function CallingsBrowser({
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1.1fr_0.9fr_1.2fr]">
+      <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1.1fr_0.85fr_0.8fr_1.2fr]">
         <div>
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Filter Calling</label>
           <input
@@ -336,6 +360,19 @@ export function CallingsBrowser({
           </select>
         </div>
 
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Sustained Date</label>
+          <select
+            value={sustainedWindow}
+            onChange={(event) => setSustainedWindow(event.target.value as SustainedWindow)}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Dates</option>
+            <option value="last_30_days">Last 30 Days</option>
+            <option value="last_60_days">Last 60 Days</option>
+          </select>
+        </div>
+
         <div className="relative">
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Calling Groups</label>
           <button
@@ -348,9 +385,7 @@ export function CallingsBrowser({
           </button>
           {selectedGroups.length > 0 ? (
             <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-              <p className="min-w-0 truncate text-slate-500">
-                {selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active: {selectedGroupLabels.join(", ")}
-              </p>
+              <p className="min-w-0 truncate text-slate-500">{selectedGroups.length} group{selectedGroups.length === 1 ? "" : "s"} active</p>
               <button
                 type="button"
                 onClick={clearGroupFilters}
@@ -384,25 +419,27 @@ export function CallingsBrowser({
                   </button>
                 </div>
               </div>
-              <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
-                {[1, 2].map((column) => (
-                  <div key={column} className="space-y-1">
-                    {CALLING_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
-                      const selected = selectedGroupIds.includes(group.id);
-                      return (
-                        <label key={group.id} className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50">
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleGroup(group.id)}
-                            className="mt-1 h-4 w-4"
-                          />
-                          <span className="text-sm text-slate-800">{group.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ))}
+              <div className="max-h-[24rem] overflow-y-auto pr-1">
+                <div className="grid gap-x-10 gap-y-2 md:grid-cols-2">
+                  {[1, 2].map((column) => (
+                    <div key={column} className="space-y-1">
+                      {CALLING_GROUP_DEFINITIONS.filter((group) => group.column === column).map((group) => {
+                        const selected = selectedGroupIds.includes(group.id);
+                        return (
+                          <label key={group.id} className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 transition hover:bg-slate-50">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleGroup(group.id)}
+                              className="mt-1 h-4 w-4"
+                            />
+                            <span className="text-sm text-slate-800">{group.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ) : null}

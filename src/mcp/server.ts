@@ -179,7 +179,7 @@ const tools = [
   },
   {
     name: "calling_group_contact_list",
-    description: "Current calling contact list for one or more named StakeOS calling groups.",
+    description: "Current calling contact list for one or more named StakeOS calling groups. Presidency groups include the secretary when one is present.",
     inputSchema: {
       type: "object",
       properties: {
@@ -488,11 +488,11 @@ const tools = [
   },
   {
     name: "resolve_member",
-    description: "Resolve a member reference to best candidate records before downstream actions.",
+    description: "Resolve a member reference to best candidate records before downstream actions. Query can be a name, LCR member id, email, or phone number.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string" },
+        query: { type: "string", description: "Member name, LCR member id, email, or phone number." },
         unit: { type: "string" },
         limit: { type: "number" }
       },
@@ -514,7 +514,7 @@ const tools = [
   },
   {
     name: "people_contact_query",
-    description: "Unified people/contact query tool with filters, columns, and sorting in one request.",
+    description: "Unified people/contact query tool with filters, columns, and sorting in one request. The free-text search supports name, email, and phone matching.",
     inputSchema: {
       type: "object",
       properties: {
@@ -531,7 +531,7 @@ const tools = [
         templeRecommendStatus: { type: "string" },
         isAttendingSeminary: { type: "boolean" },
         isAttendingInstitute: { type: "boolean" },
-        search: { type: "string" },
+        search: { type: "string", description: "Free-text search across member name, email, and phone." },
         sortBy: { type: "string", enum: ["unit", "age", "name", "calling"] },
         sortDirection: { type: "string", enum: ["asc", "desc"] },
         limit: { type: "number" }
