@@ -196,3 +196,16 @@ CREATE INDEX IF NOT EXISTS idx_sync_email_snapshots_log ON sync_email_snapshots(
 CREATE INDEX IF NOT EXISTS idx_sync_email_snapshots_member ON sync_email_snapshots(member_lcr_member_id);
 CREATE INDEX IF NOT EXISTS idx_sync_phone_snapshots_log ON sync_phone_snapshots(sync_log_id);
 CREATE INDEX IF NOT EXISTS idx_sync_phone_snapshots_member ON sync_phone_snapshots(member_lcr_member_id);
+
+CREATE TABLE IF NOT EXISTS training_follow_up_state (
+  group_key TEXT PRIMARY KEY,
+  group_label TEXT NOT NULL,
+  last_draft_at TEXT,
+  last_draft_signature TEXT,
+  last_draft_subject TEXT,
+  last_sent_at TEXT,
+  last_sent_signature TEXT,
+  last_sent_subject TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

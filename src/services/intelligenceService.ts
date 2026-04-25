@@ -3708,9 +3708,10 @@ export const getUnitHealthRadarData = async (): Promise<UnitHealthRadarRow[]> =>
     const leadershipRows = db.prepare(
       `
       SELECT
-        COALESCE(NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
+        COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
         COUNT(*) AS leadershipCallings
       FROM callings c
+      LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id
       WHERE c.released_on IS NULL AND c.is_current = 1
         AND c.lcr_member_id IS NOT NULL
         AND (c.title LIKE '%president%' OR c.title LIKE '%President%' OR c.title LIKE '%bishop%' OR c.title LIKE '%Bishop%' OR c.title LIKE '%high councilor%' OR c.title LIKE '%High Councilor%')

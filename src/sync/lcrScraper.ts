@@ -29,6 +29,52 @@ const defaultUnit: UnitRecord = {
   unitType: "Stake"
 };
 
+const deriveSyntheticUnitNumber = (unitName?: string, unitAbbreviation?: string) => {
+  const label = normalizeWhitespace(unitName ?? unitAbbreviation ?? "").trim();
+  if (!label) {
+    return env.UNIT_NUMBER;
+  }
+
+  return `generated-unit-${stableHash(label.toLowerCase()).slice(0, 12)}`;
+};
+
+const inferUnitType = (unitName?: string) => {
+  const label = normalizeWhitespace(unitName ?? "").trim();
+  if (!label) {
+    return "Unit";
+  }
+  if (/branch/i.test(label)) {
+    return "Branch";
+  }
+  if (/ward/i.test(label)) {
+    return "Ward";
+  }
+  return "Unit";
+};
+
+const buildUnitsFromMembers = (members: MemberRecord[]): UnitRecord[] => {
+  const units = new Map<string, UnitRecord>();
+
+  for (const member of members) {
+    const unitName = normalizeWhitespace(member.unitName ?? member.unitAbbreviation ?? "").trim();
+    if (!unitName) {
+      continue;
+    }
+
+    if (!units.has(member.unitNumber)) {
+      units.set(member.unitNumber, {
+        unitNumber: member.unitNumber,
+        name: unitName,
+        unitType: inferUnitType(unitName)
+      });
+    }
+  }
+
+  return units.size > 0
+    ? Array.from(units.values()).sort((left, right) => left.name.localeCompare(right.name))
+    : [defaultUnit];
+};
+
 const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const collapseRepeatedText = (value: string): string => {
@@ -177,6 +223,7 @@ const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
       const phone = valueFromRow(row, ["Individual Phone", "Phone"], { strict: true });
       const unitName = valueFromRow(row, ["Unit"], { strict: true });
       const unitAbbreviation = valueFromRow(row, ["Unit Abbreviation"], { strict: true });
+      const unitNumber = deriveSyntheticUnitNumber(unitName, unitAbbreviation);
 
       const memberId =
         valueFromRow(row, ["Individual ID", "Member ID", "Person ID"], { strict: true }) ??
@@ -215,7 +262,7 @@ const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
       const record: MemberRecord = {
         lcrMemberId: memberId,
         lcrHouseholdId,
-        unitNumber: env.UNIT_NUMBER,
+        unitNumber,
         unitName,
         unitAbbreviation,
         preferredName,
@@ -312,12 +359,17 @@ const getFallbackMembersFromPayload = (payloadObjects: Record<string, unknown>[]
     }
 
     const { firstName, lastName, preferredName } = normalizeName(nameCandidate);
+    const unitName = valueFromRow(payload, ["unitname", "unit", "ward", "branch"]);
+    const unitAbbreviation = valueFromRow(payload, ["unitabbreviation", "unit abbreviation"]);
+    const unitNumber = deriveSyntheticUnitNumber(unitName, unitAbbreviation);
 
     if (!members.has(memberId)) {
       members.set(memberId, {
         lcrMemberId: memberId,
         lcrHouseholdId: valueFromRow(payload, ["householdid"]),
-        unitNumber: env.UNIT_NUMBER,
+        unitNumber,
+        unitName,
+        unitAbbreviation,
         preferredName,
         firstName,
         lastName,
@@ -407,9 +459,12 @@ const parseHouseholds = (members: MemberRecord[], payloadObjects: Record<string,
     }
 
     const lcrHouseholdId = maybeHouseholdId ?? `generated-household-${stableHash(JSON.stringify(payload))}`;
+    const unitName = valueFromRow(payload, ["unitname", "unit", "ward", "branch"]);
+    const unitAbbreviation = valueFromRow(payload, ["unitabbreviation", "unit abbreviation"]);
+
     households.set(lcrHouseholdId, {
       lcrHouseholdId,
-      unitNumber: env.UNIT_NUMBER,
+      unitNumber: deriveSyntheticUnitNumber(unitName, unitAbbreviation),
       householdName: valueFromRow(payload, ["householdname", "familyname"]) ?? "Household",
       addressLine1: valueFromRow(payload, ["addressline1", "street"]),
       addressLine2: valueFromRow(payload, ["addressline2"]),
@@ -808,12 +863,7 @@ export class LcrScraper {
       );
 
       return {
-        units: [
-          {
-            ...defaultUnit,
-            name: members[0]?.unitName ?? env.STAKE_NAME
-          }
-        ],
+        units: buildUnitsFromMembers(members),
         households,
         members,
         organizations,

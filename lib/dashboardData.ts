@@ -2,7 +2,7 @@ import {
   getMissionGenderBreakdown
 } from "@/src/services/intelligenceService";
 import { getEffectiveDesktopEnv, parseHighCouncilUnitAssignments } from "@/src/config/desktopConfig";
-import { openSqliteSpikeDb } from "@/src/sqlite/db";
+import { ensureSqliteSpikeSchema, openSqliteSpikeDb } from "@/src/sqlite/db";
 import {
   loadSqliteSpikeCallingsList,
   loadSqliteSpikeAvailableUnits,
@@ -16,6 +16,16 @@ import {
   loadSqliteSpikeYouthPageData
 } from "@/src/sqlite/queries";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
+
+export type TrainingFollowUpStateRecord = {
+  groupLabel: string;
+  lastDraftAt: string | null;
+  lastDraftSignature: string | null;
+  lastDraftSubject: string | null;
+  lastSentAt: string | null;
+  lastSentSignature: string | null;
+  lastSentSubject: string | null;
+};
 
 const splitConfiguredEmails = (value?: string | null) =>
   (value ?? "")
@@ -103,6 +113,41 @@ const loadDynamicTrainingEmailRecipients = () => {
       stakeSundaySchool: dedupeEmails(lists.stakeSundaySchool),
       highCouncilByMemberId: lists.highCouncilByMemberId
     };
+  } finally {
+    db.close();
+  }
+};
+
+const loadTrainingFollowUpState = () => {
+  const db = openSqliteSpikeDb();
+  try {
+    ensureSqliteSpikeSchema(db);
+    const rows = db.prepare(
+      `SELECT
+        group_key AS groupKey,
+        group_label AS groupLabel,
+        last_draft_at AS lastDraftAt,
+        last_draft_signature AS lastDraftSignature,
+        last_draft_subject AS lastDraftSubject,
+        last_sent_at AS lastSentAt,
+        last_sent_signature AS lastSentSignature,
+        last_sent_subject AS lastSentSubject
+       FROM training_follow_up_state`
+    ).all() as Array<
+      {
+        groupKey: string;
+      } & TrainingFollowUpStateRecord
+    >;
+
+    return Object.fromEntries(rows.map((row) => [row.groupKey, {
+      groupLabel: row.groupLabel,
+      lastDraftAt: row.lastDraftAt,
+      lastDraftSignature: row.lastDraftSignature,
+      lastDraftSubject: row.lastDraftSubject,
+      lastSentAt: row.lastSentAt,
+      lastSentSignature: row.lastSentSignature,
+      lastSentSubject: row.lastSentSubject
+    }]));
   } finally {
     db.close();
   }
@@ -201,47 +246,49 @@ export const loadReportsPageShellDataBySource = async () => {
 export const loadYouthPageDataBySource = async () =>
   loadSqliteSpikeYouthPageData();
 
-export const loadStakeOverviewPageDataBySource = async () =>
-  {
-    const data = await loadSqliteSpikeStakeOverviewPageData();
-    const desktopEnv = getEffectiveDesktopEnv();
-    const dynamicRecipients = loadDynamicTrainingEmailRecipients();
-    const highCouncilUnitAssignments = parseHighCouncilUnitAssignments(desktopEnv.HIGH_COUNCIL_UNIT_ASSIGNMENTS);
-    return {
-      ...data,
-      trainingEmailRecipients: {
-        stakePresidency: dedupeEmails([...dynamicRecipients.stakePresidency, ...splitConfiguredEmails(desktopEnv.STAKE_PRESIDENCY_EMAILS)]),
-        stakeCouncil: dedupeEmails([
-          ...dynamicRecipients.stakePresidency,
-          ...dynamicRecipients.highCouncil,
-          ...dynamicRecipients.stakeReliefSociety,
-          ...dynamicRecipients.stakeYoungWomen,
-          ...dynamicRecipients.stakePrimary,
-          ...dynamicRecipients.stakeSundaySchool,
-          ...splitConfiguredEmails(desktopEnv.STAKE_COUNCIL_EMAILS)
-        ]),
-        highCouncil: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)]),
-        stakeReliefSociety: dedupeEmails([
-          ...(dynamicRecipients.stakeReliefSociety.length > 0 ? dynamicRecipients.stakeReliefSociety : dynamicRecipients.stakePresidency),
-          ...splitConfiguredEmails(desktopEnv.STAKE_RELIEF_SOCIETY_EMAILS)
-        ]),
-        stakeYoungWomen: dedupeEmails([
-          ...(dynamicRecipients.stakeYoungWomen.length > 0 ? dynamicRecipients.stakeYoungWomen : dynamicRecipients.stakePresidency),
-          ...splitConfiguredEmails(desktopEnv.STAKE_YOUNG_WOMEN_EMAILS)
-        ]),
-        stakePrimary: dedupeEmails([
-          ...(dynamicRecipients.stakePrimary.length > 0 ? dynamicRecipients.stakePrimary : dynamicRecipients.stakePresidency),
-          ...splitConfiguredEmails(desktopEnv.STAKE_PRIMARY_EMAILS)
-        ]),
-        stakeSundaySchool: dedupeEmails([
-          ...(dynamicRecipients.stakeSundaySchool.length > 0 ? dynamicRecipients.stakeSundaySchool : dynamicRecipients.stakePresidency),
-          ...splitConfiguredEmails(desktopEnv.STAKE_SUNDAY_SCHOOL_EMAILS)
-        ])
-      },
-      highCouncilTrainingAssignments: {
-        assignments: highCouncilUnitAssignments,
-        availableRecipientsByMemberId: dynamicRecipients.highCouncilByMemberId,
-        fallbackRecipients: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)])
-      }
-    };
+export const loadStakeOverviewPageDataBySource = async () => {
+  const data = await loadSqliteSpikeStakeOverviewPageData();
+  const desktopEnv = getEffectiveDesktopEnv();
+  const dynamicRecipients = loadDynamicTrainingEmailRecipients();
+  const trainingFollowUpState = loadTrainingFollowUpState();
+  const highCouncilUnitAssignments = parseHighCouncilUnitAssignments(desktopEnv.HIGH_COUNCIL_UNIT_ASSIGNMENTS);
+
+  return {
+    ...data,
+    trainingEmailRecipients: {
+      stakePresidency: dedupeEmails([...dynamicRecipients.stakePresidency, ...splitConfiguredEmails(desktopEnv.STAKE_PRESIDENCY_EMAILS)]),
+      stakeCouncil: dedupeEmails([
+        ...dynamicRecipients.stakePresidency,
+        ...dynamicRecipients.highCouncil,
+        ...dynamicRecipients.stakeReliefSociety,
+        ...dynamicRecipients.stakeYoungWomen,
+        ...dynamicRecipients.stakePrimary,
+        ...dynamicRecipients.stakeSundaySchool,
+        ...splitConfiguredEmails(desktopEnv.STAKE_COUNCIL_EMAILS)
+      ]),
+      highCouncil: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)]),
+      stakeReliefSociety: dedupeEmails([
+        ...(dynamicRecipients.stakeReliefSociety.length > 0 ? dynamicRecipients.stakeReliefSociety : dynamicRecipients.stakePresidency),
+        ...splitConfiguredEmails(desktopEnv.STAKE_RELIEF_SOCIETY_EMAILS)
+      ]),
+      stakeYoungWomen: dedupeEmails([
+        ...(dynamicRecipients.stakeYoungWomen.length > 0 ? dynamicRecipients.stakeYoungWomen : dynamicRecipients.stakePresidency),
+        ...splitConfiguredEmails(desktopEnv.STAKE_YOUNG_WOMEN_EMAILS)
+      ]),
+      stakePrimary: dedupeEmails([
+        ...(dynamicRecipients.stakePrimary.length > 0 ? dynamicRecipients.stakePrimary : dynamicRecipients.stakePresidency),
+        ...splitConfiguredEmails(desktopEnv.STAKE_PRIMARY_EMAILS)
+      ]),
+      stakeSundaySchool: dedupeEmails([
+        ...(dynamicRecipients.stakeSundaySchool.length > 0 ? dynamicRecipients.stakeSundaySchool : dynamicRecipients.stakePresidency),
+        ...splitConfiguredEmails(desktopEnv.STAKE_SUNDAY_SCHOOL_EMAILS)
+      ])
+    },
+    trainingFollowUpState,
+    highCouncilTrainingAssignments: {
+      assignments: highCouncilUnitAssignments,
+      availableRecipientsByMemberId: dynamicRecipients.highCouncilByMemberId,
+      fallbackRecipients: dedupeEmails([...dynamicRecipients.highCouncil, ...splitConfiguredEmails(desktopEnv.HIGH_COUNCIL_EMAILS)])
+    }
   };
+};

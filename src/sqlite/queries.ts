@@ -707,8 +707,12 @@ export const loadSqliteSpikeDashboardData = async (selectedUnitArg?: string | nu
     ).all() as SpikeMemberRow[];
 
     const allCallings = db.prepare(
-      `SELECT unit_name AS unitName, is_current AS isCurrent, lcr_member_id AS lcrMemberId
-       FROM callings`
+      `SELECT
+        COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
+        c.is_current AS isCurrent,
+        c.lcr_member_id AS lcrMemberId
+       FROM callings c
+       LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id`
     ).all() as SpikeCallingRow[];
 
     const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
@@ -1418,14 +1422,15 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
 
     const allCallings = db.prepare(
       `SELECT
-        lcr_member_id AS lcrMemberId,
-        unit_name AS unitName,
-        title,
-        organization_name AS organizationName,
-        sustained_on AS sustainedOn,
-        set_apart_on AS setApartOn,
-        is_current AS isCurrent
-       FROM callings`
+        c.lcr_member_id AS lcrMemberId,
+        COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
+        c.title,
+        c.organization_name AS organizationName,
+        c.sustained_on AS sustainedOn,
+        c.set_apart_on AS setApartOn,
+        c.is_current AS isCurrent
+       FROM callings c
+       LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id`
     ).all() as SpikeCallingDetailRow[];
 
     const allHouseholds = db.prepare(
@@ -2244,7 +2249,7 @@ export const loadSqliteSpikeYouthPageData = async (selectedUnitArg?: string | nu
     (async () => {
       const db = openSqliteSpikeDb();
       try {
-        return db.prepare(`SELECT lcr_member_id AS lcrMemberId, title, sustained_on AS sustainedOn, unit_name AS unitName FROM callings WHERE is_current = 1`).all() as Array<{ lcrMemberId: string | null; title: string; sustainedOn: string | null; unitName: string | null }>;
+        return db.prepare(`SELECT c.lcr_member_id AS lcrMemberId, c.title, c.sustained_on AS sustainedOn, COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName FROM callings c LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id WHERE c.is_current = 1`).all() as Array<{ lcrMemberId: string | null; title: string; sustainedOn: string | null; unitName: string | null }>;
       } finally { db.close(); }
     })()
   ]);
@@ -3036,7 +3041,7 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
   }
   const db = openSqliteSpikeDb();
   try {
-    const allCallings = db.prepare(`SELECT title, unit_name AS unitName, sustained_on AS sustainedOn, set_apart_on AS setApartOn, released_on AS releasedOn, is_current AS isCurrent, lcr_member_id AS lcrMemberId FROM callings`).all() as Array<{ title: string; unitName: string | null; sustainedOn: string | null; setApartOn: string | null; releasedOn: string | null; isCurrent: number; lcrMemberId: string | null }>;
+    const allCallings = db.prepare(`SELECT c.title, COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName, c.sustained_on AS sustainedOn, c.set_apart_on AS setApartOn, c.released_on AS releasedOn, c.is_current AS isCurrent, c.lcr_member_id AS lcrMemberId FROM callings c LEFT JOIN members m ON m.lcr_member_id = c.lcr_member_id`).all() as Array<{ title: string; unitName: string | null; sustainedOn: string | null; setApartOn: string | null; releasedOn: string | null; isCurrent: number; lcrMemberId: string | null }>;
     const allMembers = db.prepare(`SELECT lcr_member_id AS lcrMemberId, unit_name AS unitName, unit_abbreviation AS unitAbbreviation, temple_recommend_status AS templeRecommendStatus, is_convert AS isConvert, baptism_date AS baptismDate, move_in_date AS moveInDate, has_ministering_brothers AS hasMinisteringBrothers, has_ministering_sisters AS hasMinisteringSisters, age, birthdate, is_attending_seminary AS isAttendingSeminary, is_attending_institute AS isAttendingInstitute FROM members`).all() as SpikeMemberRow[];
     const syncRow = db.prepare(`SELECT sync_type AS syncType, status, completed_at AS completedAt FROM sync_logs WHERE status = 'success' ORDER BY completed_at DESC LIMIT 1`).get() as { syncType: string; status: string; completedAt: string | null } | undefined;
     const callings = allCallings.filter((calling) => !selectedUnit || (calling.unitName ?? "Unknown") === selectedUnit);
