@@ -101,15 +101,28 @@ git status --short
 ## Publish To GitHub
 
 1. Push commits to `main`.
-2. Create a GitHub Release for the version tag.
-3. Upload:
+2. Create the release notes template:
+
+```bash
+npm run release:notes:init
+```
+
+3. Edit:
+
+```text
+release-notes/v<version>.md
+```
+
+4. Publish the release:
+
+```bash
+npm run release:publish
+```
+
+That command updates the GitHub release notes from the local file and uploads:
 - the `.zip`
 - the `.dmg`
-
-4. In the release notes, include links to:
-- [README.md](./README.md)
-- [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
-- [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md)
+- the supporting update metadata files
 
 ## macOS Unsigned Release Note
 

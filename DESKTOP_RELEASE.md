@@ -176,15 +176,38 @@ That `asar: false` setting is intentional for now. Next.js production runtime ex
 
 ## GitHub Release Workflow
 
-A practical GitHub workflow is:
+StakeOS now supports a single publish command for GitHub releases.
 
-1. push the source changes to `main`
-2. run `npm run desktop:release`
-3. upload the generated zip and/or dmg from `release/` to a GitHub Release
-4. link users to:
-   - the release asset
-   - [FIRST_TIME_SETUP.md](./FIRST_TIME_SETUP.md)
-   - [LCR_REPORT_SETUP.md](./LCR_REPORT_SETUP.md)
+1. bump the version in `package.json`
+2. create the versioned release notes template:
+
+```bash
+npm run release:notes:init
+```
+
+3. edit the generated file in:
+
+```text
+release-notes/v<version>.md
+```
+
+4. publish the full release:
+
+```bash
+npm run release:publish
+```
+
+That command:
+- builds the `.dmg` and `.zip`
+- creates or updates the GitHub release for the current version tag
+- uploads the generated artifacts
+- replaces the GitHub release notes with the local notes file
+
+If you already built the artifacts and only want to refresh the GitHub release body/assets:
+
+```bash
+npm run release:publish -- --skip-build
+```
 
 ## Not Yet Included
 

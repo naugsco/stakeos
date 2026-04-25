@@ -18,6 +18,8 @@
     "desktop:pack": "npm run build && npm run desktop:prune-local-browsers && electron-builder --dir",
     "desktop:release": "npm run desktop:clean && npm run build && npm run desktop:prune-local-browsers && electron-builder --mac zip dmg",
     "desktop:dist": "npm run desktop:release",
+    "release:notes:init": "node scripts/initReleaseNotes.mjs",
+    "release:publish": "node scripts/publishRelease.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
