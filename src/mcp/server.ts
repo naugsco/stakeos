@@ -9,6 +9,7 @@ import {
   explainQuery,
   generateActionPacket,
   getCallingGroupContactList,
+  getCallingChangesSince,
   getDataQualityWorkbench,
   getLeadershipGapAlerts,
   getMemberTimeline,
@@ -593,6 +594,20 @@ const tools = [
     }
   },
   {
+    name: "calling_changes_since",
+    description: "Return only meaningful calling changes between two points in time: sustained, released, and transferred.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: { type: "string", description: "Required baseline timestamp or date string." },
+        until: { type: "string", description: "Optional target timestamp or date string. Defaults to the latest successful calling snapshot." },
+        unit: { type: "string", description: "Optional unit filter." },
+        limit: { type: "number" }
+      },
+      required: ["since"]
+    }
+  },
+  {
     name: "action_packet_generate",
     description: "Generate a meeting-ready action packet (stake council, bishops council, youth committee, general).",
     inputSchema: {
@@ -1045,6 +1060,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "sync_diff_report": {
         const result = await getSyncDiffReport({
           limit: args.limit ? Number(args.limit) : 30
+        });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "calling_changes_since": {
+        const result = await getCallingChangesSince({
+          since: String(args.since ?? ""),
+          until: args.until ? String(args.until) : undefined,
+          unit: args.unit ? String(args.unit) : undefined,
+          limit: args.limit ? Number(args.limit) : 200
         });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }

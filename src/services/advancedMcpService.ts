@@ -123,6 +123,115 @@ const cleanCallingTitle = (value: string | null) => {
     .trim();
 };
 
+const normalizeCallingTitleKey = (value: string | null | undefined) =>
+  cleanCallingTitle(value ?? null)
+    ?.toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim() ?? "";
+
+const loadLatestSqliteSuccessLogs = (db: ReturnType<typeof openSqliteSpikeDb>, limit: number) =>
+  db.prepare(
+    `SELECT
+      id,
+      sync_type AS syncType,
+      started_at AS startedAt,
+      completed_at AS completedAt
+     FROM sync_logs
+     WHERE status = 'success'
+     ORDER BY completed_at DESC, started_at DESC
+     LIMIT ?`
+  ).all(limit) as SnapshotLogRow[];
+
+const loadCallingSnapshotLogAtOrBefore = (db: ReturnType<typeof openSqliteSpikeDb>, completedAt: string) =>
+  (db.prepare(
+    `SELECT
+      s.id,
+      s.sync_type AS syncType,
+      s.started_at AS startedAt,
+      s.completed_at AS completedAt
+     FROM sync_logs s
+     JOIN sync_calling_snapshots c ON c.sync_log_id = s.id
+     WHERE s.status = 'success'
+       AND s.completed_at IS NOT NULL
+       AND s.completed_at <= ?
+     GROUP BY s.id
+     ORDER BY s.completed_at DESC, s.id DESC
+     LIMIT 1`
+  ).get(completedAt) as SnapshotLogRow | undefined) ?? null;
+
+const loadLatestCallingSnapshotLog = (db: ReturnType<typeof openSqliteSpikeDb>) =>
+  (db.prepare(
+    `SELECT
+      s.id,
+      s.sync_type AS syncType,
+      s.started_at AS startedAt,
+      s.completed_at AS completedAt
+     FROM sync_logs s
+     JOIN sync_calling_snapshots c ON c.sync_log_id = s.id
+     WHERE s.status = 'success'
+       AND s.completed_at IS NOT NULL
+     GROUP BY s.id
+     ORDER BY s.completed_at DESC, s.id DESC
+     LIMIT 1`
+  ).get() as SnapshotLogRow | undefined) ?? null;
+
+const parseSnapshotData = (value: string) => {
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+};
+
+const loadSqliteCallingSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, syncLogId: number) =>
+  db.prepare(
+    `SELECT
+      lcr_calling_id AS lcrCallingId,
+      unit_name AS unitName,
+      member_lcr_member_id AS memberLcrMemberId,
+      member_name AS memberName,
+      calling_title AS callingTitle,
+      is_current AS isCurrent,
+      sustained_on AS sustainedOn,
+      released_on AS releasedOn,
+      row_hash AS rowHash,
+      snapshot_data AS snapshotData
+     FROM sync_calling_snapshots
+     WHERE sync_log_id = ?`
+  ).all(syncLogId).map((row) => ({
+    ...(row as Omit<CallingSnapshotRow, "snapshotData" | "isCurrent"> & { snapshotData: string; isCurrent: number }),
+    isCurrent: (row as { isCurrent: number }).isCurrent === 1,
+    snapshotData: parseSnapshotData((row as { snapshotData: string }).snapshotData)
+  })) as CallingSnapshotRow[];
+
+const parseToolDateInput = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid date input: ${value}`);
+  }
+  return parsed.toISOString();
+};
+
+const callingOrganizationName = (row: CallingSnapshotRow) => {
+  const value = row.snapshotData.organizationName;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const callingOrganizationKey = (row: CallingSnapshotRow) => {
+  const orgId = row.snapshotData.lcrOrganizationId;
+  if (typeof orgId === "string" && orgId.trim()) {
+    return `org:${orgId.trim()}`;
+  }
+  const orgName = callingOrganizationName(row);
+  return orgName ? `name:${orgName.toLowerCase()}` : "org:none";
+};
+
+const buildCallingSlotKey = (row: CallingSnapshotRow) =>
+  `${row.unitName ?? "Unknown"}::${callingOrganizationKey(row)}::${normalizeCallingTitleKey(row.callingTitle)}`;
+
+const buildMemberCallingKey = (row: CallingSnapshotRow) =>
+  `${row.memberLcrMemberId ?? "unknown"}::${normalizeCallingTitleKey(row.callingTitle)}`;
+
 const ensureCohortStore = async () => {
   await fs.mkdir(path.dirname(cohortsFilePath), { recursive: true });
   try {
@@ -763,6 +872,7 @@ export const explainQuery = async (input: {
     people_contact_query: ["members", "units", "callings"],
     mission_eligible_contact_list: ["members", "units", "callings"],
     sync_diff_report: ["sync_logs", "sync_member_snapshots", "sync_calling_snapshots", "sync_email_snapshots", "sync_phone_snapshots"],
+    calling_changes_since: ["sync_logs", "sync_calling_snapshots"],
     leadership_contact_list: ["callings", "members"],
     resolve_member: ["members", "units", "households"]
   };
@@ -790,6 +900,7 @@ export const explainQuery = async (input: {
       "templeRecommendStatus"
     ],
     sync_diff_report: ["windowStart", "windowEnd", "counts", "members", "callings"],
+    calling_changes_since: ["requestedSince", "requestedUntil", "baselineSync", "targetSync", "counts", "changes"],
     leadership_contact_list: [
       "fullName",
       "unitName",
@@ -817,6 +928,11 @@ export const explainQuery = async (input: {
     sync_diff_report: [
       "Compares latest successful sync to previous successful sync.",
       "If there is no previous sync, falls back to a 24-hour window."
+    ],
+    calling_changes_since: [
+      "Compares calling slot state at a baseline timestamp to a target timestamp or the latest successful calling snapshot.",
+      "Returns only sustained, released, and transferred calling changes instead of broad metadata diffs.",
+      "Calling slots are matched by unit, organization, and normalized calling title."
     ],
     leadership_contact_list: [
       "Leadership scope is title/org regex based (president/bishop/high councilor families).",
@@ -985,6 +1101,204 @@ type ContactSnapshotRow = {
 
 export const getSyncDiffReport = async (options: { limit?: number } = {}) => {
   return getSqliteSpikeSyncDiffReport(options);
+};
+
+export const getCallingChangesSince = async (options: {
+  since: string;
+  until?: string;
+  unit?: string;
+  limit?: number;
+}): Promise<{
+  requestedSince: string;
+  requestedUntil: string | null;
+  baselineSync: SnapshotLogRow | null;
+  targetSync: SnapshotLogRow | null;
+  counts: { sustained: number; released: number; transferred: number; total: number };
+  changes: Array<{
+    changeType: "Sustained" | "Released" | "Transferred";
+    unitName: string;
+    organizationName: string | null;
+    callingTitle: string;
+    lcrMemberId: string | null;
+    memberName: string | null;
+    previousLcrMemberId: string | null;
+    previousMemberName: string | null;
+    sustainedOn: string | null;
+    releasedOn: string | null;
+    detectedAt: string | null;
+  }>;
+}> => {
+  const requestedSince = parseToolDateInput(options.since);
+  const requestedUntil = options.until ? parseToolDateInput(options.until) : null;
+  const limit = Math.max(1, Math.min(options.limit ?? 200, 1000));
+  const unitFilter = options.unit?.trim() || null;
+
+  const db = openSqliteSpikeDb();
+  try {
+    const baselineSync = loadCallingSnapshotLogAtOrBefore(db, requestedSince);
+    const targetSync = requestedUntil
+      ? loadCallingSnapshotLogAtOrBefore(db, requestedUntil)
+      : loadLatestCallingSnapshotLog(db);
+
+    if (!baselineSync || !targetSync) {
+      return {
+        requestedSince,
+        requestedUntil,
+        baselineSync,
+        targetSync,
+        counts: { sustained: 0, released: 0, transferred: 0, total: 0 },
+        changes: []
+      };
+    }
+
+    const baselineRows = loadSqliteCallingSnapshots(db, baselineSync.id).filter((row) => row.isCurrent);
+    const targetRows = loadSqliteCallingSnapshots(db, targetSync.id).filter((row) => row.isCurrent);
+
+    const filteredBaselineRows = unitFilter
+      ? baselineRows.filter((row) => (row.unitName ?? "Unknown") === unitFilter)
+      : baselineRows;
+    const filteredTargetRows = unitFilter
+      ? targetRows.filter((row) => (row.unitName ?? "Unknown") === unitFilter)
+      : targetRows;
+
+    const baselineBySlot = new Map(filteredBaselineRows.map((row) => [buildCallingSlotKey(row), row]));
+    const targetBySlot = new Map(filteredTargetRows.map((row) => [buildCallingSlotKey(row), row]));
+
+    const sustained: Array<{
+      changeType: "Sustained";
+      row: CallingSnapshotRow;
+      previous?: CallingSnapshotRow;
+    }> = [];
+    const released: Array<{
+      changeType: "Released";
+      row: CallingSnapshotRow;
+      next?: CallingSnapshotRow;
+    }> = [];
+    const transferred: Array<{
+      changeType: "Transferred";
+      row: CallingSnapshotRow;
+      previous: CallingSnapshotRow;
+    }> = [];
+
+    const slotKeys = new Set([...baselineBySlot.keys(), ...targetBySlot.keys()]);
+    for (const slotKey of slotKeys) {
+      const baselineRow = baselineBySlot.get(slotKey);
+      const targetRow = targetBySlot.get(slotKey);
+
+      if (!baselineRow && targetRow) {
+        sustained.push({ changeType: "Sustained", row: targetRow });
+        continue;
+      }
+
+      if (baselineRow && !targetRow) {
+        released.push({ changeType: "Released", row: baselineRow });
+        continue;
+      }
+
+      if (
+        baselineRow &&
+        targetRow &&
+        (baselineRow.memberLcrMemberId !== targetRow.memberLcrMemberId || baselineRow.memberName !== targetRow.memberName)
+      ) {
+        transferred.push({ changeType: "Transferred", row: targetRow, previous: baselineRow });
+      }
+    }
+
+    const pairedReleaseIndexes = new Set<number>();
+    const pairedSustainIndexes = new Set<number>();
+    for (const [releaseIndex, releaseChange] of released.entries()) {
+      const releaseKey = buildMemberCallingKey(releaseChange.row);
+      if (releaseKey.startsWith("unknown::")) {
+        continue;
+      }
+      const sustainIndex = sustained.findIndex((sustainChange, index) => {
+        if (pairedSustainIndexes.has(index)) {
+          return false;
+        }
+        return buildMemberCallingKey(sustainChange.row) === releaseKey;
+      });
+      if (sustainIndex === -1) {
+        continue;
+      }
+
+      pairedReleaseIndexes.add(releaseIndex);
+      pairedSustainIndexes.add(sustainIndex);
+
+      transferred.push({
+        changeType: "Transferred",
+        row: sustained[sustainIndex].row,
+        previous: releaseChange.row
+      });
+    }
+
+    const changes = [
+      ...transferred.map((change) => ({
+        changeType: change.changeType,
+        unitName: change.row.unitName ?? "Unknown",
+        organizationName: callingOrganizationName(change.row),
+        callingTitle: cleanCallingTitle(change.row.callingTitle) ?? change.row.callingTitle,
+        lcrMemberId: change.row.memberLcrMemberId,
+        memberName: change.row.memberName,
+        previousLcrMemberId: change.previous.memberLcrMemberId,
+        previousMemberName: change.previous.memberName,
+        sustainedOn: change.row.sustainedOn,
+        releasedOn: change.previous.releasedOn,
+        detectedAt: targetSync.completedAt
+      })),
+      ...sustained
+        .filter((_change, index) => !pairedSustainIndexes.has(index))
+        .map((change) => ({
+          changeType: change.changeType,
+          unitName: change.row.unitName ?? "Unknown",
+          organizationName: callingOrganizationName(change.row),
+          callingTitle: cleanCallingTitle(change.row.callingTitle) ?? change.row.callingTitle,
+          lcrMemberId: change.row.memberLcrMemberId,
+          memberName: change.row.memberName,
+          previousLcrMemberId: null,
+          previousMemberName: null,
+          sustainedOn: change.row.sustainedOn,
+          releasedOn: null,
+          detectedAt: targetSync.completedAt
+        })),
+      ...released
+        .filter((_change, index) => !pairedReleaseIndexes.has(index))
+        .map((change) => ({
+          changeType: change.changeType,
+          unitName: change.row.unitName ?? "Unknown",
+          organizationName: callingOrganizationName(change.row),
+          callingTitle: cleanCallingTitle(change.row.callingTitle) ?? change.row.callingTitle,
+          lcrMemberId: change.row.memberLcrMemberId,
+          memberName: change.row.memberName,
+          previousLcrMemberId: null,
+          previousMemberName: null,
+          sustainedOn: change.row.sustainedOn,
+          releasedOn: change.row.releasedOn,
+          detectedAt: targetSync.completedAt
+        }))
+    ]
+      .sort((left, right) => {
+        const leftTime = new Date(left.sustainedOn ?? left.releasedOn ?? left.detectedAt ?? 0).getTime();
+        const rightTime = new Date(right.sustainedOn ?? right.releasedOn ?? right.detectedAt ?? 0).getTime();
+        return rightTime - leftTime;
+      })
+      .slice(0, limit);
+
+    return {
+      requestedSince,
+      requestedUntil,
+      baselineSync,
+      targetSync,
+      counts: {
+        sustained: changes.filter((change) => change.changeType === "Sustained").length,
+        released: changes.filter((change) => change.changeType === "Released").length,
+        transferred: changes.filter((change) => change.changeType === "Transferred").length,
+        total: changes.length
+      },
+      changes
+    };
+  } finally {
+    db.close();
+  }
 };
 
 export const generateActionPacket = async (meetingType: string) => {
