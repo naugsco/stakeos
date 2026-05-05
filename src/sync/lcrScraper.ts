@@ -13,7 +13,7 @@ import type {
 import { asBoolean, normalizeWhitespace } from "@/src/utils/text";
 import { stableHash } from "@/src/utils/hash";
 
-interface ScrapedTable {
+export interface ScrapedTable {
   headers: string[];
   rows: Record<string, string>[];
 }
@@ -75,7 +75,12 @@ const buildUnitsFromMembers = (members: MemberRecord[]): UnitRecord[] => {
     : [defaultUnit];
 };
 
-const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const normalizeKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/\be\s+mail\b/g, "email")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 const collapseRepeatedText = (value: string): string => {
   const cleaned = normalizeWhitespace(value);
@@ -88,7 +93,7 @@ const collapseRepeatedText = (value: string): string => {
     const midpoint = current.length / 2;
     const firstHalf = current.slice(0, midpoint);
     const secondHalf = current.slice(midpoint);
-    if (firstHalf !== secondHalf) {
+    if (firstHalf !== secondHalf || firstHalf.length < 3 || !/[a-z]/i.test(firstHalf)) {
       break;
     }
     current = firstHalf.trim();
@@ -99,10 +104,24 @@ const collapseRepeatedText = (value: string): string => {
 
 const stripAliasPrefix = (value: string, aliases: string[]): string => {
   let output = value;
-  for (const alias of aliases) {
-    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
-    output = output.replace(new RegExp(`^${escapedAlias}\\s*`, "i"), "").trim();
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    for (const alias of aliases) {
+      if (!alias) {
+        continue;
+      }
+
+      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
+      const nextOutput = output.replace(new RegExp(`^${escapedAlias}\\s*`, "i"), "").trim();
+      if (nextOutput !== output) {
+        output = nextOutput;
+        changed = true;
+      }
+    }
   }
+
   return output;
 };
 
@@ -110,34 +129,45 @@ const normalizeDense = (value: string) => value.toLowerCase().replace(/[^a-z0-9]
 
 const matchAliasScore = (rawKey: string, alias: string, strict: boolean): number => {
   const normalizedKey = normalizeKey(collapseRepeatedText(rawKey));
+  const normalizedAlias = normalizeKey(alias);
   const denseKey = normalizeDense(collapseRepeatedText(rawKey));
-  const denseAlias = normalizeDense(alias);
+  const denseAlias = normalizeDense(normalizedAlias);
 
-  if ((!normalizedKey && !denseKey) || !alias) {
+  if ((!normalizedKey && !denseKey) || !normalizedAlias) {
     return -1;
   }
 
-  if (normalizedKey === alias || denseKey === denseAlias || denseKey === `${denseAlias}${denseAlias}`) {
+  if (normalizedKey === normalizedAlias || denseKey === denseAlias || denseKey === `${denseAlias}${denseAlias}`) {
     return 100;
+  }
+
+  // LCR custom reports can expose machine-prefixed headers, e.g. "record.individual.email".
+  // Treat those as strict matches for the friendly aliases used by the importer.
+  if (normalizedKey.endsWith(` ${normalizedAlias}`) || (denseAlias.length >= 6 && denseKey.endsWith(denseAlias))) {
+    return strict ? 85 : 50;
+  }
+
+  if (strict && normalizedKey.includes(normalizedAlias) && normalizedAlias.length >= 8) {
+    return 65;
   }
 
   if (strict) {
     return -1;
   }
 
-  if (normalizedKey.startsWith(`${alias} `)) {
+  if (normalizedKey.startsWith(`${normalizedAlias} `)) {
     return 70;
   }
 
-  if (normalizedKey.endsWith(` ${alias}`)) {
+  if (normalizedKey.endsWith(` ${normalizedAlias}`)) {
     return 50;
   }
 
-  if (alias.includes(normalizedKey) && normalizedKey.length >= 8) {
+  if (normalizedAlias.includes(normalizedKey) && normalizedKey.length >= 8) {
     return 25;
   }
 
-  if (normalizedKey.includes(alias) && alias.length >= 8) {
+  if (normalizedKey.includes(normalizedAlias) && normalizedAlias.length >= 8) {
     return 10;
   }
 
@@ -204,25 +234,29 @@ const normalizeName = (value?: string) => {
   };
 };
 
-const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
+const tableHasHeader = (table: ScrapedTable, aliases: string[]): boolean =>
+  table.headers.some((header) => aliases.some((alias) => matchAliasScore(header, alias, true) >= 0));
+
+export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
   const members = new Map<string, MemberRecord>();
 
-  const reportTables = tables.filter((table) => {
-    const headerText = table.headers.map(normalizeKey).join(" ");
-    return headerText.includes("preferred name") && headerText.includes("individual e mail");
-  });
+  const reportTables = tables.filter(
+    (table) =>
+      tableHasHeader(table, ["Preferred Name", "record.preferred.name", "Name"]) &&
+      tableHasHeader(table, ["Individual E-mail", "Individual Email", "record.individual.email", "Email"])
+  );
 
   for (const table of reportTables) {
     for (const row of table.rows) {
-      const preferredName = valueFromRow(row, ["Preferred Name", "Name"], { strict: true });
+      const preferredName = valueFromRow(row, ["Preferred Name", "record.preferred.name", "Name"], { strict: true });
       if (!preferredName) {
         continue;
       }
 
-      const email = valueFromRow(row, ["Individual E-mail", "Email"], { strict: true });
-      const phone = valueFromRow(row, ["Individual Phone", "Phone"], { strict: true });
-      const unitName = valueFromRow(row, ["Unit"], { strict: true });
-      const unitAbbreviation = valueFromRow(row, ["Unit Abbreviation"], { strict: true });
+      const email = valueFromRow(row, ["Individual E-mail", "Individual Email", "record.individual.email", "Email"], { strict: true });
+      const phone = valueFromRow(row, ["Individual Phone", "record.individual.phone", "Phone"], { strict: true });
+      const unitName = valueFromRow(row, ["Unit", "custom-reports.unit"], { strict: true });
+      const unitAbbreviation = valueFromRow(row, ["Unit Abbreviation", "custom-reports.unit.abbreviation"], { strict: true });
       const unitNumber = deriveSyntheticUnitNumber(unitName, unitAbbreviation);
 
       const memberId =
@@ -230,14 +264,18 @@ const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
         `generated-member-${stableHash(`${preferredName}|${email ?? ""}|${phone ?? ""}|${unitName ?? ""}`)}`;
 
       const { firstName, lastName } = normalizeName(preferredName);
-      const addressLine1 = valueFromRow(row, ["Address - Street 1"], { strict: true });
-      const addressLine2 = valueFromRow(row, ["Address - Street 2"], { strict: true });
-      const addressCity = valueFromRow(row, ["Address - City"], { strict: true });
-      const addressStateOrProvince = valueFromRow(row, ["Address - State or Province"], { strict: true });
-      const addressPostalCode = valueFromRow(row, ["Address - Postal Code"], { strict: true });
-      const addressCountry = valueFromRow(row, ["Address - Country"], { strict: true });
-      const headOfHouse = valueFromRow(row, ["Head of House"], { strict: true });
-      const householdPosition = valueFromRow(row, ["Household Position"], { strict: true });
+      const addressLine1 = valueFromRow(row, ["Address - Street 1", "custom-reports.address.street1"], { strict: true });
+      const addressLine2 = valueFromRow(row, ["Address - Street 2", "custom-reports.address.street2"], { strict: true });
+      const addressCity = valueFromRow(row, ["Address - City", "custom-reports.address.city"], { strict: true });
+      const addressStateOrProvince = valueFromRow(
+        row,
+        ["Address - State or Province", "Address - State", "custom-reports.address.state"],
+        { strict: true }
+      );
+      const addressPostalCode = valueFromRow(row, ["Address - Postal Code", "custom-reports.address.postal.code"], { strict: true });
+      const addressCountry = valueFromRow(row, ["Address - Country", "custom-reports.address.country"], { strict: true });
+      const headOfHouse = valueFromRow(row, ["Head of House", "custom-reports.head.of.house"], { strict: true });
+      const householdPosition = valueFromRow(row, ["Household Position", "custom-reports.household.position"], { strict: true });
 
       const householdSource = `${headOfHouse ?? lastName}|${addressLine1 ?? ""}|${addressCity ?? ""}|${addressPostalCode ?? ""}|${addressCountry ?? ""}|${unitName ?? ""}`;
       const lcrHouseholdId = `generated-household-${stableHash(householdSource)}`;
@@ -276,7 +314,9 @@ const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
         addressCountry,
         age: toNumber(valueFromRow(row, ["Age"], { strict: true })),
         gender: valueFromRow(row, ["Gender"], { strict: true }),
-        birthdate: valueFromRow(row, ["Birth Date (1 Jan 1990)", "Birth Date"], { strict: true }),
+        birthdate: valueFromRow(row, ["Birth Date (1 Jan 1990)", "Birth Date", "custom-reports.birth.date.with.example"], {
+          strict: true
+        }),
         birthCountry: valueFromRow(row, ["Birth Country"], { strict: true }),
         birthplace: valueFromRow(row, ["Birthplace"], { strict: true }),
         moveInDate: valueFromRow(row, ["Move In Date"], { strict: true }),
@@ -307,7 +347,11 @@ const getReportMembersFromTables = (tables: ScrapedTable[]): MemberRecord[] => {
         priesthoodType: valueFromRow(row, ["Priesthood"], { strict: true }),
         priesthoodOffice: valueFromRow(row, ["Priesthood office"], { strict: true }),
         callingsText: valueFromRow(row, ["Callings"], { strict: true }),
-        callingsWithDatesText: valueFromRow(row, ["Callings with Date Sustained and Set Apart"], { strict: true }),
+        callingsWithDatesText: valueFromRow(
+          row,
+          ["Callings with Date Sustained and Set Apart", "custom-reports.callings.with.date.sustained.and.set.apart"],
+          { strict: true }
+        ),
         instituteStatus: valueFromRow(row, ["Institute Status"], { strict: true }),
         seminaryStatus: valueFromRow(row, ["Seminary Status"], { strict: true }),
         isAttendingSeminary: asBoolean(valueFromRow(row, ["Is Attending Seminary"], { strict: true })),
@@ -414,7 +458,7 @@ const getFallbackMembersFromPayload = (payloadObjects: Record<string, unknown>[]
 };
 
 const parseMembers = (tables: ScrapedTable[], payloadObjects: Record<string, unknown>[]): MemberRecord[] => {
-  const reportMembers = getReportMembersFromTables(tables);
+  const reportMembers = parseReportMembersFromTables(tables);
   if (reportMembers.length > 0) {
     return reportMembers;
   }

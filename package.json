@@ -1,6 +1,6 @@
 {
   "name": "stakeos",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "description": "Private AI assistant and leadership dashboard for stake leadership.",
   "author": "Nicholas Naugle",
@@ -29,7 +29,8 @@
     "sqlite:seed-baseline": "tsx src/sqlite/seedSyncSnapshots.ts",
     "mcp:dev": "tsx src/mcp/server.ts",
     "mcp:build": "tsup src/mcp/server.ts --format cjs --out-dir dist --clean",
-    "mcp:start": "node dist/server.cjs"
+    "mcp:start": "node dist/server.cjs",
+    "test:lcr-parser": "tsx scripts/verifyLcrReportParser.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
