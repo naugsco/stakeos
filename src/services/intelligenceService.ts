@@ -1,6 +1,7 @@
 import { differenceInYears } from "date-fns";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { env } from "@/src/config/env";
+import { compareStakeDates, formatStakeMonthKey, isOnOrAfterDate, parseStakeDate } from "@/src/utils/date";
 
 export interface CallingMember {
   memberId: number;
@@ -642,18 +643,6 @@ export interface CovenantPathProgressionRow {
 
 const fullNameExpr = `TRIM(m.first_name || ' ' || m.last_name)`;
 
-const actualAgeSql = (alias = "m") => `COALESCE(${alias}.age, CAST((julianday('now') - julianday(${alias}.birthdate)) / 365.25 AS INTEGER))`;
-
-// LCR youth program age starts on January 1 of the year a member turns 12.
-const youthProgramAgeSql = (alias = "m") =>
-  `CASE WHEN ${alias}.birthdate IS NOT NULL THEN CAST(strftime('%Y', 'now') AS INTEGER) - CAST(strftime('%Y', ${alias}.birthdate) AS INTEGER) ELSE ${actualAgeSql(alias)} END`;
-
-const isYouthProgramSql = (alias = "m") => `(${youthProgramAgeSql(alias)} BETWEEN 12 AND 18)`;
-// Seminary is approximated as freshman year of high school through age 18.
-// Without an LCR grade-level field, we use youth-program age 14-18 rather than the broader 12-18 youth band.
-const isSeminaryEligibleSql = (alias = "m") => `(${youthProgramAgeSql(alias)} BETWEEN 14 AND 18)`;
-const isYsaSql = (alias = "m") => `(${actualAgeSql(alias)} BETWEEN 18 AND 35)`;
-const isYouthOrYsaSql = (alias = "m") => `((${isYouthProgramSql(alias)}) OR (${isYsaSql(alias)}))`;
 const isUnmarriedSql = (alias = "m") =>
   `(COALESCE(${alias}.is_married, 0) = 0 AND (COALESCE(${alias}.is_single, 0) = 1 OR LOWER(COALESCE(${alias}.marriage_status, '')) = 'single'))`;
 
@@ -743,17 +732,55 @@ const monthsAgoThreshold = (months: number) => {
   return today;
 };
 
-const safeDate = (value?: string | null) => {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+const daysAgoThreshold = (days: number) => {
+  const today = startOfToday();
+  today.setDate(today.getDate() - days);
+  return today;
 };
 
+const safeDate = (value?: string | null) => {
+  return parseStakeDate(value);
+};
+
+const daysFromToday = (date: Date) => Math.floor((date.getTime() - startOfToday().getTime()) / 86400000);
+
+const actualAgeFromBirthdate = (birthdate?: string | null, fallbackAge?: number | null) => {
+  if (typeof fallbackAge === "number") {
+    return fallbackAge;
+  }
+
+  const parsed = safeDate(birthdate);
+  if (!parsed) {
+    return null;
+  }
+
+  const today = startOfToday();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const birthdayPassed =
+    today.getMonth() > parsed.getMonth() ||
+    (today.getMonth() === parsed.getMonth() && today.getDate() >= parsed.getDate());
+  if (!birthdayPassed) {
+    age -= 1;
+  }
+  return age;
+};
+
+const youthProgramAgeFromBirthdate = (birthdate?: string | null, fallbackAge?: number | null) => {
+  const parsed = safeDate(birthdate);
+  if (!parsed) {
+    return typeof fallbackAge === "number" ? fallbackAge : null;
+  }
+  return startOfToday().getFullYear() - parsed.getFullYear();
+};
+
+const isSeminaryEligibleAge = (youthProgramAge: number | null) =>
+  youthProgramAge !== null && youthProgramAge >= 14 && youthProgramAge <= 18;
+
+const isInstituteEligibleAge = (actualAge: number | null) =>
+  actualAge !== null && actualAge >= 18 && actualAge <= 35;
+
 const isOnOrAfter = (value: string | null | undefined, threshold: Date) => {
-  const date = safeDate(value);
-  return Boolean(date && date >= threshold);
+  return isOnOrAfterDate(value, threshold);
 };
 
 const compareDateStrings = (
@@ -761,21 +788,9 @@ const compareDateStrings = (
   right: string | null | undefined,
   direction: ContactSortDirection = "asc"
 ) => {
-  const leftDate = safeDate(left);
-  const rightDate = safeDate(right);
-
-  if (leftDate && rightDate) {
-    const result = leftDate.getTime() - rightDate.getTime();
-    return direction === "asc" ? result : -result;
-  }
-  if (leftDate) {
-    return direction === "asc" ? -1 : 1;
-  }
-  if (rightDate) {
-    return direction === "asc" ? 1 : -1;
-  }
-  return compareNullable(left ?? null, right ?? null, direction);
+  return compareStakeDates(left, right, direction);
 };
+const monthKeyFromValue = (value?: string | null) => formatStakeMonthKey(value);
 
 const normalizeTempleRecommendStatus = (status: string | null | undefined) => (status ?? "").trim().toLowerCase();
 
@@ -996,7 +1011,7 @@ export const yearsInCalling = async (callingTitle: string, memberName?: string) 
       rows.map((row) => ({
         ...row,
         callingTitle: cleanCallingTitle(row.callingTitle),
-        years: row.sustainedOn ? differenceInYears(new Date(), new Date(row.sustainedOn)) : null
+        years: row.sustainedOn && safeDate(row.sustainedOn) ? differenceInYears(new Date(), safeDate(row.sustainedOn)!) : null
       })),
       (row) => `${row.fullName}:${row.callingTitle.toLowerCase()}`
     );
@@ -2096,8 +2111,6 @@ export const getCovenantPathProgressionReport = async (
         (COALESCE(m.has_ministering_brothers, 0) OR COALESCE(m.has_ministering_sisters, 0)) AS ministeringAssigned
       FROM members m
       ${whereClause}
-      ORDER BY ${nullsLast('COALESCE(m.confirmation_date, m.baptism_date, m.endowment_date, m.ordination_date)')}, COALESCE(m.confirmation_date, m.baptism_date, m.endowment_date, m.ordination_date) DESC, m.last_name, m.first_name
-      LIMIT ${safeLimit}
       `
     ).all(...params) as Array<{
       lcrMemberId: string;
@@ -2121,16 +2134,12 @@ export const getCovenantPathProgressionReport = async (
       ministeringAssigned: number;
     }>;
 
-    const today = new Date();
     const isRecent = (value: string | null | undefined, days: number) => {
-      if (!value) {
+      const date = safeDate(value);
+      if (!date) {
         return false;
       }
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) {
-        return false;
-      }
-      const diffDays = (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+      const diffDays = (startOfToday().getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
       return diffDays >= 0 && diffDays <= days;
     };
 
@@ -2151,7 +2160,7 @@ export const getCovenantPathProgressionReport = async (
           milestones.push({ label: "Ordained", date: row.ordinationDate });
         }
 
-        milestones.sort((left, right) => right.date.localeCompare(left.date));
+        milestones.sort((left, right) => compareDateStrings(left.date, right.date, "desc"));
         const ordinanceBucket = isRecent(row.baptismDate, 730) || isRecent(row.confirmationDate, 730) || isRecent(row.endowmentDate, 730) || isRecent(row.ordinationDate, 730)
           ? "Recent Milestone"
           : row.endowmentDate
@@ -2246,7 +2255,12 @@ export const getCovenantPathProgressionReport = async (
         };
       })
       .filter((row) => row.attentionScore >= minScore)
-      .sort((left, right) => compareNullable(right.attentionScore, left.attentionScore, "asc"));
+      .sort(
+        (left, right) =>
+          compareNullable(right.attentionScore, left.attentionScore, "asc") ||
+          compareDateStrings(left.recentMilestoneDate, right.recentMilestoneDate, "desc")
+      )
+      .slice(0, safeLimit);
 
     return rows;
   } finally {
@@ -2362,33 +2376,41 @@ export const getLeadershipTurnover = async (unit?: string | null) => {
     const sustainedRows = db.prepare(
       `
       SELECT
-        strftime('%Y-%m', COALESCE(c.sustained_on, c.set_apart_on)) AS month,
-        COUNT(*) AS sustained_count
+        COALESCE(c.sustained_on, c.set_apart_on) AS sustainedDate
       FROM callings c
       WHERE c.released_on IS NULL AND c.is_current = 1
         AND (c.title LIKE '%president%' OR c.title LIKE '%President%' OR c.title LIKE '%bishop%' OR c.title LIKE '%Bishop%' OR c.title LIKE '%high councilor%' OR c.title LIKE '%High Councilor%')
         AND COALESCE(c.sustained_on, c.set_apart_on) IS NOT NULL
         AND (? IS NULL OR c.unit_name = ?)
-      GROUP BY 1
       `
-    ).all(unitScope, unitScope) as Array<{ month: string; sustained_count: number }>;
+    ).all(unitScope, unitScope) as Array<{ sustainedDate: string | null }>;
 
     const releasedRows = db.prepare(
       `
       SELECT
-        strftime('%Y-%m', c.released_on) AS month,
-        COUNT(*) AS released_count
+        c.released_on AS releasedDate
       FROM callings c
       WHERE c.released_on IS NOT NULL
         AND c.lcr_calling_id NOT LIKE 'generated-calling-%'
         AND (c.title LIKE '%president%' OR c.title LIKE '%President%' OR c.title LIKE '%bishop%' OR c.title LIKE '%Bishop%' OR c.title LIKE '%high councilor%' OR c.title LIKE '%High Councilor%')
         AND (? IS NULL OR c.unit_name = ?)
-      GROUP BY 1
       `
-    ).all(unitScope, unitScope) as Array<{ month: string; released_count: number }>;
+    ).all(unitScope, unitScope) as Array<{ releasedDate: string | null }>;
 
-    const sustainedMap = new Map(sustainedRows.map((row) => [row.month, row.sustained_count]));
-    const releasedMap = new Map(releasedRows.map((row) => [row.month, row.released_count]));
+    const sustainedMap = new Map(months.map((month) => [month, 0]));
+    const releasedMap = new Map(months.map((month) => [month, 0]));
+    for (const row of sustainedRows) {
+      const month = monthKeyFromValue(row.sustainedDate);
+      if (month && sustainedMap.has(month)) {
+        sustainedMap.set(month, (sustainedMap.get(month) ?? 0) + 1);
+      }
+    }
+    for (const row of releasedRows) {
+      const month = monthKeyFromValue(row.releasedDate);
+      if (month && releasedMap.has(month)) {
+        releasedMap.set(month, (releasedMap.get(month) ?? 0) + 1);
+      }
+    }
 
     return months.map((month) => ({
       month,
@@ -2412,40 +2434,42 @@ export const getYouthProgression = async (unit?: string | null) => {
       params.push(unitScope);
     }
 
-    const whereClause = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    const rows = db.prepare(
+    const members = db.prepare(
       `
       SELECT
-        CASE
-          WHEN ${youthProgramAgeSql()} = 12 THEN 'Turns 12 / 12'
-          WHEN ${youthProgramAgeSql()} BETWEEN 13 AND 15 THEN '13-15'
-          WHEN ${youthProgramAgeSql()} BETWEEN 16 AND 17 THEN '16-17'
-          WHEN ${youthProgramAgeSql()} = 18 THEN '18 Transition'
-          WHEN ${actualAgeSql()} BETWEEN 19 AND 25 THEN 'YSA 19-25'
-          WHEN ${actualAgeSql()} BETWEEN 26 AND 35 THEN 'YSA 26-35'
-        END AS ageBand,
-        CASE
-          WHEN ${youthProgramAgeSql()} = 12 THEN 1
-          WHEN ${youthProgramAgeSql()} BETWEEN 13 AND 15 THEN 2
-          WHEN ${youthProgramAgeSql()} BETWEEN 16 AND 17 THEN 3
-          WHEN ${youthProgramAgeSql()} = 18 THEN 4
-          WHEN ${actualAgeSql()} BETWEEN 19 AND 25 THEN 5
-          ELSE 6
-        END AS ageBandOrder,
-        COUNT(*) AS count
+        m.birthdate,
+        m.age
       FROM members m
-      WHERE (${isYouthProgramSql()} OR (${actualAgeSql()} BETWEEN 19 AND 35))
-        ${whereClause}
-      GROUP BY 1, 2
-      ORDER BY 2
+      ${whereClause}
       `
-    ).all(...params) as Array<{ ageBand: string; ageBandOrder: number; count: number }>;
+    ).all(...params) as Array<{ birthdate: string | null; age: number | null }>;
 
-    return rows.map((row) => ({
-      ageBand: row.ageBand,
-      count: row.count
-    }));
+    const bands = new Map<string, { ageBand: string; ageBandOrder: number; count: number }>();
+    const addBand = (ageBand: string, ageBandOrder: number) => {
+      const existing = bands.get(ageBand) ?? { ageBand, ageBandOrder, count: 0 };
+      existing.count++;
+      bands.set(ageBand, existing);
+    };
+
+    for (const member of members) {
+      const actualAge = actualAgeFromBirthdate(member.birthdate, member.age);
+      const youthProgramAge = youthProgramAgeFromBirthdate(member.birthdate, member.age);
+      if (youthProgramAge === 12) addBand("Turns 12 / 12", 1);
+      else if (youthProgramAge !== null && youthProgramAge >= 13 && youthProgramAge <= 15) addBand("13-15", 2);
+      else if (youthProgramAge !== null && youthProgramAge >= 16 && youthProgramAge <= 17) addBand("16-17", 3);
+      else if (youthProgramAge === 18) addBand("18 Transition", 4);
+      else if (actualAge !== null && actualAge >= 19 && actualAge <= 25) addBand("YSA 19-25", 5);
+      else if (actualAge !== null && actualAge >= 26 && actualAge <= 35) addBand("YSA 26-35", 6);
+    }
+
+    return Array.from(bands.values())
+      .sort((left, right) => left.ageBandOrder - right.ageBandOrder)
+      .map((row) => ({
+        ageBand: row.ageBand,
+        count: row.count
+      }));
   } finally {
     db.close();
   }
@@ -2462,8 +2486,8 @@ export const getYouthTransitionMilestones = async (unit?: string | null): Promis
     const members = db.prepare(
       `
       SELECT
-        ${actualAgeSql()} AS actualAge,
-        ${youthProgramAgeSql()} AS youthProgramAge,
+        m.birthdate,
+        m.age,
         LOWER(COALESCE(m.gender, '')) AS genderNorm,
         LOWER(COALESCE(m.priesthood_office, '')) AS officeNorm,
         m.baptism_date AS baptismDate,
@@ -2480,8 +2504,8 @@ export const getYouthTransitionMilestones = async (unit?: string | null): Promis
       WHERE 1=1 ${unitCondition}
       `
     ).all(...params) as Array<{
-      actualAge: number | null;
-      youthProgramAge: number | null;
+      birthdate: string | null;
+      age: number | null;
       genderNorm: string;
       officeNorm: string;
       baptismDate: string | null;
@@ -2519,8 +2543,8 @@ export const getYouthTransitionMilestones = async (unit?: string | null): Promis
     ];
 
     for (const m of members) {
-      const aa = m.actualAge ?? 0;
-      const ypa = m.youthProgramAge ?? 0;
+      const aa = actualAgeFromBirthdate(m.birthdate, m.age) ?? 0;
+      const ypa = youthProgramAgeFromBirthdate(m.birthdate, m.age) ?? 0;
 
       // 8-11 Baptized & Confirmed
       if (aa >= 8 && aa <= 11) {
@@ -2589,14 +2613,14 @@ export const getYouthOrganizationTransitions = async (unit?: string | null): Pro
     const members = db.prepare(
       `
       SELECT
-        ${actualAgeSql()} AS actualAge,
-        ${youthProgramAgeSql()} AS youthProgramAge,
+        m.birthdate,
+        m.age,
         LOWER(COALESCE(m.gender, '')) AS genderNorm,
         ${isUnmarriedSql("m")} AS isUnmarried
       FROM members m
       WHERE 1=1 ${unitCondition}
       `
-    ).all(...params) as Array<{ actualAge: number | null; youthProgramAge: number | null; genderNorm: string; isUnmarried: number }>;
+    ).all(...params) as Array<{ birthdate: string | null; age: number | null; genderNorm: string; isUnmarried: number }>;
 
     const isMale = (g: string) => g === "m" || g === "male";
     const isFemale = (g: string) => g === "f" || g === "female";
@@ -2624,8 +2648,8 @@ export const getYouthOrganizationTransitions = async (unit?: string | null): Pro
     ];
 
     for (const m of members) {
-      const aa = m.actualAge ?? 0;
-      const ypa = m.youthProgramAge ?? 0;
+      const aa = actualAgeFromBirthdate(m.birthdate, m.age) ?? 0;
+      const ypa = youthProgramAgeFromBirthdate(m.birthdate, m.age) ?? 0;
       const unmarried = toBool(m.isUnmarried);
 
       if (ypa >= 12 && ypa <= 13 && isFemale(m.genderNorm)) cohorts[0].count++;
@@ -2669,16 +2693,21 @@ export const getRecentConvertGrowth = async () => {
     const rows = db.prepare(
       `
       SELECT
-        strftime('%Y-%m', COALESCE(baptism_date, move_in_date)) AS month,
-        COUNT(*) AS converts
+        baptism_date AS baptismDate,
+        move_in_date AS moveInDate
       FROM members
       WHERE is_convert = 1
         AND COALESCE(baptism_date, move_in_date) IS NOT NULL
-      GROUP BY 1
       `
-    ).all() as Array<{ month: string; converts: number }>;
+    ).all() as Array<{ baptismDate: string | null; moveInDate: string | null }>;
 
-    const convertMap = new Map(rows.map((row) => [row.month, row.converts]));
+    const convertMap = new Map(months.map((month) => [month, 0]));
+    for (const row of rows) {
+      const month = monthKeyFromValue(row.baptismDate ?? row.moveInDate);
+      if (month && convertMap.has(month)) {
+        convertMap.set(month, (convertMap.get(month) ?? 0) + 1);
+      }
+    }
 
     return months.map((month) => ({
       month,
@@ -3015,26 +3044,47 @@ export const getReportsOverview = async () => {
       `
     ).get() as { count: number }).count;
 
-    const seminaryAttending = (db.prepare(
-      `SELECT COUNT(*) AS count FROM members m WHERE ${isSeminaryEligibleSql()} AND m.is_attending_seminary = 1`
-    ).get() as { count: number }).count;
-
-    const instituteAttending = (db.prepare(
-      `SELECT COUNT(*) AS count FROM members m WHERE ${isYsaSql()} AND m.is_attending_institute = 1`
-    ).get() as { count: number }).count;
+    const classRows = db.prepare(
+      `
+      SELECT
+        birthdate,
+        age,
+        is_attending_seminary AS isAttendingSeminary,
+        is_attending_institute AS isAttendingInstitute
+      FROM members
+      `
+    ).all() as Array<{
+      birthdate: string | null;
+      age: number | null;
+      isAttendingSeminary: number | null;
+      isAttendingInstitute: number | null;
+    }>;
+    const seminaryAttending = classRows.filter((row) => {
+      const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+      return isSeminaryEligibleAge(youthProgramAge) && toBool(row.isAttendingSeminary);
+    }).length;
+    const instituteAttending = classRows.filter((row) => {
+      const actualAge = actualAgeFromBirthdate(row.birthdate, row.age);
+      return isInstituteEligibleAge(actualAge) && toBool(row.isAttendingInstitute);
+    }).length;
 
     const activeTempleRecommend = (db.prepare(
       `SELECT COUNT(*) AS count FROM members WHERE temple_recommend_status LIKE 'active%' OR temple_recommend_status LIKE 'Active%'`
     ).get() as { count: number }).count;
 
-    const convertsLast12Months = (db.prepare(
+    const recentConvertRows = db.prepare(
       `
-      SELECT COUNT(*) AS count
+      SELECT
+        baptism_date AS baptismDate,
+        move_in_date AS moveInDate
       FROM members
       WHERE is_convert = 1
-        AND COALESCE(baptism_date, move_in_date) >= datetime('now', '-12 months')
       `
-    ).get() as { count: number }).count;
+    ).all() as Array<{ baptismDate: string | null; moveInDate: string | null }>;
+    const recentConvertThreshold = monthsAgoThreshold(12);
+    const convertsLast12Months = recentConvertRows.filter(
+      (row) => isOnOrAfter(row.baptismDate, recentConvertThreshold) || isOnOrAfter(row.moveInDate, recentConvertThreshold)
+    ).length;
 
     return {
       totalMembers: String(totalMembers),
@@ -3061,9 +3111,9 @@ export const getUnitHealthReport = async () => {
         COUNT(DISTINCT m.id) AS memberCount,
         COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id) THEN m.id END) AS currentCallings,
         COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id AND (c.title LIKE '%president%' OR c.title LIKE '%President%' OR c.title LIKE '%bishop%' OR c.title LIKE '%Bishop%' OR c.title LIKE '%high councilor%' OR c.title LIKE '%High Councilor%')) THEN m.id END) AS leadershipCallings,
-        COUNT(DISTINCT CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 AND m.is_attending_seminary = 1 THEN m.id END) AS seminaryAttending,
-        COUNT(DISTINCT CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 AND m.is_attending_institute = 1 THEN m.id END) AS instituteAttending,
-        COUNT(DISTINCT CASE WHEN m.is_convert = 1 AND COALESCE(m.baptism_date, m.move_in_date) >= datetime('now', '-12 months') THEN m.id END) AS convertsLast12Months
+        0 AS seminaryAttending,
+        0 AS instituteAttending,
+        0 AS convertsLast12Months
       FROM members m
       GROUP BY ${unitNameExpr()}
       ORDER BY ${unitNameExpr()}
@@ -3078,7 +3128,60 @@ export const getUnitHealthReport = async () => {
       convertsLast12Months: number;
     }>;
 
-    return rows;
+    const classRows = db.prepare(
+      `
+      SELECT
+        ${unitNameExpr()} AS unitName,
+        m.birthdate,
+        m.age,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute
+      FROM members m
+      `
+    ).all() as Array<{
+      unitName: string;
+      birthdate: string | null;
+      age: number | null;
+      isAttendingSeminary: number | null;
+      isAttendingInstitute: number | null;
+    }>;
+    const classCounts = classRows.reduce((counts, row) => {
+      const existing = counts.get(row.unitName) ?? { seminaryAttending: 0, instituteAttending: 0 };
+      const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+      const actualAge = actualAgeFromBirthdate(row.birthdate, row.age);
+      if (isSeminaryEligibleAge(youthProgramAge) && toBool(row.isAttendingSeminary)) {
+        existing.seminaryAttending++;
+      }
+      if (isInstituteEligibleAge(actualAge) && toBool(row.isAttendingInstitute)) {
+        existing.instituteAttending++;
+      }
+      counts.set(row.unitName, existing);
+      return counts;
+    }, new Map<string, { seminaryAttending: number; instituteAttending: number }>());
+
+    const recentConvertRows = db.prepare(
+      `
+      SELECT
+        ${unitNameExpr()} AS unitName,
+        m.baptism_date AS baptismDate,
+        m.move_in_date AS moveInDate
+      FROM members m
+      WHERE m.is_convert = 1
+      `
+    ).all() as Array<{ unitName: string; baptismDate: string | null; moveInDate: string | null }>;
+    const recentConvertThreshold = monthsAgoThreshold(12);
+    const recentConvertCounts = recentConvertRows.reduce((counts, row) => {
+      if (isOnOrAfter(row.baptismDate, recentConvertThreshold) || isOnOrAfter(row.moveInDate, recentConvertThreshold)) {
+        counts.set(row.unitName, (counts.get(row.unitName) ?? 0) + 1);
+      }
+      return counts;
+    }, new Map<string, number>());
+
+    return rows.map((row) => ({
+      ...row,
+      ...(classCounts.get(row.unitName) ?? { seminaryAttending: 0, instituteAttending: 0 }),
+      convertsLast12Months: recentConvertCounts.get(row.unitName) ?? 0
+    }));
   } finally {
     db.close();
   }
@@ -3094,15 +3197,12 @@ export const getLeadershipTenureReport = async () => {
         ${unitNameExpr()} AS unitName,
         ${fullNameExpr} AS fullName,
         c.title AS callingTitle,
-        c.sustained_on AS sustainedOn,
-        CAST((julianday('now') - julianday(c.sustained_on)) / 365.25 AS INTEGER) AS yearsInCalling
+        c.sustained_on AS sustainedOn
       FROM callings c
       JOIN members m ON c.lcr_member_id = m.lcr_member_id
       WHERE c.released_on IS NULL AND c.is_current = 1
         AND c.sustained_on IS NOT NULL
         AND (c.title LIKE '%president%' OR c.title LIKE '%President%' OR c.title LIKE '%bishop%' OR c.title LIKE '%Bishop%' OR c.title LIKE '%high councilor%' OR c.title LIKE '%High Councilor%')
-      ORDER BY (julianday('now') - julianday(c.sustained_on)) DESC, c.sustained_on ASC
-      LIMIT 40
       `
     ).all() as Array<{
       lcrMemberId: string;
@@ -3110,13 +3210,16 @@ export const getLeadershipTenureReport = async () => {
       fullName: string;
       callingTitle: string;
       sustainedOn: string;
-      yearsInCalling: number;
     }>;
 
-    return rows.map((row) => ({
-      ...row,
-      callingTitle: cleanCallingTitle(row.callingTitle)
-    }));
+    return rows
+      .map((row) => ({
+        ...row,
+        callingTitle: cleanCallingTitle(row.callingTitle),
+        yearsInCalling: row.sustainedOn && safeDate(row.sustainedOn) ? differenceInYears(new Date(), safeDate(row.sustainedOn)!) : 0
+      }))
+      .sort((left, right) => compareDateStrings(left.sustainedOn, right.sustainedOn, "asc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 40);
   } finally {
     db.close();
   }
@@ -3402,11 +3505,14 @@ export const getTempleRecommendHealthSummary = async (unit?: string | null): Pro
 export const getRecentBaptismSummary = async (monthsBack = 12, unit?: string | null): Promise<RecentBaptismReport> => {
   const safeMonthsBack = Math.max(1, Math.min(monthsBack, 36));
   const unitScope = normalizeUnitScope(unit);
+  const cutoffDate = monthsAgoThreshold(safeMonthsBack);
+  const last30DaysThreshold = daysAgoThreshold(30);
+  const last90DaysThreshold = daysAgoThreshold(90);
+  const thisYear = startOfToday().getFullYear();
   const db = openSqliteSpikeDb();
   try {
     const conditions: string[] = [
-      `m.baptism_date IS NOT NULL`,
-      `m.baptism_date >= datetime('now', '-${safeMonthsBack} months')`
+      `NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL`
     ];
     const params: unknown[] = [];
 
@@ -3415,30 +3521,23 @@ export const getRecentBaptismSummary = async (monthsBack = 12, unit?: string | n
       params.push(unitScope);
     }
 
-    const whereClause = conditions.join(" AND ");
-
     const rows = db.prepare(
       `
-      SELECT label, COUNT(*) AS value
-      FROM (
-        SELECT 'Last 30 Days' AS label FROM members m WHERE ${whereClause} AND m.baptism_date >= date('now', '-30 days')
-        UNION ALL
-        SELECT 'Last 90 Days' AS label FROM members m WHERE ${whereClause} AND m.baptism_date >= date('now', '-90 days')
-        UNION ALL
-        SELECT 'This Year' AS label FROM members m WHERE ${whereClause} AND strftime('%Y', m.baptism_date) = strftime('%Y', 'now')
-      ) counts
-      GROUP BY label
-      ORDER BY CASE label WHEN 'Last 30 Days' THEN 1 WHEN 'Last 90 Days' THEN 2 ELSE 3 END
+      SELECT m.baptism_date AS baptismDate
+      FROM members m
+      WHERE ${conditions.join(" AND ")}
       `
-    ).all(...params, ...params, ...params) as Array<{ label: string; value: number }>;
+    ).all(...params) as Array<{ baptismDate: string | null }>;
 
-    const summaryMap = new Map(rows.map((row) => [row.label, row.value]));
+    const recentDates = rows
+      .map((row) => safeDate(row.baptismDate))
+      .filter((date): date is Date => Boolean(date && date >= cutoffDate));
 
     return {
       summary: [
-        { label: "Last 30 Days", value: summaryMap.get("Last 30 Days") ?? 0 },
-        { label: "Last 90 Days", value: summaryMap.get("Last 90 Days") ?? 0 },
-        { label: "This Year", value: summaryMap.get("This Year") ?? 0 }
+        { label: "Last 30 Days", value: recentDates.filter((date) => date >= last30DaysThreshold).length },
+        { label: "Last 90 Days", value: recentDates.filter((date) => date >= last90DaysThreshold).length },
+        { label: "This Year", value: recentDates.filter((date) => date.getFullYear() === thisYear).length }
       ],
       members: []
     };
@@ -3449,11 +3548,13 @@ export const getRecentBaptismSummary = async (monthsBack = 12, unit?: string | n
 
 export const getRecommendExpirationRiskSummary = async (unit?: string | null): Promise<RecommendExpirationRiskReport> => {
   const unitScope = normalizeUnitScope(unit);
+  const today = startOfToday();
+  const next90Threshold = new Date(today);
+  next90Threshold.setDate(next90Threshold.getDate() + 90);
   const db = openSqliteSpikeDb();
   try {
     const conditions: string[] = [
-      `m.temple_recommend_expiration_date IS NOT NULL`,
-      `m.temple_recommend_expiration_date <= date('now', '+90 days')`
+      `NULLIF(TRIM(COALESCE(m.temple_recommend_expiration_date, '')), '') IS NOT NULL`
     ];
     const params: unknown[] = [];
 
@@ -3465,26 +3566,33 @@ export const getRecommendExpirationRiskSummary = async (unit?: string | null): P
     const rows = db.prepare(
       `
       SELECT
-        CASE
-          WHEN m.temple_recommend_expiration_date < date('now') THEN 'Expired'
-          WHEN m.temple_recommend_expiration_date <= date('now', '+30 days') THEN 'Next 30 Days'
-          ELSE '31-90 Days'
-        END AS label,
-        COUNT(*) AS value
+        m.temple_recommend_expiration_date AS expirationDate
       FROM members m
       WHERE ${conditions.join(" AND ")}
-      GROUP BY label
-      ORDER BY CASE label WHEN 'Expired' THEN 1 WHEN 'Next 30 Days' THEN 2 ELSE 3 END
       `
-    ).all(...params) as Array<{ label: string; value: number }>;
+    ).all(...params) as Array<{ expirationDate: string | null }>;
 
-    const summaryMap = new Map(rows.map((row) => [row.label, row.value]));
+    const summary = { expired: 0, next30: 0, next90: 0 };
+    for (const row of rows) {
+      const expiration = safeDate(row.expirationDate);
+      if (!expiration || expiration > next90Threshold) {
+        continue;
+      }
+      const days = daysFromToday(expiration);
+      if (days < 0) {
+        summary.expired++;
+      } else if (days <= 30) {
+        summary.next30++;
+      } else {
+        summary.next90++;
+      }
+    }
 
     return {
       summary: [
-        { label: "Expired", value: summaryMap.get("Expired") ?? 0 },
-        { label: "Next 30 Days", value: summaryMap.get("Next 30 Days") ?? 0 },
-        { label: "31-90 Days", value: summaryMap.get("31-90 Days") ?? 0 }
+        { label: "Expired", value: summary.expired },
+        { label: "Next 30 Days", value: summary.next30 },
+        { label: "31-90 Days", value: summary.next90 }
       ],
       members: []
     };
@@ -3568,6 +3676,8 @@ export const getMinisteringCoverageByUnit = async (unit?: string | null): Promis
 
 export const getHouseholdOutreachSummary = async (unit?: string | null): Promise<HouseholdOutreachReport> => {
   const unitScope = normalizeUnitScope(unit);
+  const next90Threshold = new Date(startOfToday());
+  next90Threshold.setDate(next90Threshold.getDate() + 90);
   const db = openSqliteSpikeDb();
   try {
     const unitCondition = unitScope ? `AND ${unitNameExpr()} = ?` : "";
@@ -3577,8 +3687,8 @@ export const getHouseholdOutreachSummary = async (unit?: string | null): Promise
       `
       SELECT
         COUNT(DISTINCT CASE WHEN m.age BETWEEN 12 AND 35 THEN h.id END) AS youthYsa,
-        COUNT(DISTINCT CASE WHEN m.baptism_date IS NOT NULL AND m.baptism_date >= datetime('now', '-12 months') THEN h.id END) AS recentBaptism,
-        COUNT(DISTINCT CASE WHEN m.temple_recommend_expiration_date IS NOT NULL AND m.temple_recommend_expiration_date <= date('now', '+90 days') THEN h.id END) AS recommendRisk,
+        0 AS recentBaptism,
+        0 AS recommendRisk,
         COUNT(DISTINCT CASE WHEN COALESCE(m.has_ministering_brothers, 0) = 0 AND COALESCE(m.has_ministering_sisters, 0) = 0 THEN h.id END) AS ministeringGap
       FROM households h
       JOIN members m ON m.household_id = h.id
@@ -3591,11 +3701,46 @@ export const getHouseholdOutreachSummary = async (unit?: string | null): Promise
       ministeringGap: number;
     };
 
+    const recentBaptismRows = db.prepare(
+      `
+      SELECT DISTINCT
+        h.id AS householdId,
+        m.baptism_date AS baptismDate
+      FROM households h
+      JOIN members m ON m.household_id = h.id
+      WHERE NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL ${unitCondition}
+      `
+    ).all(...params) as Array<{ householdId: number; baptismDate: string | null }>;
+    const recentBaptismThreshold = monthsAgoThreshold(12);
+    const recentBaptismHouseholds = new Set(
+      recentBaptismRows
+        .filter((row) => isOnOrAfter(row.baptismDate, recentBaptismThreshold))
+        .map((row) => row.householdId)
+    );
+    const recommendRiskRows = db.prepare(
+      `
+      SELECT DISTINCT
+        h.id AS householdId,
+        m.temple_recommend_expiration_date AS expirationDate
+      FROM households h
+      JOIN members m ON m.household_id = h.id
+      WHERE NULLIF(TRIM(COALESCE(m.temple_recommend_expiration_date, '')), '') IS NOT NULL ${unitCondition}
+      `
+    ).all(...params) as Array<{ householdId: number; expirationDate: string | null }>;
+    const recommendRiskHouseholds = new Set(
+      recommendRiskRows
+        .filter((row) => {
+          const expiration = safeDate(row.expirationDate);
+          return Boolean(expiration && expiration <= next90Threshold);
+        })
+        .map((row) => row.householdId)
+    );
+
     return {
       summary: [
         { label: "Youth / YSA", value: rows.youthYsa },
-        { label: "Recent Baptism", value: rows.recentBaptism },
-        { label: "Recommend Risk", value: rows.recommendRisk },
+        { label: "Recent Baptism", value: recentBaptismHouseholds.size },
+        { label: "Recommend Risk", value: recommendRiskHouseholds.size },
         { label: "Ministering Gap", value: rows.ministeringGap }
       ],
       households: []
@@ -3607,18 +3752,25 @@ export const getHouseholdOutreachSummary = async (unit?: string | null): Promise
 
 export const getNewReturningStrengtheningSummary = async (unit?: string | null): Promise<NewReturningStrengtheningReport> => {
   const unitScope = normalizeUnitScope(unit);
+  const cutoffDate = daysAgoThreshold(730);
   const db = openSqliteSpikeDb();
   try {
-    const unitCondition = unitScope ? `AND ${unitNameExpr()} = ?` : "";
+    const unitCondition = unitScope ? `WHERE ${unitNameExpr()} = ?` : "";
     const params: unknown[] = unitScope ? [unitScope] : [];
 
-    const convertCount = (db.prepare(
-      `SELECT COUNT(*) AS count FROM members m WHERE m.is_convert = 1 AND COALESCE(m.baptism_date, m.move_in_date) >= datetime('now', '-24 months') ${unitCondition}`
-    ).get(...params) as { count: number }).count;
+    const rows = db.prepare(
+      `
+      SELECT
+        m.is_convert AS isConvert,
+        m.baptism_date AS baptismDate,
+        m.move_in_date AS moveInDate
+      FROM members m
+      ${unitCondition}
+      `
+    ).all(...params) as Array<{ isConvert: number | null; baptismDate: string | null; moveInDate: string | null }>;
 
-    const moveInCount = (db.prepare(
-      `SELECT COUNT(*) AS count FROM members m WHERE m.move_in_date IS NOT NULL AND m.move_in_date >= datetime('now', '-24 months') ${unitCondition}`
-    ).get(...params) as { count: number }).count;
+    const convertCount = rows.filter((row) => toBool(row.isConvert) && (isOnOrAfter(row.baptismDate, cutoffDate) || isOnOrAfter(row.moveInDate, cutoffDate))).length;
+    const moveInCount = rows.filter((row) => isOnOrAfter(row.moveInDate, cutoffDate)).length;
 
     // No member_status_history in SQLite, so no recommend recovered data
     return {
@@ -3703,24 +3855,45 @@ export const getSeminaryInstituteByUnitReport = async (unit?: string | null): Pr
       `
       SELECT
         ${unitNameExpr()} AS unitName,
-        COUNT(CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 THEN 1 END) AS seminaryEligible,
-        COUNT(CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 AND m.is_attending_seminary = 1 THEN 1 END) AS seminaryAttending,
-        COUNT(CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 THEN 1 END) AS instituteEligible,
-        COUNT(CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 AND m.is_attending_institute = 1 THEN 1 END) AS instituteAttending
+        m.birthdate,
+        m.age,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute
       FROM members m
       ${whereClause}
-      GROUP BY ${unitNameExpr()}
       ORDER BY ${unitNameExpr()}
       `
     ).all(...params) as Array<{
       unitName: string;
-      seminaryEligible: number;
-      seminaryAttending: number;
-      instituteEligible: number;
-      instituteAttending: number;
+      birthdate: string | null;
+      age: number | null;
+      isAttendingSeminary: number | null;
+      isAttendingInstitute: number | null;
     }>;
 
-    return rows.map((row) => ({
+    const unitRows = rows.reduce((groups, row) => {
+      const existing = groups.get(row.unitName) ?? {
+        unitName: row.unitName,
+        seminaryEligible: 0,
+        seminaryAttending: 0,
+        instituteEligible: 0,
+        instituteAttending: 0
+      };
+      const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+      const actualAge = actualAgeFromBirthdate(row.birthdate, row.age);
+      if (isSeminaryEligibleAge(youthProgramAge)) {
+        existing.seminaryEligible++;
+        if (toBool(row.isAttendingSeminary)) existing.seminaryAttending++;
+      }
+      if (isInstituteEligibleAge(actualAge)) {
+        existing.instituteEligible++;
+        if (toBool(row.isAttendingInstitute)) existing.instituteAttending++;
+      }
+      groups.set(row.unitName, existing);
+      return groups;
+    }, new Map<string, Omit<SeminaryInstituteByUnitRow, "seminaryParticipationPct" | "instituteParticipationPct">>());
+
+    return Array.from(unitRows.values()).map((row) => ({
       ...row,
       seminaryParticipationPct: row.seminaryEligible > 0 ? Math.round((row.seminaryAttending / row.seminaryEligible) * 100) : 0,
       instituteParticipationPct: row.instituteEligible > 0 ? Math.round((row.instituteAttending / row.instituteEligible) * 100) : 0
@@ -3738,12 +3911,12 @@ export const getUnitHealthRadarData = async (): Promise<UnitHealthRadarRow[]> =>
       SELECT
         ${unitNameExpr()} AS unitName,
         COUNT(DISTINCT m.id) AS memberCount,
-        COUNT(DISTINCT CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 THEN m.id END) AS seminaryEligible,
-        COUNT(DISTINCT CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 AND m.is_attending_seminary = 1 THEN m.id END) AS seminaryAttending,
-        COUNT(DISTINCT CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 THEN m.id END) AS instituteEligible,
-        COUNT(DISTINCT CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 AND m.is_attending_institute = 1 THEN m.id END) AS instituteAttending,
+        0 AS seminaryEligible,
+        0 AS seminaryAttending,
+        0 AS instituteEligible,
+        0 AS instituteAttending,
         COUNT(DISTINCT CASE WHEN COALESCE(m.temple_recommend_status, '') LIKE 'active%' OR COALESCE(m.temple_recommend_status, '') LIKE 'Active%' THEN m.id END) AS activeRecommendCount,
-        COUNT(DISTINCT CASE WHEN m.is_convert = 1 AND COALESCE(m.baptism_date, m.move_in_date) >= datetime('now', '-12 months') THEN m.id END) AS recentConvertCount,
+        0 AS recentConvertCount,
         COUNT(DISTINCT CASE WHEN COALESCE(m.has_ministering_brothers, 0) = 1 OR COALESCE(m.has_ministering_sisters, 0) = 1 THEN m.id END) AS ministeringCoverageCount
       FROM members m
       GROUP BY ${unitNameExpr()}
@@ -3777,16 +3950,69 @@ export const getUnitHealthRadarData = async (): Promise<UnitHealthRadarRow[]> =>
     ).all() as Array<{ unitName: string; leadershipCallings: number }>;
     const leadershipMap = new Map(leadershipRows.map((r) => [r.unitName, r.leadershipCallings]));
 
+    const classRows = db.prepare(
+      `
+      SELECT
+        ${unitNameExpr()} AS unitName,
+        m.birthdate,
+        m.age,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute
+      FROM members m
+      `
+    ).all() as Array<{
+      unitName: string;
+      birthdate: string | null;
+      age: number | null;
+      isAttendingSeminary: number | null;
+      isAttendingInstitute: number | null;
+    }>;
+    const classCounts = classRows.reduce((counts, row) => {
+      const existing = counts.get(row.unitName) ?? { seminaryEligible: 0, seminaryAttending: 0, instituteEligible: 0, instituteAttending: 0 };
+      const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+      const actualAge = actualAgeFromBirthdate(row.birthdate, row.age);
+      if (isSeminaryEligibleAge(youthProgramAge)) {
+        existing.seminaryEligible++;
+        if (toBool(row.isAttendingSeminary)) existing.seminaryAttending++;
+      }
+      if (isInstituteEligibleAge(actualAge)) {
+        existing.instituteEligible++;
+        if (toBool(row.isAttendingInstitute)) existing.instituteAttending++;
+      }
+      counts.set(row.unitName, existing);
+      return counts;
+    }, new Map<string, { seminaryEligible: number; seminaryAttending: number; instituteEligible: number; instituteAttending: number }>());
+
+    const recentConvertRows = db.prepare(
+      `
+      SELECT
+        ${unitNameExpr()} AS unitName,
+        m.baptism_date AS baptismDate,
+        m.move_in_date AS moveInDate
+      FROM members m
+      WHERE m.is_convert = 1
+      `
+    ).all() as Array<{ unitName: string; baptismDate: string | null; moveInDate: string | null }>;
+    const recentConvertThreshold = monthsAgoThreshold(12);
+    const recentConvertCounts = recentConvertRows.reduce((counts, row) => {
+      if (isOnOrAfter(row.baptismDate, recentConvertThreshold) || isOnOrAfter(row.moveInDate, recentConvertThreshold)) {
+        counts.set(row.unitName, (counts.get(row.unitName) ?? 0) + 1);
+      }
+      return counts;
+    }, new Map<string, number>());
+
     return rows.map((row) => {
       const leadershipCallings = leadershipMap.get(row.unitName) ?? 0;
+      const recentConvertCount = recentConvertCounts.get(row.unitName) ?? 0;
+      const classCount = classCounts.get(row.unitName) ?? { seminaryEligible: 0, seminaryAttending: 0, instituteEligible: 0, instituteAttending: 0 };
       return {
         unitName: row.unitName,
         memberCount: row.memberCount,
-        seminaryParticipationPct: row.seminaryEligible > 0 ? Math.round((row.seminaryAttending / row.seminaryEligible) * 100) : 0,
-        instituteParticipationPct: row.instituteEligible > 0 ? Math.round((row.instituteAttending / row.instituteEligible) * 100) : 0,
+        seminaryParticipationPct: classCount.seminaryEligible > 0 ? Math.round((classCount.seminaryAttending / classCount.seminaryEligible) * 100) : 0,
+        instituteParticipationPct: classCount.instituteEligible > 0 ? Math.round((classCount.instituteAttending / classCount.instituteEligible) * 100) : 0,
         activeRecommendPct: row.memberCount > 0 ? Math.round((row.activeRecommendCount / row.memberCount) * 100) : 0,
         leadershipPer100: row.memberCount > 0 ? Math.round((leadershipCallings / row.memberCount) * 100) : 0,
-        recentConvertPct: row.memberCount > 0 ? Math.round((row.recentConvertCount / row.memberCount) * 100) : 0,
+        recentConvertPct: row.memberCount > 0 ? Math.round((recentConvertCount / row.memberCount) * 100) : 0,
         ministeringCoveragePct: row.memberCount > 0 ? Math.round((row.ministeringCoverageCount / row.memberCount) * 100) : 0
       };
     });
@@ -3802,18 +4028,59 @@ export const getUnitReadinessScatterData = async (): Promise<UnitReadinessScatte
       `
       SELECT
         ${unitNameExpr()} AS unitName,
-        COUNT(CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 THEN 1 END) AS seminaryEligible,
-        COUNT(CASE WHEN ${youthProgramAgeSql()} BETWEEN 14 AND 18 AND COALESCE(m.is_attending_seminary, 0) = 1 THEN 1 END) AS seminaryAttending,
-        COUNT(CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 THEN 1 END) AS instituteEligible,
-        COUNT(CASE WHEN ${actualAgeSql()} BETWEEN 18 AND 35 AND COALESCE(m.is_attending_institute, 0) = 1 THEN 1 END) AS instituteAttending,
-        COUNT(CASE WHEN ${isYouthProgramSql()} OR (${actualAgeSql()} BETWEEN 18 AND 35) THEN 1 END) AS readinessEligibleCount,
-        COUNT(CASE WHEN (${isYouthProgramSql()} OR (${actualAgeSql()} BETWEEN 18 AND 35)) AND (COALESCE(m.temple_recommend_status, '') LIKE 'active%' OR COALESCE(m.temple_recommend_status, '') LIKE 'Active%') THEN 1 END) AS activeRecommendCount,
-        COUNT(CASE WHEN (${isYouthProgramSql()} OR (${actualAgeSql()} BETWEEN 18 AND 35)) AND (COALESCE(m.has_ministering_brothers, 0) = 1 OR COALESCE(m.has_ministering_sisters, 0) = 1) THEN 1 END) AS ministeringAssignedCount
+        m.birthdate,
+        m.age,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute,
+        m.temple_recommend_status AS templeRecommendStatus,
+        m.has_ministering_brothers AS hasMinisteringBrothers,
+        m.has_ministering_sisters AS hasMinisteringSisters
       FROM members m
-      GROUP BY ${unitNameExpr()}
       ORDER BY ${unitNameExpr()}
       `
     ).all() as Array<{
+      unitName: string;
+      birthdate: string | null;
+      age: number | null;
+      isAttendingSeminary: number | null;
+      isAttendingInstitute: number | null;
+      templeRecommendStatus: string | null;
+      hasMinisteringBrothers: number | null;
+      hasMinisteringSisters: number | null;
+    }>;
+
+    const unitRows = rows.reduce((groups, row) => {
+      const existing = groups.get(row.unitName) ?? {
+        unitName: row.unitName,
+        seminaryEligible: 0,
+        seminaryAttending: 0,
+        instituteEligible: 0,
+        instituteAttending: 0,
+        readinessEligibleCount: 0,
+        activeRecommendCount: 0,
+        ministeringAssignedCount: 0
+      };
+      const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+      const actualAge = actualAgeFromBirthdate(row.birthdate, row.age);
+      const seminaryEligible = isSeminaryEligibleAge(youthProgramAge);
+      const instituteEligible = isInstituteEligibleAge(actualAge);
+      const readinessEligible = (youthProgramAge !== null && youthProgramAge >= 12 && youthProgramAge <= 18) || instituteEligible;
+      if (seminaryEligible) {
+        existing.seminaryEligible++;
+        if (toBool(row.isAttendingSeminary)) existing.seminaryAttending++;
+      }
+      if (instituteEligible) {
+        existing.instituteEligible++;
+        if (toBool(row.isAttendingInstitute)) existing.instituteAttending++;
+      }
+      if (readinessEligible) {
+        existing.readinessEligibleCount++;
+        if (isActiveTempleRecommendStatus(row.templeRecommendStatus)) existing.activeRecommendCount++;
+        if (toBool(row.hasMinisteringBrothers) || toBool(row.hasMinisteringSisters)) existing.ministeringAssignedCount++;
+      }
+      groups.set(row.unitName, existing);
+      return groups;
+    }, new Map<string, {
       unitName: string;
       seminaryEligible: number;
       seminaryAttending: number;
@@ -3822,9 +4089,9 @@ export const getUnitReadinessScatterData = async (): Promise<UnitReadinessScatte
       readinessEligibleCount: number;
       activeRecommendCount: number;
       ministeringAssignedCount: number;
-    }>;
+    }>());
 
-    return rows
+    return Array.from(unitRows.values())
       .map((row) => {
         const seminaryParticipationPct = row.seminaryEligible > 0 ? Math.round((row.seminaryAttending / row.seminaryEligible) * 100) : 0;
         const instituteParticipationPct = row.instituteEligible > 0 ? Math.round((row.instituteAttending / row.instituteEligible) * 100) : 0;
@@ -3915,6 +4182,7 @@ export const getRecentBaptismReport = async (monthsBack = 12): Promise<RecentBap
 };
 
 export const getRecentBaptismPathCohort = async (): Promise<RecentBaptismPathRow[]> => {
+  const cutoffDate = daysAgoThreshold(730);
   const db = openSqliteSpikeDb();
   try {
     const cohortRows = db.prepare(
@@ -3929,10 +4197,7 @@ export const getRecentBaptismPathCohort = async (): Promise<RecentBaptismPathRow
         (SELECT c.title FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id ORDER BY c.sustained_on DESC LIMIT 1) AS currentCalling,
         (COALESCE(m.has_ministering_brothers, 0) OR COALESCE(m.has_ministering_sisters, 0)) AS ministeringAssigned
       FROM members m
-      WHERE m.baptism_date IS NOT NULL
-        AND m.baptism_date >= datetime('now', '-24 months')
-      ORDER BY m.baptism_date DESC, m.last_name, m.first_name
-      LIMIT 5000
+      WHERE NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL
       `
     ).all() as Array<{
       lcrMemberId: string;
@@ -3965,28 +4230,35 @@ export const getRecentBaptismPathCohort = async (): Promise<RecentBaptismPathRow
       }
     }
 
-    return cohortRows.map((row) => {
-      const assignedAsMinister = buildNameVariants(row.fullName).some((variant) => assignedMinisterVariants.has(variant));
+    return cohortRows
+      .filter((row) => isOnOrAfter(row.baptismDate, cutoffDate))
+      .sort((left, right) => compareDateStrings(left.baptismDate, right.baptismDate, "desc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 5000)
+      .map((row) => {
+        const assignedAsMinister = buildNameVariants(row.fullName).some((variant) => assignedMinisterVariants.has(variant));
 
-      return {
-        lcrMemberId: row.lcrMemberId,
-        fullName: row.fullName,
-        unitName: row.unitName,
-        baptismDate: row.baptismDate,
-        templeRecommendStatus: row.templeRecommendStatus,
-        hasCurrentCalling: toBool(row.hasCurrentCalling),
-        currentCalling: cleanCallingTitle(row.currentCalling) || null,
-        ministeringAssigned: toBool(row.ministeringAssigned),
-        assignedAsMinister,
-        assignedAsMinisterLabel: assignedAsMinister ? "Yes" : "No"
-      };
-    });
+        return {
+          lcrMemberId: row.lcrMemberId,
+          fullName: row.fullName,
+          unitName: row.unitName,
+          baptismDate: row.baptismDate,
+          templeRecommendStatus: row.templeRecommendStatus,
+          hasCurrentCalling: toBool(row.hasCurrentCalling),
+          currentCalling: cleanCallingTitle(row.currentCalling) || null,
+          ministeringAssigned: toBool(row.ministeringAssigned),
+          assignedAsMinister,
+          assignedAsMinisterLabel: assignedAsMinister ? "Yes" : "No"
+        };
+      });
   } finally {
     db.close();
   }
 };
 
 export const getRecommendExpirationRiskReport = async (): Promise<RecommendExpirationRiskReport> => {
+  const today = startOfToday();
+  const next90Threshold = new Date(today);
+  next90Threshold.setDate(next90Threshold.getDate() + 90);
   const db = openSqliteSpikeDb();
   try {
     const rows = db.prepare(
@@ -3997,18 +4269,11 @@ export const getRecommendExpirationRiskReport = async (): Promise<RecommendExpir
         ${unitNameExpr()} AS unitName,
         m.age,
         m.temple_recommend_status AS templeRecommendStatus,
-        m.temple_recommend_expiration_date AS expirationDate,
-        CASE
-          WHEN m.temple_recommend_expiration_date IS NULL THEN NULL
-          ELSE CAST(julianday(m.temple_recommend_expiration_date) - julianday('now') AS INTEGER)
-        END AS daysUntilExpiration
+        m.temple_recommend_expiration_date AS expirationDate
       FROM members m
-      WHERE m.temple_recommend_expiration_date IS NOT NULL
-        AND m.temple_recommend_expiration_date <= date('now', '+90 days')
-      ORDER BY m.temple_recommend_expiration_date ASC, unitName, m.last_name, m.first_name
-      LIMIT 5000
+      WHERE NULLIF(TRIM(COALESCE(m.temple_recommend_expiration_date, '')), '') IS NOT NULL
       `
-    ).all() as RecommendExpirationRiskRow[];
+    ).all() as Array<Omit<RecommendExpirationRiskRow, "daysUntilExpiration">>;
 
     const summary = {
       expired: 0,
@@ -4016,7 +4281,26 @@ export const getRecommendExpirationRiskReport = async (): Promise<RecommendExpir
       next90: 0
     };
 
-    for (const row of rows) {
+    const members: RecommendExpirationRiskRow[] = rows
+      .flatMap((row) => {
+        const expiration = safeDate(row.expirationDate);
+        if (!expiration || expiration > next90Threshold) {
+          return [];
+        }
+        return [{
+          ...row,
+          daysUntilExpiration: daysFromToday(expiration)
+        }];
+      })
+      .sort(
+        (left, right) =>
+          compareDateStrings(left.expirationDate, right.expirationDate, "asc") ||
+          left.unitName.localeCompare(right.unitName) ||
+          left.fullName.localeCompare(right.fullName)
+      )
+      .slice(0, 5000);
+
+    for (const row of members) {
       const days = row.daysUntilExpiration ?? 0;
       if (days < 0) {
         summary.expired += 1;
@@ -4033,7 +4317,7 @@ export const getRecommendExpirationRiskReport = async (): Promise<RecommendExpir
         { label: "Next 30 Days", value: summary.next30 },
         { label: "31-90 Days", value: summary.next90 }
       ],
-      members: rows
+      members
     };
   } finally {
     db.close();
@@ -4101,55 +4385,76 @@ export const getSeminaryInstituteOpportunityReport = async (): Promise<SeminaryI
         m.lcr_member_id AS lcrMemberId,
         ${fullNameExpr} AS fullName,
         ${unitNameExpr()} AS unitName,
-        ${actualAgeSql()} AS age,
-        CASE
-          WHEN ${isSeminaryEligibleSql()} THEN 'Seminary'
-          ELSE 'Institute'
-        END AS track,
-        CASE
-          WHEN ${isSeminaryEligibleSql()} THEN m.is_attending_seminary
-          ELSE m.is_attending_institute
-        END AS attending,
-        CASE
-          WHEN ${isSeminaryEligibleSql()} THEN m.potential_seminary_student
-          ELSE m.potential_institute_student
-        END AS potentialFlag,
-        CASE
-          WHEN ${isSeminaryEligibleSql()} THEN m.seminary_status
-          ELSE m.institute_status
-        END AS statusText,
+        m.birthdate,
+        m.age,
+        m.is_attending_seminary AS isAttendingSeminary,
+        m.is_attending_institute AS isAttendingInstitute,
+        m.potential_seminary_student AS potentialSeminaryStudent,
+        m.potential_institute_student AS potentialInstituteStudent,
+        m.seminary_status AS seminaryStatus,
+        m.institute_status AS instituteStatus,
         m.primary_phone AS phoneNumber,
         m.primary_email AS email
       FROM members m
-      WHERE (
-          ${isSeminaryEligibleSql()}
-          AND COALESCE(m.is_attending_seminary, 0) = 0
-        )
-        OR (
-          ${actualAgeSql()} BETWEEN 18 AND 35
-          AND COALESCE(m.is_attending_institute, 0) = 0
-        )
-      ORDER BY track, unitName, ${nullsLast('age')}, age DESC, m.last_name, m.first_name
-      LIMIT 5000
+      ORDER BY unitName, ${nullsLast('m.age')}, m.age DESC, m.last_name, m.first_name
       `
     ).all() as Array<
-      Omit<SeminaryInstituteOpportunityRow, "attending" | "potentialFlag"> & {
-        attending: number | null;
-        potentialFlag: number | null;
+      Omit<SeminaryInstituteOpportunityRow, "age" | "track" | "attending" | "potentialFlag" | "statusText"> & {
+        birthdate: string | null;
+        age: number | null;
+        isAttendingSeminary: number | null;
+        isAttendingInstitute: number | null;
+        potentialSeminaryStudent: number | null;
+        potentialInstituteStudent: number | null;
+        seminaryStatus: string | null;
+        instituteStatus: string | null;
       }
     >;
 
-    return rows.map((row) => ({
-      ...row,
-      attending: toBoolOrNull(row.attending),
-      potentialFlag: toBoolOrNull(row.potentialFlag)
-    })) as SeminaryInstituteOpportunityRow[];
+    return rows
+      .flatMap<SeminaryInstituteOpportunityRow>((row) => {
+        const age = actualAgeFromBirthdate(row.birthdate, row.age);
+        const youthProgramAge = youthProgramAgeFromBirthdate(row.birthdate, row.age);
+        const seminaryEligible = isSeminaryEligibleAge(youthProgramAge);
+        const instituteEligible = isInstituteEligibleAge(age);
+        if (seminaryEligible && !toBool(row.isAttendingSeminary)) {
+          return [{
+            ...row,
+            age,
+            track: "Seminary" as const,
+            attending: toBoolOrNull(row.isAttendingSeminary),
+            potentialFlag: toBoolOrNull(row.potentialSeminaryStudent),
+            statusText: row.seminaryStatus
+          }];
+        }
+        if (instituteEligible && !toBool(row.isAttendingInstitute)) {
+          return [{
+            ...row,
+            age,
+            track: "Institute" as const,
+            attending: toBoolOrNull(row.isAttendingInstitute),
+            potentialFlag: toBoolOrNull(row.potentialInstituteStudent),
+            statusText: row.instituteStatus
+          }];
+        }
+        return [];
+      })
+      .sort(
+        (left, right) =>
+          left.track.localeCompare(right.track) ||
+          left.unitName.localeCompare(right.unitName) ||
+          ((right.age ?? -1) - (left.age ?? -1)) ||
+          left.fullName.localeCompare(right.fullName)
+      )
+      .slice(0, 5000);
   } finally {
     db.close();
   }
 };
 
 export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachReport> => {
+  const next90Threshold = new Date(startOfToday());
+  next90Threshold.setDate(next90Threshold.getDate() + 90);
   const db = openSqliteSpikeDb();
   try {
     const rawRows = db.prepare(
@@ -4161,8 +4466,8 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
         COALESCE(MAX(NULLIF(m.unit_name, '')), 'Unknown') AS unitName,
         COUNT(DISTINCT m.id) AS memberCount,
         COUNT(DISTINCT CASE WHEN m.age BETWEEN 12 AND 35 THEN m.id END) AS youthCount,
-        COUNT(DISTINCT CASE WHEN m.baptism_date IS NOT NULL AND m.baptism_date >= datetime('now', '-12 months') THEN m.id END) AS recentBaptismCount,
-        COUNT(DISTINCT CASE WHEN m.temple_recommend_expiration_date IS NOT NULL AND m.temple_recommend_expiration_date <= date('now', '+90 days') THEN m.id END) AS recommendRiskCount,
+        GROUP_CONCAT(NULLIF(m.baptism_date, ''), ' | ') AS baptismDates,
+        GROUP_CONCAT(NULLIF(m.temple_recommend_expiration_date, ''), ' | ') AS recommendExpirationDates,
         COUNT(DISTINCT CASE WHEN COALESCE(m.has_ministering_brothers, 0) = 0 AND COALESCE(m.has_ministering_sisters, 0) = 0 THEN m.id END) AS ministeringGapCount,
         (SELECT GROUP_CONCAT(e, ' | ') FROM (SELECT DISTINCT primary_email AS e FROM members WHERE household_id = h.id AND primary_email IS NOT NULL)) AS householdEmails,
         (SELECT GROUP_CONCAT(p, ' | ') FROM (SELECT DISTINCT primary_phone AS p FROM members WHERE household_id = h.id AND primary_phone IS NOT NULL)) AS householdPhones
@@ -4171,8 +4476,8 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
       GROUP BY h.id, h.household_name
       HAVING
         COUNT(DISTINCT CASE WHEN m.age BETWEEN 12 AND 35 THEN m.id END) > 0
-        OR COUNT(DISTINCT CASE WHEN m.baptism_date IS NOT NULL AND m.baptism_date >= datetime('now', '-12 months') THEN m.id END) > 0
-        OR COUNT(DISTINCT CASE WHEN m.temple_recommend_expiration_date IS NOT NULL AND m.temple_recommend_expiration_date <= date('now', '+90 days') THEN m.id END) > 0
+        OR COUNT(DISTINCT CASE WHEN NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL THEN m.id END) > 0
+        OR COUNT(DISTINCT CASE WHEN NULLIF(TRIM(COALESCE(m.temple_recommend_expiration_date, '')), '') IS NOT NULL THEN m.id END) > 0
         OR COUNT(DISTINCT CASE WHEN COALESCE(m.has_ministering_brothers, 0) = 0 AND COALESCE(m.has_ministering_sisters, 0) = 0 THEN m.id END) > 0
       ORDER BY unitName, householdName
       LIMIT 5000
@@ -4184,18 +4489,28 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
       unitName: string;
       memberCount: number;
       youthCount: number;
-      recentBaptismCount: number;
-      recommendRiskCount: number;
+      baptismDates: string | null;
+      recommendExpirationDates: string | null;
       ministeringGapCount: number;
       householdEmails: string | null;
       householdPhones: string | null;
     }>;
 
+    const recentBaptismThreshold = monthsAgoThreshold(12);
     const households = rawRows.map<HouseholdOutreachRow>((row) => {
+      const recentBaptismCount = (row.baptismDates ?? "")
+        .split(" | ")
+        .filter((value) => isOnOrAfter(value, recentBaptismThreshold)).length;
+      const recommendRiskCount = (row.recommendExpirationDates ?? "")
+        .split(" | ")
+        .filter((value) => {
+          const expiration = safeDate(value);
+          return Boolean(expiration && expiration <= next90Threshold);
+        }).length;
       const focusAreas = [
         row.youthCount > 0 ? "Youth / YSA" : null,
-        row.recentBaptismCount > 0 ? "Recent Baptism" : null,
-        row.recommendRiskCount > 0 ? "Recommend Risk" : null,
+        recentBaptismCount > 0 ? "Recent Baptism" : null,
+        recommendRiskCount > 0 ? "Recommend Risk" : null,
         row.ministeringGapCount > 0 ? "Ministering Gap" : null
       ].filter(Boolean) as string[];
 
@@ -4206,14 +4521,14 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
         unitName: row.unitName,
         memberCount: row.memberCount,
         youthCount: row.youthCount,
-        recentBaptismCount: row.recentBaptismCount,
-        recommendRiskCount: row.recommendRiskCount,
+        recentBaptismCount,
+        recommendRiskCount,
         ministeringGapCount: row.ministeringGapCount,
         householdEmails: row.householdEmails ?? "",
         householdPhones: row.householdPhones ?? "",
         focusAreas
       };
-    });
+    }).filter((household) => household.focusAreas.length > 0);
 
     const summary = [
       { label: "Youth / YSA", value: households.filter((household) => household.youthCount > 0).length },
@@ -4229,6 +4544,7 @@ export const getHouseholdOutreachReport = async (): Promise<HouseholdOutreachRep
 };
 
 export const getNewReturningStrengtheningReport = async (): Promise<NewReturningStrengtheningReport> => {
+  const cutoffDate = daysAgoThreshold(730);
   const db = openSqliteSpikeDb();
   try {
     // No member_status_history in SQLite, so no recommend recovered data
@@ -4243,6 +4559,8 @@ export const getNewReturningStrengtheningReport = async (): Promise<NewReturning
           WHEN m.move_in_date IS NOT NULL THEN 'Move-in'
           ELSE 'Returning Member'
         END AS focusCategory,
+        m.baptism_date AS baptismDate,
+        m.move_in_date AS moveInDate,
         COALESCE(m.baptism_date, m.move_in_date) AS focusDate,
         m.temple_recommend_status AS templeRecommendStatus,
         EXISTS (SELECT 1 FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id) AS hasCurrentCalling,
@@ -4253,20 +4571,17 @@ export const getNewReturningStrengtheningReport = async (): Promise<NewReturning
       FROM members m
       WHERE (
           m.is_convert = 1
-          AND COALESCE(m.baptism_date, m.move_in_date) >= datetime('now', '-24 months')
+          AND (NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL OR NULLIF(TRIM(COALESCE(m.move_in_date, '')), '') IS NOT NULL)
         )
-        OR (
-          m.move_in_date IS NOT NULL
-          AND m.move_in_date >= datetime('now', '-24 months')
-        )
-      ORDER BY ${nullsLast('COALESCE(m.baptism_date, m.move_in_date)')}, COALESCE(m.baptism_date, m.move_in_date) DESC, m.last_name, m.first_name
-      LIMIT 5000
+        OR NULLIF(TRIM(COALESCE(m.move_in_date, '')), '') IS NOT NULL
       `
     ).all() as Array<{
       lcrMemberId: string;
       fullName: string;
       unitName: string;
       focusCategory: string;
+      baptismDate: string | null;
+      moveInDate: string | null;
       focusDate: string | null;
       templeRecommendStatus: string | null;
       hasCurrentCalling: number;
@@ -4276,19 +4591,27 @@ export const getNewReturningStrengtheningReport = async (): Promise<NewReturning
       inactiveDays: number | null;
     }>;
 
-    const mappedRows: NewReturningStrengtheningRow[] = rows.map((row) => ({
-      lcrMemberId: row.lcrMemberId,
-      fullName: row.fullName,
-      unitName: row.unitName,
-      focusCategory: row.focusCategory,
-      focusDate: row.focusDate,
-      templeRecommendStatus: row.templeRecommendStatus,
-      hasCurrentCalling: toBool(row.hasCurrentCalling),
-      ministeringAssigned: toBool(row.ministeringAssigned),
-      recoveredAfterLongLapse: false,
-      reactivatedAt: null,
-      inactiveDays: null
-    }));
+    const mappedRows: NewReturningStrengtheningRow[] = rows
+      .filter((row) => {
+        const isRecentConvert = row.focusCategory === "Convert" && (isOnOrAfter(row.baptismDate, cutoffDate) || isOnOrAfter(row.moveInDate, cutoffDate));
+        const isRecentMoveIn = isOnOrAfter(row.moveInDate, cutoffDate);
+        return isRecentConvert || isRecentMoveIn;
+      })
+      .map((row) => ({
+        lcrMemberId: row.lcrMemberId,
+        fullName: row.fullName,
+        unitName: row.unitName,
+        focusCategory: row.focusCategory,
+        focusDate: row.focusDate,
+        templeRecommendStatus: row.templeRecommendStatus,
+        hasCurrentCalling: toBool(row.hasCurrentCalling),
+        ministeringAssigned: toBool(row.ministeringAssigned),
+        recoveredAfterLongLapse: false,
+        reactivatedAt: null,
+        inactiveDays: null
+      }))
+      .sort((left, right) => compareDateStrings(left.focusDate, right.focusDate, "desc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 5000);
 
     const summaryMap = mappedRows.reduce<Record<string, number>>((acc, row) => {
       acc[row.focusCategory] = (acc[row.focusCategory] ?? 0) + 1;
@@ -4385,6 +4708,7 @@ export const getPriesthoodProgressionReport = async (): Promise<PriesthoodProgre
 };
 
 export const getRecentMoveInsReport = async () => {
+  const cutoffDate = daysAgoThreshold(365);
   const db = openSqliteSpikeDb();
   try {
     const rows = db.prepare(
@@ -4397,10 +4721,7 @@ export const getRecentMoveInsReport = async () => {
         m.primary_phone AS phoneNumber,
         m.primary_email AS email
       FROM members m
-      WHERE m.move_in_date IS NOT NULL
-        AND m.move_in_date >= datetime('now', '-12 months')
-      ORDER BY m.move_in_date DESC, m.last_name, m.first_name
-      LIMIT 100
+      WHERE NULLIF(TRIM(COALESCE(m.move_in_date, '')), '') IS NOT NULL
       `
     ).all() as Array<{
       lcrMemberId: string;
@@ -4411,7 +4732,10 @@ export const getRecentMoveInsReport = async () => {
       email: string | null;
     }>;
 
-    return rows;
+    return rows
+      .filter((row) => isOnOrAfter(row.moveInDate, cutoffDate))
+      .sort((left, right) => compareDateStrings(left.moveInDate, right.moveInDate, "desc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 100);
   } finally {
     db.close();
   }

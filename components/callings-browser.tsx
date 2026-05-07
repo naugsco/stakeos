@@ -11,6 +11,7 @@ import {
   type ExportContact
 } from "@/src/contacts/contactExport";
 import { CALLING_GROUP_DEFINITIONS, type CallingGroupId, matchesCallingGroup } from "@/src/callings/callingGroups";
+import { compareStakeDates, parseStakeDate } from "@/src/utils/date";
 
 type CallingRow = {
   callingTitle: string;
@@ -101,8 +102,8 @@ const isRecentlySustained = (value: string | null, days: number) => {
     return false;
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseStakeDate(value);
+  if (!parsed) {
     return false;
   }
 
@@ -226,7 +227,9 @@ export function CallingsBrowser({
               : sortKey === "sustainedOn"
                 ? right.sustainedOn
                 : right[sortKey];
-          return compareValues(leftValue, rightValue, sortDirection);
+          return sortKey === "sustainedOn"
+            ? compareStakeDates(left.sustainedOn, right.sustainedOn, sortDirection)
+            : compareValues(leftValue, rightValue, sortDirection);
         }),
         stats: {
           total: unitCallings.length,

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ContactMethodsInline } from "@/components/contact-links";
 import { MemberNameLink } from "@/components/member-name-link";
+import { compareStakeDates } from "@/src/utils/date";
 
 type SortDirection = "asc" | "desc";
 
@@ -397,7 +398,12 @@ export function ReportsBrowser({
   );
 
   const sortedBaptisms = useMemo(
-    () => [...recentBaptisms.members].sort((left, right) => compareValues(left[baptismSortKey], right[baptismSortKey], baptismSortDirection)),
+    () =>
+      [...recentBaptisms.members].sort((left, right) =>
+        baptismSortKey === "baptismDate"
+          ? compareStakeDates(left.baptismDate, right.baptismDate, baptismSortDirection)
+          : compareValues(left[baptismSortKey], right[baptismSortKey], baptismSortDirection)
+      ),
     [baptismSortDirection, baptismSortKey, recentBaptisms.members]
   );
 

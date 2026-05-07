@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MemberNameLink } from "@/components/member-name-link";
+import { compareStakeDates } from "@/src/utils/date";
 
 type SortDirection = "asc" | "desc";
 
@@ -59,7 +60,12 @@ export function RecentBaptismPathBrowser({
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const sortedRows = useMemo(
-    () => [...rows].sort((left, right) => compareValues(left[sortKey], right[sortKey], sortDirection)),
+    () =>
+      [...rows].sort((left, right) =>
+        sortKey === "baptismDate"
+          ? compareStakeDates(left.baptismDate, right.baptismDate, sortDirection)
+          : compareValues(left[sortKey], right[sortKey], sortDirection)
+      ),
     [rows, sortDirection, sortKey]
   );
 

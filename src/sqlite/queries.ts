@@ -26,6 +26,7 @@ import type {
 import { buildVisualOrgPayload, normalizeVisualOrgUnit, type VisualOrgSourceRow } from "@/src/services/visualOrgService";
 import type { DashboardOverviewMetrics } from "@/src/types/dashboard";
 import type { VisualOrgPayload } from "@/src/types/visualOrg";
+import { compareStakeDates, formatStakeMonthKey, parseStakeDate } from "@/src/utils/date";
 
 interface SpikeMemberRow {
   lcrMemberId?: string;
@@ -164,16 +165,11 @@ const daysAgoThreshold = (days: number) => {
   return today;
 };
 const safeDate = (value?: string | null) => {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseStakeDate(value);
 };
 const formatMonthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const monthKeyFromValue = (value?: string | null) => {
-  const date = safeDate(value);
-  return date ? formatMonthKey(date) : null;
+  return formatStakeMonthKey(value);
 };
 const actualAge = (row: Pick<SpikeMemberRow, "age" | "birthdate">) => {
   if (typeof row.age === "number") {
@@ -1266,7 +1262,7 @@ export const loadSqliteSpikeReportsShellData = async (selectedUnitArg?: string |
         phoneNumber: member.primaryPhone ?? null,
         email: member.primaryEmail ?? null
       }))
-      .sort((left, right) => (right.baptismDate ?? "").localeCompare(left.baptismDate ?? "") || left.fullName.localeCompare(right.fullName))
+      .sort((left, right) => compareStakeDates(left.baptismDate, right.baptismDate, "desc") || left.fullName.localeCompare(right.fullName))
       .slice(0, 5000);
 
     const recommendExpirationMembers = members
@@ -1532,7 +1528,7 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
           assignedAsMinisterLabel: assignedAsMinister ? "Yes" : "No"
         };
       })
-      .sort((left, right) => (right.baptismDate ?? "").localeCompare(left.baptismDate ?? "") || left.fullName.localeCompare(right.fullName));
+      .sort((left, right) => compareStakeDates(left.baptismDate, right.baptismDate, "desc") || left.fullName.localeCompare(right.fullName));
 
     const unitHealth = [...membersByUnit.entries()]
       .map(([unitName, rows]) => ({
@@ -1588,7 +1584,7 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
         phoneNumber: member.primaryPhone ?? null,
         email: member.primaryEmail ?? null
       }))
-      .sort((left, right) => (right.moveInDate ?? "").localeCompare(left.moveInDate ?? "") || left.fullName.localeCompare(right.fullName))
+      .sort((left, right) => compareStakeDates(left.moveInDate, right.moveInDate, "desc") || left.fullName.localeCompare(right.fullName))
       .slice(0, 100);
 
     const seminaryInstituteByUnit: SeminaryInstituteByUnitRow[] = dashboard.seminaryByUnit.map((row) => {
@@ -1626,7 +1622,7 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
           inactiveDays: null
         };
       })
-      .sort((left, right) => (right.focusDate ?? "").localeCompare(left.focusDate ?? "") || left.fullName.localeCompare(right.fullName));
+      .sort((left, right) => compareStakeDates(left.focusDate, right.focusDate, "desc") || left.fullName.localeCompare(right.fullName));
 
     const newReturningStrengthening: NewReturningStrengtheningReport = {
       summary: [
@@ -1806,7 +1802,7 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
         if (member.confirmationDate) milestones.push({ label: "Confirmed", date: member.confirmationDate });
         if (member.endowmentDate) milestones.push({ label: "Endowed", date: member.endowmentDate });
         if (member.ordinationDate) milestones.push({ label: "Ordained", date: member.ordinationDate });
-        milestones.sort((left, right) => right.date.localeCompare(left.date));
+        milestones.sort((left, right) => compareStakeDates(left.date, right.date, "desc"));
 
         const ordinanceBucket =
           (member.baptismDate && safeDate(member.baptismDate) && safeDate(member.baptismDate)! >= daysAgoThreshold(730)) ||
@@ -1904,7 +1900,7 @@ export const loadSqliteSpikeFullReportsData = async (selectedUnitArg?: string | 
         };
       })
       .filter((row) => row.attentionScore >= 1)
-      .sort((left, right) => right.attentionScore - left.attentionScore || (right.recentMilestoneDate ?? "").localeCompare(left.recentMilestoneDate ?? ""));
+      .sort((left, right) => right.attentionScore - left.attentionScore || compareStakeDates(left.recentMilestoneDate, right.recentMilestoneDate, "desc"));
 
     return {
       overview: shell.overview,

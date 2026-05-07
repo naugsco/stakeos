@@ -6,6 +6,7 @@ import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { getSqliteSpikeSyncDiffReport } from "@/src/sqlite/queries";
 import { ensureMailer } from "@/src/email/mailer";
 import { CALLING_GROUP_DEFINITIONS, matchesCallingGroup, type CallingGroupId } from "@/src/callings/callingGroups";
+import { compareStakeDates, parseStakeDate } from "@/src/utils/date";
 import {
   getCallingMembers,
   getCommitteeContactList,
@@ -205,8 +206,8 @@ const loadSqliteCallingSnapshots = (db: ReturnType<typeof openSqliteSpikeDb>, sy
   })) as CallingSnapshotRow[];
 
 const parseToolDateInput = (value: string) => {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseStakeDate(value);
+  if (!parsed) {
     throw new Error(`Invalid date input: ${value}`);
   }
   return parsed.toISOString();
@@ -1277,8 +1278,10 @@ export const getCallingChangesSince = async (options: {
         }))
     ]
       .sort((left, right) => {
-        const leftTime = new Date(left.sustainedOn ?? left.releasedOn ?? left.detectedAt ?? 0).getTime();
-        const rightTime = new Date(right.sustainedOn ?? right.releasedOn ?? right.detectedAt ?? 0).getTime();
+        const leftDate = parseStakeDate(left.sustainedOn ?? left.releasedOn ?? left.detectedAt);
+        const rightDate = parseStakeDate(right.sustainedOn ?? right.releasedOn ?? right.detectedAt);
+        const leftTime = leftDate?.getTime() ?? 0;
+        const rightTime = rightDate?.getTime() ?? 0;
         return rightTime - leftTime;
       })
       .slice(0, limit);
@@ -1673,7 +1676,7 @@ export const getMemberTimeline = async (memberRef: string) => {
       if (!right.date) {
         return -1;
       }
-      return right.date.localeCompare(left.date);
+      return compareStakeDates(left.date, right.date, "desc");
     });
 
     return {
