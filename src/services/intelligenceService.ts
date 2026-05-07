@@ -732,6 +732,51 @@ const compareNullable = (
   return direction === "asc" ? result : -result;
 };
 
+const startOfToday = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
+const monthsAgoThreshold = (months: number) => {
+  const today = startOfToday();
+  today.setMonth(today.getMonth() - months);
+  return today;
+};
+
+const safeDate = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const isOnOrAfter = (value: string | null | undefined, threshold: Date) => {
+  const date = safeDate(value);
+  return Boolean(date && date >= threshold);
+};
+
+const compareDateStrings = (
+  left: string | null | undefined,
+  right: string | null | undefined,
+  direction: ContactSortDirection = "asc"
+) => {
+  const leftDate = safeDate(left);
+  const rightDate = safeDate(right);
+
+  if (leftDate && rightDate) {
+    const result = leftDate.getTime() - rightDate.getTime();
+    return direction === "asc" ? result : -result;
+  }
+  if (leftDate) {
+    return direction === "asc" ? -1 : 1;
+  }
+  if (rightDate) {
+    return direction === "asc" ? 1 : -1;
+  }
+  return compareNullable(left ?? null, right ?? null, direction);
+};
+
 const normalizeTempleRecommendStatus = (status: string | null | undefined) => (status ?? "").trim().toLowerCase();
 
 const isActiveTempleRecommendStatus = (status: string | null | undefined) =>
@@ -1634,15 +1679,15 @@ export const getNewMemberContactList = async (options: NewMemberContactListOptio
   const direction = resolveSortDirection(options.sortDirection);
   const sortBy = options.sortBy ?? "move_in_date";
   const safeLimit = Math.max(1, Math.min(options.limit ?? 500, 5000));
+  const cutoffDate = monthsAgoThreshold(monthsBack);
 
   const db = openSqliteSpikeDb();
   try {
-    const cutoffDate = `datetime('now', '-${monthsBack} months')`;
     const convertCondition = includeConverts
-      ? `(m.is_convert = 1 AND COALESCE(m.baptism_date, m.move_in_date) >= ${cutoffDate})`
+      ? `(m.is_convert = 1 AND (NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL OR NULLIF(TRIM(COALESCE(m.move_in_date, '')), '') IS NOT NULL))`
       : `0`;
     const moveInCondition = includeMoveIns
-      ? `(m.move_in_date IS NOT NULL AND m.move_in_date >= ${cutoffDate})`
+      ? `NULLIF(TRIM(COALESCE(m.move_in_date, '')), '') IS NOT NULL`
       : `0`;
 
     const conditions: string[] = [`(${convertCondition} OR ${moveInCondition})`];
@@ -1663,6 +1708,7 @@ export const getNewMemberContactList = async (options: NewMemberContactListOptio
         ${fullNameExpr} AS fullName,
         ${unitNameExpr()} AS unitName,
         m.is_convert AS convertFlag,
+        m.baptism_date AS baptismDate,
         m.move_in_date AS moveInDate,
         (SELECT c.title FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id ORDER BY c.sustained_on DESC LIMIT 1) AS callingTitle,
         m.primary_phone AS phoneNumber,
@@ -1674,16 +1720,26 @@ export const getNewMemberContactList = async (options: NewMemberContactListOptio
     ).all(...params) as Array<
       Omit<NewMemberContactRow, "convertFlag" | "ministeringAssigned"> & {
         convertFlag: number | null;
+        baptismDate: string | null;
         ministeringAssigned: number;
       }
     >;
 
-    const rows = rawRows.map((row) => ({
-      ...row,
-      convertFlag: toBoolOrNull(row.convertFlag),
-      callingTitle: cleanCallingTitle(row.callingTitle),
-      ministeringAssigned: toBool(row.ministeringAssigned)
-    }));
+    const rows = rawRows
+      .filter((row) => {
+        const isRecentConvert =
+          includeConverts &&
+          toBool(row.convertFlag) &&
+          (isOnOrAfter(row.baptismDate, cutoffDate) || isOnOrAfter(row.moveInDate, cutoffDate));
+        const isRecentMoveIn = includeMoveIns && isOnOrAfter(row.moveInDate, cutoffDate);
+        return isRecentConvert || isRecentMoveIn;
+      })
+      .map(({ baptismDate: _baptismDate, ...row }) => ({
+        ...row,
+        convertFlag: toBoolOrNull(row.convertFlag),
+        callingTitle: cleanCallingTitle(row.callingTitle),
+        ministeringAssigned: toBool(row.ministeringAssigned)
+      }));
 
     const sorted = [...rows].sort((left, right) => {
       if (sortBy === "name") {
@@ -1696,7 +1752,7 @@ export const getNewMemberContactList = async (options: NewMemberContactListOptio
         }
         return compareNullable(left.fullName, right.fullName, "asc");
       }
-      return compareNullable(left.moveInDate, right.moveInDate, direction);
+      return compareDateStrings(left.moveInDate, right.moveInDate, direction);
     });
 
     return sorted.slice(0, safeLimit);
@@ -1947,12 +2003,12 @@ export const getMarriedCouplesContactList = async (unit?: string): Promise<Marri
 export const getRecentBaptismContactList = async (monthsBack = 12, unit?: string): Promise<RecentBaptismRow[]> => {
   const safeMonthsBack = Math.max(1, Math.min(monthsBack, 36));
   const unitFilter = unit?.trim() ? `%${unit.trim()}%` : null;
+  const cutoffDate = monthsAgoThreshold(safeMonthsBack);
 
   const db = openSqliteSpikeDb();
   try {
     const conditions: string[] = [
-      `m.baptism_date IS NOT NULL`,
-      `m.baptism_date >= datetime('now', '-${safeMonthsBack} months')`
+      `NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL`
     ];
     const params: unknown[] = [];
 
@@ -1974,12 +2030,13 @@ export const getRecentBaptismContactList = async (monthsBack = 12, unit?: string
         m.primary_email AS email
       FROM members m
       WHERE ${conditions.join(" AND ")}
-      ORDER BY m.baptism_date DESC, m.last_name, m.first_name
-      LIMIT 5000
       `
     ).all(...params) as RecentBaptismRow[];
 
-    return rows;
+    return rows
+      .filter((row) => isOnOrAfter(row.baptismDate, cutoffDate))
+      .sort((left, right) => compareDateStrings(left.baptismDate, right.baptismDate, "desc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 5000);
   } finally {
     db.close();
   }
@@ -3792,6 +3849,7 @@ export const getUnitReadinessScatterData = async (): Promise<UnitReadinessScatte
 
 export const getRecentBaptismReport = async (monthsBack = 12): Promise<RecentBaptismReport> => {
   const safeMonthsBack = Math.max(1, Math.min(monthsBack, 36));
+  const cutoffDate = monthsAgoThreshold(safeMonthsBack);
   const db = openSqliteSpikeDb();
   try {
     const rows = db.prepare(
@@ -3806,12 +3864,14 @@ export const getRecentBaptismReport = async (monthsBack = 12): Promise<RecentBap
         m.primary_phone AS phoneNumber,
         m.primary_email AS email
       FROM members m
-      WHERE m.baptism_date IS NOT NULL
-        AND m.baptism_date >= datetime('now', '-${safeMonthsBack} months')
-      ORDER BY m.baptism_date DESC, m.last_name, m.first_name
-      LIMIT 5000
+      WHERE NULLIF(TRIM(COALESCE(m.baptism_date, '')), '') IS NOT NULL
       `
     ).all() as RecentBaptismRow[];
+
+    const recentRows = rows
+      .filter((row) => isOnOrAfter(row.baptismDate, cutoffDate))
+      .sort((left, right) => compareDateStrings(left.baptismDate, right.baptismDate, "desc") || left.fullName.localeCompare(right.fullName))
+      .slice(0, 5000);
 
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -3821,11 +3881,14 @@ export const getRecentBaptismReport = async (monthsBack = 12): Promise<RecentBap
       thisYear: 0
     };
 
-    for (const row of rows) {
+    for (const row of recentRows) {
       if (!row.baptismDate) {
         continue;
       }
-      const baptismDate = new Date(row.baptismDate);
+      const baptismDate = safeDate(row.baptismDate);
+      if (!baptismDate) {
+        continue;
+      }
       const daysAgo = Math.floor((now.getTime() - baptismDate.getTime()) / (1000 * 60 * 60 * 24));
       if (daysAgo <= 30) {
         summary.last30 += 1;
@@ -3844,7 +3907,7 @@ export const getRecentBaptismReport = async (monthsBack = 12): Promise<RecentBap
         { label: "Last 90 Days", value: summary.last90 },
         { label: "This Year", value: summary.thisYear }
       ],
-      members: rows
+      members: recentRows
     };
   } finally {
     db.close();
