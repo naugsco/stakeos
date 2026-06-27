@@ -81,7 +81,7 @@ export function UnitHealthRadarPanel({ rows }: UnitHealthRadarPanelProps) {
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-line bg-panel p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-slate-900">Compare up to three units across normalized indicators.</p>

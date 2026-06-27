@@ -108,7 +108,7 @@ export function LcrReportHelper() {
   };
 
   return (
-    <div className="space-y-4 rounded-[28px] border border-amber-900/10 bg-[#fffaf0] p-5 shadow-sm">
+    <div className="space-y-4 rounded-panel border border-line bg-panel-warm p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h3 className="font-serif text-2xl text-slate-900">LCR Report Helper</h3>
@@ -120,7 +120,7 @@ export function LcrReportHelper() {
         <button
           type="button"
           onClick={() => void copyText(fullColumnText, "Copied the full recommended column list.")}
-          className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
         >
           Copy Full Column List
         </button>
@@ -132,7 +132,7 @@ export function LcrReportHelper() {
 
       <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="space-y-4">
-          <div className="rounded-2xl border border-amber-900/10 bg-white px-4 py-4">
+          <div className="rounded-2xl border border-line bg-white px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Minimum Required</p>
@@ -141,7 +141,7 @@ export function LcrReportHelper() {
               <button
                 type="button"
                 onClick={() => void copyText(minimumColumns.join("\n"), "Copied the minimum required headers.")}
-                className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-3 py-1.5 text-xs font-semibold text-slate-700"
+                className="rounded-full border border-line bg-panel-warm px-3 py-1.5 text-xs font-semibold text-slate-700"
               >
                 Copy Minimum
               </button>
@@ -153,7 +153,7 @@ export function LcrReportHelper() {
             </ul>
           </div>
 
-          <div className="rounded-2xl border border-amber-900/10 bg-white px-4 py-4 text-sm text-slate-600">
+          <div className="rounded-2xl border border-line bg-white px-4 py-4 text-sm text-slate-600">
             <p className="font-semibold text-slate-900">Checklist</p>
             <ul className="mt-3 space-y-2">
               <li>Use a custom report in LCR, not a household-based export.</li>
@@ -166,7 +166,7 @@ export function LcrReportHelper() {
 
         <div className="space-y-4">
           {recommendedGroups.map((group) => (
-            <div key={group.title} className="rounded-2xl border border-amber-900/10 bg-white px-4 py-4">
+            <div key={group.title} className="rounded-2xl border border-line bg-white px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{group.title}</p>
@@ -175,7 +175,7 @@ export function LcrReportHelper() {
                 <button
                   type="button"
                   onClick={() => void copyText(group.columns.join("\n"), `Copied ${group.title} headers.`)}
-                  className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  className="rounded-full border border-line bg-panel-warm px-3 py-1.5 text-xs font-semibold text-slate-700"
                 >
                   Copy Group
                 </button>

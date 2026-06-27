@@ -220,12 +220,12 @@ export default async function StakeOverviewPage() {
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Leadership Turnover Trend</h2>
-        <LineTrendChart data={data.turnover} variant="turnover" />
+        <LineTrendChart data={data.turnover} variant="turnover" title="Leadership Turnover Trend" />
       </section>
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Recent Convert Growth</h2>
-        <LineTrendChart data={data.converts} variant="converts" />
+        <LineTrendChart data={data.converts} variant="converts" title="Recent Convert Growth" />
       </section>
 
       <section>

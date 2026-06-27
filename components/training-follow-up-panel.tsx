@@ -149,7 +149,7 @@ export function TrainingFollowUpPanel({ groups, pendingSetApartCount, initialSta
   };
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#fffdf8_0%,#ffffff_42%,#f7fbff_100%)] p-5 shadow-sm ring-1 ring-amber-100/70">
+    <div className="rounded-panel border border-slate-200 bg-[linear-gradient(180deg,#fffdf8_0%,#ffffff_42%,#f7fbff_100%)] p-5 shadow-sm ring-1 ring-amber-100/70">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div className="max-w-3xl space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -178,7 +178,7 @@ export function TrainingFollowUpPanel({ groups, pendingSetApartCount, initialSta
           const isBusy = busyGroupKey === group.groupKey;
 
           return (
-            <article key={group.groupKey} className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_18px_55px_-35px_rgba(15,23,42,0.35)]">
+            <article key={group.groupKey} className="overflow-hidden rounded-panel border border-slate-200 bg-white shadow-[0_18px_55px_-35px_rgba(15,23,42,0.35)]">
               <header className="border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-5 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -228,7 +228,7 @@ export function TrainingFollowUpPanel({ groups, pendingSetApartCount, initialSta
                       {group.recipients.length > 0 ? <EmailListInline emails={group.recipients} /> : "No recipients configured."}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-[#fffaf0] px-4 py-3">
+                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-panel-warm px-4 py-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Queue</p>
                       <p className="mt-2 text-2xl font-semibold text-slate-900">{group.rows.length}</p>

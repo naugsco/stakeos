@@ -1,19 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { copyToClipboard } from "@/lib/clipboard";
 
 const emailClassName =
   "text-teal-700 underline decoration-teal-300 underline-offset-4 transition hover:text-teal-900";
 const phoneClassName =
   "text-slate-700 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-900";
-
-const copyToClipboard = async (value: string) => {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-    throw new Error("Clipboard is unavailable.");
-  }
-
-  await navigator.clipboard.writeText(value);
-};
 
 export function EmailAddressLink({
   email,
@@ -43,6 +36,7 @@ export function CopyPhoneLink({
 }) {
   const trimmed = phone?.trim();
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   if (!trimmed) {
     return <>-</>;
@@ -55,15 +49,18 @@ export function CopyPhoneLink({
       onClick={async () => {
         try {
           await copyToClipboard(trimmed);
+          setFailed(false);
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1200);
         } catch {
           setCopied(false);
+          setFailed(true);
+          window.setTimeout(() => setFailed(false), 2000);
         }
       }}
-      title={copied ? "Copied" : "Copy phone number"}
+      title={failed ? "Couldn't copy" : copied ? "Copied" : "Copy phone number"}
     >
-      {copied ? `${trimmed} (copied)` : trimmed}
+      {failed ? `${trimmed} (copy failed)` : copied ? `${trimmed} (copied)` : trimmed}
     </button>
   );
 }

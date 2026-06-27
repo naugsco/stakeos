@@ -10,6 +10,8 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
+import { AXIS_TICK, CHART_COLORS, GRID_STROKE, TOOLTIP_CONTENT_STYLE } from "@/lib/chartTheme";
 
 interface DataRow {
   month: string;
@@ -21,35 +23,42 @@ interface DataRow {
 interface Props {
   data: DataRow[];
   variant: "turnover" | "converts";
+  title?: string;
 }
 
-export function LineTrendChart({ data, variant }: Props) {
+export function LineTrendChart({ data, variant, title }: Props) {
+  const chartTitle = title ?? (variant === "turnover" ? "Leadership turnover trend" : "Convert trend");
+  const columns =
+    variant === "turnover" ? ["Month", "Sustained", "Released"] : ["Month", "Converts"];
+  const rows = data.map((row) =>
+    variant === "turnover"
+      ? [row.month, row.sustained ?? 0, row.released ?? 0]
+      : [row.month, row.converts ?? 0]
+  );
+
   return (
-    <div className="h-80 w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
+    <ChartFrame
+      title={chartTitle}
+      isEmpty={data.length === 0}
+      srTable={<SrDataTable caption={chartTitle} columns={columns} rows={rows} />}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 6" stroke="#cbd5e1" />
-          <XAxis dataKey="month" tick={{ fill: "#475569", fontSize: 12 }} />
-          <YAxis tick={{ fill: "#475569", fontSize: 12 }} />
-          <Tooltip
-            contentStyle={{
-              borderRadius: "12px",
-              border: "1px solid #cbd5e1",
-              background: "#fffef8",
-              boxShadow: "0 4px 18px rgba(15,23,42,0.08)"
-            }}
-          />
+          <CartesianGrid strokeDasharray="3 6" stroke={GRID_STROKE} />
+          <XAxis dataKey="month" tick={AXIS_TICK} />
+          <YAxis tick={AXIS_TICK} />
+          <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} />
           <Legend />
           {variant === "turnover" ? (
             <>
-              <Line type="monotone" dataKey="sustained" stroke="#0f766e" strokeWidth={3} dot={false} />
+              <Line type="monotone" dataKey="sustained" stroke={CHART_COLORS.teal} strokeWidth={3} dot={false} />
               <Line type="monotone" dataKey="released" stroke="#dc2626" strokeWidth={2} dot={false} />
             </>
           ) : (
-            <Line type="monotone" dataKey="converts" stroke="#1d4ed8" strokeWidth={3} dot={false} />
+            <Line type="monotone" dataKey="converts" stroke={CHART_COLORS.blue} strokeWidth={3} dot={false} />
           )}
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

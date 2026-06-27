@@ -10,8 +10,11 @@
   --panel-border: #d9d2c3;
   --accent: #0f766e;
   --accent-2: #1d4ed8;
-  --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, serif;
-  --body-font: "Avenir Next", "Gill Sans Nova", "Segoe UI", sans-serif;
+  /* Font stacks deliberately span macOS and Windows so the brand reads
+     consistently on both. macOS-only faces come first, then a Windows match,
+     then a universally available fallback and a generic family. */
+  --display-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, "Times New Roman", serif;
+  --body-font: "Avenir Next", "Segoe UI", "Gill Sans Nova", "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
@@ -27,6 +30,39 @@ body {
 
 a {
   @apply text-sky-700 hover:text-sky-900;
+}
+
+/* Visible keyboard-focus indicator for every interactive element. Mouse users
+   never see it (`:focus-visible`), keyboard/switch users always do. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Screen-reader-only content (e.g. accessible data tables behind charts). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect the user's reduced-motion preference: no pulses, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 h1,
@@ -50,7 +86,7 @@ h3 {
   height: 28rem;
   border-radius: 9999px;
   filter: blur(40px);
-  opacity: 0.2;
+  opacity: 0.12;
 }
 
 .orb-a {

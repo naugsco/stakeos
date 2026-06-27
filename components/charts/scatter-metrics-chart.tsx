@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { CartesianGrid, Cell, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
+import { AXIS_TICK, GRID_STROKE, SCATTER_PALETTE } from "@/lib/chartTheme";
 
 interface ScatterPoint {
   label: string;
@@ -17,61 +18,52 @@ interface ScatterMetricsChartProps {
   data: ScatterPoint[];
   href?: string;
   linkLabel?: string;
+  title?: string;
 }
-
-const palette = [
-  "#0f766e",
-  "#0369a1",
-  "#b45309",
-  "#be123c",
-  "#4f46e5",
-  "#15803d",
-  "#7c2d12",
-  "#1d4ed8",
-  "#a21caf",
-  "#0f766e",
-  "#4338ca",
-  "#c2410c"
-];
 
 const getColorForLabel = (label: string) => {
   let hash = 0;
   for (const char of label) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   }
-  return palette[hash % palette.length];
+  return SCATTER_PALETTE[hash % SCATTER_PALETTE.length];
 };
 
 export function ScatterMetricsChart({
   data,
   href,
-  linkLabel = "Open detail list"
+  linkLabel = "Open detail list",
+  title = "Readiness scatter plot"
 }: ScatterMetricsChartProps) {
   return (
-    <div className="relative h-80 w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
-      {href ? (
-        <Link
-          href={href}
-          className="absolute right-3 top-3 z-10 rounded-md border border-amber-300 bg-white/95 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-white"
-        >
-          {linkLabel}
-        </Link>
-      ) : null}
+    <ChartFrame
+      title={title}
+      href={href}
+      linkLabel={linkLabel}
+      isEmpty={data.length === 0}
+      srTable={
+        <SrDataTable
+          caption={title}
+          columns={["Unit", "Class participation %", "Weighted readiness %", "Active recommend %"]}
+          rows={data.map((point) => [point.label, point.x, point.y, point.recommendPct ?? point.z])}
+        />
+      }
+    >
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 16, right: 24, bottom: 16, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 6" stroke="#cbd5e1" />
+          <CartesianGrid strokeDasharray="3 6" stroke={GRID_STROKE} />
           <XAxis
             type="number"
             dataKey="x"
             name="Class Participation %"
-            tick={{ fill: "#475569", fontSize: 12 }}
+            tick={AXIS_TICK}
             domain={[0, 100]}
           />
           <YAxis
             type="number"
             dataKey="y"
             name="Weighted Readiness"
-            tick={{ fill: "#475569", fontSize: 12 }}
+            tick={AXIS_TICK}
             domain={[0, 100]}
           />
           <ZAxis type="number" dataKey="z" name="Active Recommend %" range={[120, 920]} />
@@ -100,6 +92,6 @@ export function ScatterMetricsChart({
           </Scatter>
         </ScatterChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { CopyPhoneLink, EmailAddressLink } from "@/components/contact-links";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { copyToClipboard } from "@/lib/clipboard";
 import {
   buildAppleContactsVcf,
   buildContactsFilename,
@@ -68,15 +69,8 @@ const compareValues = (
   b: string | number | null,
   direction: SortDirection
 ): number => {
-  const normalize = (value: string | number | null) => {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    return value;
-  };
-
-  const first = normalize(a);
-  const second = normalize(b);
+  const first = a ?? null;
+  const second = b ?? null;
 
   if (first === null && second === null) {
     return 0;
@@ -115,14 +109,6 @@ const normalizePhoneSearch = (value: string | null | undefined) => (value ?? "")
 
 const encodeMailtoValue = (value: string) => encodeURIComponent(value).replace(/%20/g, " ");
 
-const copyToClipboard = async (value: string) => {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-    throw new Error("Clipboard is unavailable.");
-  }
-
-  await navigator.clipboard.writeText(value);
-};
-
 export function MembersTable({
   members,
   stakeName
@@ -137,6 +123,41 @@ export function MembersTable({
   const [selectedGroupIds, setSelectedGroupIds] = useState<MemberGroupId[]>([]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const [phonesCopied, setPhonesCopied] = useState(false);
+  const [phonesCopyFailed, setPhonesCopyFailed] = useState(false);
+  const groupMenuRef = useRef<HTMLDivElement>(null);
+  const groupTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Dismiss the group menu on Escape or an outside click, and return focus to
+  // the trigger so keyboard users are never trapped inside the popover.
+  useEffect(() => {
+    if (!groupMenuOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setGroupMenuOpen(false);
+        groupTriggerRef.current?.focus();
+      }
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !groupMenuRef.current?.contains(target) &&
+        !groupTriggerRef.current?.contains(target)
+      ) {
+        setGroupMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [groupMenuOpen]);
 
   const unitOptions = useMemo(() => {
     const units = Array.from(new Set(members.map((member) => member.unitName?.trim() ?? "").filter(Boolean))).sort((a, b) =>
@@ -312,8 +333,11 @@ export function MembersTable({
             </label>
             <button
               id="member-group-filter"
+              ref={groupTriggerRef}
               type="button"
               onClick={() => setGroupMenuOpen((current) => !current)}
+              aria-haspopup="dialog"
+              aria-expanded={groupMenuOpen}
               className="mt-2 flex w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 shadow-sm"
             >
               <span className="truncate">{summarizeSelectedGroups(selectedGroupLabels)}</span>
@@ -332,7 +356,12 @@ export function MembersTable({
               </div>
             ) : null}
             {groupMenuOpen ? (
-              <div className="absolute right-0 z-20 mt-2 w-[44rem] max-w-[calc(100vw-3rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+              <div
+                ref={groupMenuRef}
+                role="dialog"
+                aria-label="Filter by member groups"
+                className="absolute right-0 z-20 mt-2 w-[44rem] max-w-[calc(100vw-3rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+              >
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Filter by member groups</div>
@@ -348,7 +377,10 @@ export function MembersTable({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setGroupMenuOpen(false)}
+                      onClick={() => {
+                        setGroupMenuOpen(false);
+                        groupTriggerRef.current?.focus();
+                      }}
                       className="rounded-full bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-800"
                     >
                       Close
@@ -416,15 +448,18 @@ export function MembersTable({
               onClick={async () => {
                 try {
                   await copyToClipboard(visiblePhoneList.join("\n"));
+                  setPhonesCopyFailed(false);
                   setPhonesCopied(true);
                   window.setTimeout(() => setPhonesCopied(false), 1500);
                 } catch {
                   setPhonesCopied(false);
+                  setPhonesCopyFailed(true);
+                  window.setTimeout(() => setPhonesCopyFailed(false), 2500);
                 }
               }}
               className="rounded-full border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50"
             >
-              {phonesCopied ? "Phone Numbers Copied" : "Copy Filtered Phones"}
+              {phonesCopyFailed ? "Couldn't Copy" : phonesCopied ? "Phone Numbers Copied" : "Copy Filtered Phones"}
             </button>
           ) : (
             <div className="rounded-full border border-slate-200 px-4 py-2 font-semibold text-slate-400">

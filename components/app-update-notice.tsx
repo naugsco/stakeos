@@ -68,7 +68,7 @@ export function AppUpdateNotice() {
               href={payload.releaseUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-amber-900/10 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
+              className="rounded-full border border-line bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
             >
               Download Update
             </a>
@@ -77,7 +77,7 @@ export function AppUpdateNotice() {
             href={RELEASES_URL}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full border border-amber-900/10 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
+            className="rounded-full border border-line bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
           >
             All Releases
           </a>

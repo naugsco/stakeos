@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
+import { AXIS_TICK, CHART_COLORS, GRID_STROKE, TOOLTIP_CONTENT_STYLE } from "@/lib/chartTheme";
 
 interface MultiSeriesHorizontalBarRow {
   label: string;
@@ -14,28 +15,37 @@ interface MultiSeriesHorizontalBarRow {
 export function MultiSeriesHorizontalBarChart({
   data,
   href,
-  linkLabel = "Open member list"
+  linkLabel = "Open member list",
+  title = "Distribution by group"
 }: {
   data: MultiSeriesHorizontalBarRow[];
   href?: string;
   linkLabel?: string;
+  title?: string;
 }) {
   const chartHeight = Math.max(720, data.length * 42);
 
   return (
-    <div className="relative w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
-      {href ? (
-        <Link
-          href={href}
-          className="absolute right-3 top-3 z-10 rounded-md border border-amber-300 bg-white/95 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-white"
-        >
-          {linkLabel}
-        </Link>
-      ) : null}
+    <ChartFrame
+      title={title}
+      href={href}
+      linkLabel={linkLabel}
+      heightClass=""
+      isEmpty={data.length === 0}
+      srTable={
+        <SrDataTable
+          caption={title}
+          columns={["Row", "Shared", "Men", "Women"]}
+          rows={data
+            .filter((row) => row.kind !== "section")
+            .map((row) => [row.label, row.everyone ?? 0, row.men ?? 0, row.women ?? 0])}
+        />
+      }
+    >
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart data={data} layout="vertical" margin={{ top: 8, right: 20, bottom: 8, left: 48 }} barCategoryGap="22%">
-          <CartesianGrid horizontal={false} strokeDasharray="3 6" stroke="#cbd5e1" />
-          <XAxis type="number" tick={{ fill: "#475569", fontSize: 12 }} />
+          <CartesianGrid horizontal={false} strokeDasharray="3 6" stroke={GRID_STROKE} />
+          <XAxis type="number" tick={AXIS_TICK} />
           <YAxis
             type="category"
             dataKey="label"
@@ -52,7 +62,7 @@ export function MultiSeriesHorizontalBarChart({
                     dy={4}
                     textAnchor="end"
                     fill={isSection ? "#0f172a" : "#475569"}
-                    fontSize={isSection ? 12 : 12}
+                    fontSize={12}
                     fontWeight={isSection ? 700 : 500}
                   >
                     {payload.value}
@@ -80,19 +90,14 @@ export function MultiSeriesHorizontalBarChart({
                 </div>
               );
             }}
-            contentStyle={{
-              borderRadius: "12px",
-              border: "1px solid #cbd5e1",
-              background: "#fffef8",
-              boxShadow: "0 4px 18px rgba(15,23,42,0.08)"
-            }}
+            contentStyle={TOOLTIP_CONTENT_STYLE}
           />
           <Legend />
-          <Bar dataKey="everyone" name="Shared" fill="#0f766e" radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
-          <Bar dataKey="men" name="M" fill="#1d4ed8" radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
-          <Bar dataKey="women" name="W" fill="#d94674" radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
+          <Bar dataKey="everyone" name="Shared" fill={CHART_COLORS.teal} radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
+          <Bar dataKey="men" name="M" fill={CHART_COLORS.blue} radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
+          <Bar dataKey="women" name="W" fill={CHART_COLORS.pink} radius={[0, 8, 8, 0]} isAnimationActive={false} barSize={18} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

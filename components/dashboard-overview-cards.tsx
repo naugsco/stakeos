@@ -15,7 +15,7 @@ export function DashboardOverviewCards({
   missionReadyLabel?: string;
 }) {
   return (
-    <section className={`grid gap-4 md:grid-cols-2 ${showRecommendRecovered ? "xl:grid-cols-5" : "xl:grid-cols-5"}`}>
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
       <StatCard label="Total Members" value={overview.totalMembers} />
       <StatCard label="Current Callings" value={overview.currentCallings} />
       <StatCard label="Recommend Active" value={overview.recommendActive} />

@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
+import { AXIS_TICK, CHART_COLORS, TOOLTIP_CONTENT_STYLE } from "@/lib/chartTheme";
 
 interface RecentBaptismPathRow {
   templeRecommendStatus: string | null;
@@ -71,13 +72,21 @@ export function RecentBaptismStageChart({
   }));
 
   return (
-    <div className="relative h-[24rem] w-full">
-      <Link
-        href={href}
-        className="absolute right-0 top-0 z-10 rounded-lg border border-amber-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm transition hover:bg-white"
-      >
-        {linkLabel}
-      </Link>
+    <ChartFrame
+      title="Recent baptism progression by stage"
+      href={href}
+      linkLabel={linkLabel}
+      heightClass="h-[24rem]"
+      bare
+      isEmpty={total === 0}
+      srTable={
+        <SrDataTable
+          caption="Recent baptism progression by stage"
+          columns={["Stage", "Meets stage", "Percent", "Not yet"]}
+          rows={stageData.map((row) => [row.stage, row.positiveCount, `${row.positivePct}%`, row.remainingCount])}
+        />
+      }
+    >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={stageData}
@@ -87,8 +96,8 @@ export function RecentBaptismStageChart({
           barGap={0}
         >
           <CartesianGrid horizontal={false} strokeDasharray="2 8" stroke="#dbe3ef" />
-          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 12 }} domain={[0, total || 1]} />
-          <YAxis type="category" dataKey="stage" width={140} tick={{ fill: "#475569", fontSize: 12 }} />
+          <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} domain={[0, total || 1]} />
+          <YAxis type="category" dataKey="stage" width={140} tick={AXIS_TICK} />
           <Tooltip
             formatter={(value: number, name: string, item) => {
               const row = item.payload as StageChartRow;
@@ -98,18 +107,13 @@ export function RecentBaptismStageChart({
               return [String(value), row.remainingLabel];
             }}
             labelFormatter={(label) => `Stage: ${label}`}
-            contentStyle={{
-              borderRadius: "12px",
-              border: "1px solid #cbd5e1",
-              background: "#fffef8",
-              boxShadow: "0 4px 18px rgba(15,23,42,0.08)"
-            }}
+            contentStyle={TOOLTIP_CONTENT_STYLE}
           />
           <Legend />
-          <Bar dataKey="positiveCount" name="Meets Stage" stackId="stage" fill="#0f766e" radius={[10, 0, 0, 10]} barSize={22} />
-          <Bar dataKey="remainingCount" name="Not Yet" stackId="stage" fill="#cbd5e1" radius={[0, 10, 10, 0]} barSize={22} />
+          <Bar dataKey="positiveCount" name="Meets Stage" stackId="stage" fill={CHART_COLORS.teal} radius={[10, 0, 0, 10]} barSize={22} />
+          <Bar dataKey="remainingCount" name="Not Yet" stackId="stage" fill={CHART_COLORS.neutral} radius={[0, 10, 10, 0]} barSize={22} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

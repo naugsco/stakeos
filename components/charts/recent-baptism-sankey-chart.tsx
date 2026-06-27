@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
 
 interface RecentBaptismPathRow {
   templeRecommendStatus: string | null;
@@ -84,13 +84,20 @@ export function RecentBaptismSankeyChart({
   const nodes: SankeyNode[] = nodeOrder.map((name) => ({ name }));
 
   return (
-    <div className="relative h-[24rem] w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
-      <Link
-        href={href}
-        className="absolute right-3 top-3 z-10 rounded-md border border-amber-300 bg-white/95 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-white"
-      >
-        {linkLabel}
-      </Link>
+    <ChartFrame
+      title="Recent baptism progression flow"
+      href={href}
+      linkLabel={linkLabel}
+      heightClass="h-[24rem]"
+      isEmpty={links.length === 0}
+      srTable={
+        <SrDataTable
+          caption="Recent baptism progression flow"
+          columns={["From", "To", "Members"]}
+          rows={links.map((link) => [nodeOrder[link.source], nodeOrder[link.target], link.value])}
+        />
+      }
+    >
       <ResponsiveContainer width="100%" height="100%">
         <Sankey
           data={{ nodes, links }}
@@ -127,6 +134,6 @@ export function RecentBaptismSankeyChart({
           />
         </Sankey>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

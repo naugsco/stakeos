@@ -95,7 +95,7 @@ export default async function DashboardPage({
     data.daysSinceLastSync === null
       ? "border-slate-200 bg-white"
       : data.daysSinceLastSync >= 7
-        ? "border-rose-300 bg-rose-50/90 animate-pulse"
+        ? "border-rose-400 bg-rose-50/90 ring-1 ring-rose-300"
         : data.daysSinceLastSync >= 2
           ? "border-amber-300 bg-amber-50/90"
           : "border-emerald-200 bg-emerald-50/70";
@@ -120,7 +120,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-4 rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
+      <header className="space-y-4 rounded-panel-lg border border-line bg-white/95 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">StakeOS Dashboard</p>
@@ -134,7 +134,7 @@ export default async function DashboardPage({
           </div>
 
           <div className={`shrink-0 self-end rounded-2xl border px-4 py-2.5 shadow-sm transition ${freshnessTone} lg:max-w-[18rem]`}>
-            <p className="text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Days Since Last LCR Sync</p>
+            <p className="text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">Days Since Last LCR Sync</p>
             <div className="mt-1.5 flex items-end justify-end gap-3 text-right">
               <div className={`text-3xl font-semibold leading-none ${freshnessTextTone}`}>
                 {data.daysSinceLastSync === null ? "n/a" : data.daysSinceLastSync}
@@ -143,7 +143,7 @@ export default async function DashboardPage({
                 <p className={`text-xs ${data.daysSinceLastSync !== null && data.daysSinceLastSync >= 7 ? "text-rose-700" : data.daysSinceLastSync !== null && data.daysSinceLastSync >= 2 ? "text-amber-700" : "text-slate-500"}`}>
                   {freshnessCaption}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p className="mt-1 text-xs text-slate-600">
                   {data.overview.latestSync?.completedAt
                     ? new Date(data.overview.latestSync.completedAt).toLocaleString()
                     : "No successful sync recorded"}
@@ -154,7 +154,7 @@ export default async function DashboardPage({
         </div>
 
         <div className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
-          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-5 py-4 shadow-sm">
+          <div className="min-w-0 rounded-panel border border-line bg-panel-warm px-5 py-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center">
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Sections</span>
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
@@ -167,7 +167,7 @@ export default async function DashboardPage({
                       className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
                         active
                           ? "border-teal-300 bg-teal-50 text-teal-900"
-                          : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
+                          : "border-line bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       {link.label}
@@ -178,7 +178,7 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          <div className="min-w-0 rounded-[24px] border border-amber-900/10 bg-[#fffaf0] px-5 py-4 shadow-sm">
+          <div className="min-w-0 rounded-panel border border-line bg-panel-warm px-5 py-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start">
               <span className="pt-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Display</span>
               <div className="min-w-0 space-y-3">
@@ -192,7 +192,7 @@ export default async function DashboardPage({
                         className={`rounded-full border px-4 py-1.5 text-sm font-semibold shadow-sm transition ${
                           active
                             ? "border-teal-300 bg-teal-50 text-teal-900"
-                            : "border-amber-900/10 bg-white text-slate-700 hover:bg-slate-50"
+                            : "border-line bg-white text-slate-700 hover:bg-slate-50"
                         }`}
                       >
                         {link.label}
@@ -224,7 +224,7 @@ export default async function DashboardPage({
       />
 
       {selectedMode === "unit-leader" && !selectedUnit ? (
-        <section className="rounded-[28px] border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 shadow-sm">
+        <section className="rounded-panel border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 shadow-sm">
           <h2 className="font-serif text-2xl text-slate-900">Choose A Ward Or Branch First</h2>
           <p className="mt-2 leading-6">
             Unit Leader Mode is meant for bishoprics and ward councils. Use the ward or branch scope picker in the display-mode card, then StakeOS will reduce the page to the most useful follow-up panels for that unit.
@@ -242,32 +242,32 @@ export default async function DashboardPage({
             <div>
               <h3 className="mb-2 text-lg font-semibold">Recommend Expiration Risk</h3>
               <p className="mb-2 text-xs text-slate-600">Expired and next-90-day recommend follow-up for the selected unit.</p>
-              <BarMetricsChart data={data.recommendExpirationRisk.summary} href="/reports#recommend-expiration-risk-list" linkLabel="Open expiration list" />
+              <BarMetricsChart data={data.recommendExpirationRisk.summary} href="/reports#recommend-expiration-risk-list" linkLabel="Open expiration list" title="Recommend Expiration Risk" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Mission Readiness (Age 17-25)</h3>
               <p className="mb-2 text-xs text-slate-600">Preparation and readiness signal for upcoming and current mission-age members.</p>
-              <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" />
+              <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" title="Mission Readiness (Age 17-25)" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Youth / YSA Progression</h3>
               <p className="mb-2 text-xs text-slate-600">Age-band distribution across youth and YSA progression for the selected unit.</p>
-              <BarMetricsChart data={data.youth.map((item) => ({ label: item.ageBand, value: item.count }))} href="/youth" linkLabel="Open youth lists" />
+              <BarMetricsChart data={data.youth.map((item) => ({ label: item.ageBand, value: item.count }))} href="/youth" linkLabel="Open youth lists" title="Youth / YSA Progression" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Recent Baptisms</h3>
               <p className="mb-2 text-xs text-slate-600">Recent convert cohort activity and follow-up for the selected unit.</p>
-              <BarMetricsChart data={data.recentBaptisms.summary} href="/reports#recent-baptisms-list" linkLabel="Open baptism list" />
+              <BarMetricsChart data={data.recentBaptisms.summary} href="/reports#recent-baptisms-list" linkLabel="Open baptism list" title="Recent Baptisms" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Ministering Coverage</h3>
               <p className="mb-2 text-xs text-slate-600">Coverage categories for the selected unit.</p>
-              <MinisteringCoverageUnitChart data={data.ministeringCoverageByUnit} href="/reports#ministering-gap-list" linkLabel="Open ministering gaps" />
+              <MinisteringCoverageUnitChart data={data.ministeringCoverageByUnit} href="/reports#ministering-gap-list" linkLabel="Open ministering gaps" title="Ministering Coverage by Unit" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Household Outreach Opportunities</h3>
               <p className="mb-2 text-xs text-slate-600">Households flagged for youth, recommend, recent baptism, or ministering follow-up.</p>
-              <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" />
+              <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" title="Household Outreach Opportunities" />
             </div>
           </div>
         </section>
@@ -278,23 +278,23 @@ export default async function DashboardPage({
           <div>
             <h3 className="mb-2 text-lg font-semibold">Temple Recommend Health</h3>
             <p className="mb-2 text-xs text-slate-600">{recommendHistoryNote}</p>
-            <BarMetricsChart data={data.templeRecommendHealth.statusCounts} href="/reports#temple-recommend-list" linkLabel="Open recommend list" />
+            <BarMetricsChart data={data.templeRecommendHealth.statusCounts} href="/reports#temple-recommend-list" linkLabel="Open recommend list" title="Temple Recommend Health" />
           </div>
           <div>
             <h3 className="mb-2 text-lg font-semibold">Mission Readiness Composite (Age 17-25)</h3>
             <p className="mb-2 text-xs text-slate-600">Score = Active recommend + seminary/institute participation + endowed at 18+.</p>
-            <p className="mb-2 text-xs font-medium text-slate-500">{missionGenderNote}</p>
-            <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" />
+            <p className="mb-2 text-xs font-medium text-slate-600">{missionGenderNote}</p>
+            <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" title="Mission Readiness (Age 17-25)" />
           </div>
           <div>
             <h3 className="mb-2 text-lg font-semibold">Household Outreach Opportunities</h3>
             <p className="mb-2 text-xs text-slate-600">Households flagged for youth, recent baptisms, recommend risk, or ministering follow-up.</p>
-            <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" />
+            <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" title="Household Outreach Opportunities" />
           </div>
           <div>
             <h3 className="mb-2 text-lg font-semibold">Recent Baptisms</h3>
             <p className="mb-2 text-xs text-slate-600">Current baptism and early retention snapshot.</p>
-            <BarMetricsChart data={data.recentBaptisms.summary} href="/reports#recent-baptisms-list" linkLabel="Open baptism list" />
+            <BarMetricsChart data={data.recentBaptisms.summary} href="/reports#recent-baptisms-list" linkLabel="Open baptism list" title="Recent Baptisms" />
           </div>
         </section>
       ) : null}
@@ -309,22 +309,22 @@ export default async function DashboardPage({
             <div>
               <h3 className="mb-2 text-lg font-semibold">Recommend Expiration Risk</h3>
               <p className="mb-2 text-xs text-slate-600">Expired and next-90-day expiration risk based on recommend expiration dates.</p>
-              <BarMetricsChart data={data.recommendExpirationRisk.summary} href="/reports#recommend-expiration-risk-list" linkLabel="Open expiration list" />
+              <BarMetricsChart data={data.recommendExpirationRisk.summary} href="/reports#recommend-expiration-risk-list" linkLabel="Open expiration list" title="Recommend Expiration Risk" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Mission Readiness Composite (Age 17-25)</h3>
               <p className="mb-2 text-xs text-slate-600">Preparation view that keeps 17-year-olds visible before formal eligibility at 18.</p>
-              <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" />
+              <BarMetricsChart data={data.missionReadiness.summary} href="/youth#mission-youth-pipeline" linkLabel="Open mission/youth list" title="Mission Readiness (Age 17-25)" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Ministering Coverage by Unit</h3>
               <p className="mb-2 text-xs text-slate-600">No ministers, brothers only, sisters only, or both assigned.</p>
-              <MinisteringCoverageUnitChart data={data.ministeringCoverageByUnit} href="/reports#ministering-gap-list" linkLabel="Open ministering gaps" />
+              <MinisteringCoverageUnitChart data={data.ministeringCoverageByUnit} href="/reports#ministering-gap-list" linkLabel="Open ministering gaps" title="Ministering Coverage by Unit" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Household Outreach Opportunities</h3>
               <p className="mb-2 text-xs text-slate-600">Households flagged for youth, recent baptisms, recommend risk, or ministering follow-up.</p>
-              <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" />
+              <BarMetricsChart data={data.householdOutreach.summary} href="/reports#household-outreach-list" linkLabel="Open household outreach list" title="Household Outreach Opportunities" />
             </div>
           </div>
         </section>
@@ -340,11 +340,11 @@ export default async function DashboardPage({
             <div>
               <h3 className="mb-2 text-lg font-semibold">Youth / YSA Progression</h3>
               <p className="mb-2 text-xs text-slate-600">Age-band distribution across the combined youth and YSA pipeline.</p>
-              <BarMetricsChart data={data.youth.map((item) => ({ label: item.ageBand, value: item.count }))} href="/youth" linkLabel="Open youth lists" />
+              <BarMetricsChart data={data.youth.map((item) => ({ label: item.ageBand, value: item.count }))} href="/youth" linkLabel="Open youth lists" title="Youth / YSA Progression" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Leadership Turnover</h3>
-              <LineTrendChart data={data.turnover} variant="turnover" />
+              <LineTrendChart data={data.turnover} variant="turnover" title="Leadership Turnover" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Seminary Participation by Unit</h3>
@@ -355,6 +355,7 @@ export default async function DashboardPage({
                 linkLabel="Open seminary opportunity list"
                 actualLabel="Seminary Attending"
                 potentialLabel="Seminary Eligible"
+                title="Seminary Participation by Unit"
               />
             </div>
             <div>
@@ -366,15 +367,16 @@ export default async function DashboardPage({
                 linkLabel="Open institute opportunity list"
                 actualLabel="Institute Attending"
                 potentialLabel="Institute Eligible"
+                title="Institute Participation by Unit"
               />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">New/Returning Strengthening Focus</h3>
-              <BarMetricsChart data={data.newReturningStrengthening.summary} href="/reports#new-returning-strengthening" linkLabel="Open strengthening list" />
+              <BarMetricsChart data={data.newReturningStrengthening.summary} href="/reports#new-returning-strengthening" linkLabel="Open strengthening list" title="New/Returning Strengthening Focus" />
             </div>
             <div>
               <h3 className="mb-2 text-lg font-semibold">Priesthood Progression Pipeline</h3>
-              <BarMetricsChart data={data.priesthoodProgression.summary} href="/reports#priesthood-progression-list" linkLabel="Open progression list" />
+              <BarMetricsChart data={data.priesthoodProgression.summary} href="/reports#priesthood-progression-list" linkLabel="Open progression list" title="Priesthood Progression Pipeline" />
             </div>
           </div>
         </section>

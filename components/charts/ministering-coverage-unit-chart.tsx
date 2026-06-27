@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -11,6 +10,8 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { ChartFrame, SrDataTable } from "@/components/charts/chart-frame";
+import { AXIS_TICK } from "@/lib/chartTheme";
 
 interface MinisteringCoverageUnitPoint {
   unitName: string;
@@ -26,22 +27,36 @@ interface MinisteringCoverageUnitPoint {
 export function MinisteringCoverageUnitChart({
   data,
   href,
-  linkLabel = "Open ministering gaps"
+  linkLabel = "Open ministering gaps",
+  title = "Ministering coverage by unit"
 }: {
   data: MinisteringCoverageUnitPoint[];
   href?: string;
   linkLabel?: string;
+  title?: string;
 }) {
   return (
-    <div className="relative h-[28rem] w-full rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
-      {href ? (
-        <Link
-          href={href}
-          className="absolute right-3 top-3 z-10 rounded-lg border border-amber-300 bg-white/95 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm transition hover:bg-white"
-        >
-          {linkLabel}
-        </Link>
-      ) : null}
+    <ChartFrame
+      title={title}
+      href={href}
+      linkLabel={linkLabel}
+      heightClass="h-[28rem]"
+      isEmpty={data.length === 0}
+      srTable={
+        <SrDataTable
+          caption={title}
+          columns={["Unit", "Eligible", "No ministers", "Brothers only", "Sisters only", "Both assigned"]}
+          rows={data.map((row) => [
+            row.unitName,
+            row.eligibleCount,
+            row.noAssignedCount,
+            row.brothersOnlyCount,
+            row.sistersOnlyCount,
+            row.bothAssignedCount
+          ])}
+        />
+      }
+    >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -51,8 +66,8 @@ export function MinisteringCoverageUnitChart({
           barGap={0}
         >
           <CartesianGrid horizontal={false} strokeDasharray="2 8" stroke="#dbe3ef" />
-          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 12 }} />
-          <YAxis type="category" dataKey="unitName" width={160} tick={{ fill: "#475569", fontSize: 12 }} />
+          <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+          <YAxis type="category" dataKey="unitName" width={160} tick={AXIS_TICK} />
           <Tooltip
             cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
             content={({ active, payload, label }) => {
@@ -115,6 +130,6 @@ export function MinisteringCoverageUnitChart({
           />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartFrame>
   );
 }

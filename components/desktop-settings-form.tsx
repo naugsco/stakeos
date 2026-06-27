@@ -114,9 +114,9 @@ type SyncLogPayload = {
 type SetupStep = "required" | "diagnostics" | "firstSync" | "finish";
 
 const fieldClassName =
-  "mt-2 w-full rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20";
+  "mt-2 w-full rounded-2xl border border-line bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20";
 
-const sectionClassName = "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
+const sectionClassName = "rounded-panel border border-line bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 const releasesUrl = "https://github.com/naugsco/stakeos/releases";
 
 const runtimeCriticalKeys = ["PLAYWRIGHT_USER_DATA_DIR", "PLAYWRIGHT_HEADLESS"] as const;
@@ -579,7 +579,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
   const renderRequiredSettings = () => (
     <div className="space-y-5">
-      <div className="rounded-[28px] border border-amber-900/10 bg-white p-5 shadow-sm">
+      <div className="rounded-panel border border-line bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="font-serif text-2xl text-slate-900">Paste The Stake Report URL</h3>
@@ -592,7 +592,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               type="button"
               onClick={importFromEnv}
               disabled={saving || restarting}
-              className="rounded-full border border-amber-900/10 bg-[#fffaf0] px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-line bg-panel-warm px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving || restarting ? "Importing..." : "Import From .env"}
             </button>
@@ -615,7 +615,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         </div>
       </div>
 
-      <div className="rounded-[28px] border border-amber-900/10 bg-white p-5 shadow-sm">
+      <div className="rounded-panel border border-line bg-white p-5 shadow-sm">
         <h3 className="font-serif text-2xl text-slate-900">First Install Checklist</h3>
         <p className="mt-2 text-sm text-slate-600">This is the shortest path to a working desktop install.</p>
         <ol className="mt-4 space-y-3 text-sm text-slate-700">
@@ -846,21 +846,21 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="text-xs font-semibold uppercase tracking-wide">First Full Sync</div>
           <div className="mt-1 font-semibold">{snapshot.status.firstSyncCompleted ? "Completed" : "Pending"}</div>
         </div>
-        <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+        <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Phase</div>
           <div className="mt-1 font-semibold text-slate-900">{syncStatus?.phase || "idle"}</div>
         </div>
-        <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+        <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Latest Full Sync</div>
           <div className="mt-1 font-semibold text-slate-900">{snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
         </div>
-        <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+        <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Records</div>
           <div className="mt-1 font-semibold text-slate-900">{syncStatus?.latest?.recordsProcessed ?? "—"}</div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+      <div className="rounded-2xl border border-line bg-panel-warm px-4 py-4 text-sm text-slate-600">
         <p>Run one full sync now. StakeOS will open its browser helper if needed, and you can complete the LCR sign-in manually in that browser window.</p>
         <p className="mt-2">After the first full sync succeeds, the dashboard, reports, and optional Claude tools will all have local stake data available.</p>
       </div>
@@ -916,7 +916,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               setError(caughtError instanceof Error ? caughtError.message : "Unable to refresh first-sync status.")
             );
           }}
-          className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
         >
           Refresh First Sync Status
         </button>
@@ -926,14 +926,14 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             onClick={() => {
               window.location.href = "/sync-center";
             }}
-            className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
           >
             Open Sync Center
           </button>
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-amber-900/10 bg-slate-950 text-slate-100 shadow-inner">
+      <div className="rounded-2xl border border-line bg-slate-950 text-slate-100 shadow-inner">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">First Sync Log</div>
@@ -959,7 +959,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <p className="mt-2 text-sm text-slate-600">
           Optional. Connect StakeOS to Claude Desktop so Claude can query the same local data as the app.
         </p>
-        <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+        <div className="mt-6 rounded-2xl border border-line bg-panel-warm px-4 py-4 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Claude config:</span> {snapshot.status.mcp.configPath}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">StakeOS MCP:</span> {snapshot.status.mcp.matchesExpected ? "Configured" : snapshot.status.mcp.configured ? "Needs refresh" : "Not configured"}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">Launcher:</span> {snapshot.status.mcp.launcherPath}</div>
@@ -971,7 +971,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             type="button"
             onClick={() => void runDiagnosticAction("configure_mcp")}
             disabled={saving || restarting || setupAction !== null}
-            className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {setupAction === "configure_mcp"
               ? "Configuring Claude MCP..."
@@ -1000,7 +1000,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
           <div className="mt-1 font-semibold">{snapshot.status.setupComplete && !restartRequired ? "Unlocked" : "Locked to setup"}</div>
         </div>
       </div>
-      <div className="mt-4 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
+      <div className="mt-4 rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-600">
         <div><span className="font-semibold text-slate-900">Config file:</span> {snapshot.configPath}</div>
         <div className="mt-1"><span className="font-semibold text-slate-900">Desktop port:</span> {shellStatus?.desktopPort || "Unavailable"}</div>
         <div className="mt-1"><span className="font-semibold text-slate-900">Control port:</span> {shellStatus?.controlPort || "Unavailable"}</div>
@@ -1012,7 +1012,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             href={releasesUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
           >
             Download Or Update StakeOS
           </a>
@@ -1044,7 +1044,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
     return (
       <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
+        <section className="rounded-panel-lg border border-line bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">First-Run Setup</p>
           <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
@@ -1070,7 +1070,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
                       ? "border-teal-300 bg-teal-50 text-teal-900"
                       : complete
                         ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-amber-900/10 bg-white text-slate-500"
+                        : "border-line bg-white text-slate-500"
                   }`}
                 >
                   <div className="text-xs font-semibold uppercase tracking-[0.16em]">{step.label}</div>
@@ -1116,7 +1116,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             {wizardStep === "finish" ? (
               <div className="space-y-4 text-sm text-slate-600">
                 <p>StakeOS is ready. The report URL is saved, the app checks passed, and the first full sync is recorded.</p>
-                <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4">
+                <div className="rounded-2xl border border-line bg-panel-warm px-4 py-4">
                   <div><span className="font-semibold text-slate-900">Report URL:</span> {snapshot.status.requiredComplete ? "Ready" : "Still incomplete"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">App checks:</span> {snapshot.status.prerequisitesReady ? "Ready" : "Needs attention"}</div>
                   <div className="mt-1"><span className="font-semibold text-slate-900">First sync:</span> {snapshot.status.firstSyncCompleted ? "Completed" : "Missing"}</div>
@@ -1133,7 +1133,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             </div>
             <div className="flex flex-wrap gap-3">
               {wizardStep !== "required" ? (
-                <button type="button" onClick={goBack} className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
+                <button type="button" onClick={goBack} className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
                   Back
                 </button>
               ) : null}
@@ -1190,7 +1190,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
+      <section className="rounded-panel-lg border border-line bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Desktop Setup</p>
         <h1 className="mt-3 font-serif text-4xl text-slate-900">StakeOS Settings</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
@@ -1214,7 +1214,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             <div className="mt-1 font-semibold">{snapshot.status.firstSyncCompleted ? "Completed" : "Pending"}</div>
           </div>
         </div>
-        <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-600">
+        <div className="mt-6 rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-600">
           <div><span className="font-semibold text-slate-900">Config file:</span> {snapshot.configPath}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">Local data:</span> {snapshot.status.database.message}</div>
           <div className="mt-1"><span className="font-semibold text-slate-900">First successful full sync:</span> {snapshot.status.latestSuccessfulSyncAt ? new Date(snapshot.status.latestSuccessfulSyncAt).toLocaleString() : "None yet"}</div>
@@ -1232,7 +1232,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
               <h2 className="font-serif text-2xl text-slate-900">Required Core Settings</h2>
               <p className="mt-2 text-sm text-slate-600">For most users, this is just the LCR report URL. Everything else can stay on the app defaults.</p>
             </div>
-            <button type="button" onClick={importFromEnv} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="button" onClick={importFromEnv} disabled={saving || restarting} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
               {saving || restarting ? "Importing..." : "Import Developer .env And Restart"}
             </button>
           </div>
@@ -1248,7 +1248,7 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
             <h2 className="font-serif text-2xl text-slate-900">App Checks</h2>
             <p className="mt-2 text-sm text-slate-600">These checks verify that StakeOS can save local data and open the LCR report correctly.</p>
           </div>
-          <button type="button" onClick={() => void refreshSnapshot().catch((caughtError) => setError(caughtError instanceof Error ? caughtError.message : "Unable to refresh diagnostics."))} className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
+          <button type="button" onClick={() => void refreshSnapshot().catch((caughtError) => setError(caughtError instanceof Error ? caughtError.message : "Unable to refresh diagnostics."))} className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">
             Re-run App Checks
           </button>
         </div>
@@ -1272,13 +1272,13 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         <LcrReportHelper />
       </section>
 
-      <div className="flex items-center justify-between rounded-[28px] border border-amber-900/10 bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center justify-between rounded-panel border border-line bg-white/80 px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
         <div>
           <div className="text-sm font-semibold text-slate-900">Save Desktop Settings</div>
           <div className="mt-1 text-sm text-slate-600">Browser runtime changes automatically restart StakeOS Desktop. Report URL and optional settings save without restart.</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => void saveSettings()} disabled={saving || restarting} className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="button" onClick={() => void saveSettings()} disabled={saving || restarting} className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60">
             {saving && !restarting ? "Saving..." : runtimeCriticalChanged ? "Save And Auto-Restart" : "Save Settings"}
           </button>
           <button type="button" onClick={() => void saveSettings({ restart: true })} disabled={saving || restarting || !shellStatus?.available} className="rounded-full bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60">

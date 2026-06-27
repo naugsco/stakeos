@@ -37,7 +37,7 @@ export function ReportsIndexNav({ reportGroups }: { reportGroups: ReportGroup[] 
   }, [fallbackId]);
 
   return (
-    <div className="sticky top-24 rounded-[28px] border border-amber-900/10 bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+    <div className="sticky top-24 rounded-panel border border-line bg-white/85 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Reports Index</div>
       <p className="mt-2 text-sm text-slate-600">
         Jump by report family instead of scanning the entire page top to bottom.
@@ -58,7 +58,7 @@ export function ReportsIndexNav({ reportGroups }: { reportGroups: ReportGroup[] 
                       "block rounded-2xl border px-4 py-3 text-sm font-medium transition",
                       active
                         ? "border-teal-600/20 bg-teal-50 text-teal-800 shadow-[inset_0_0_0_1px_rgba(13,148,136,0.08)]"
-                        : "border-transparent bg-[#fffaf0] text-slate-700 hover:border-amber-300 hover:bg-white"
+                        : "border-transparent bg-panel-warm text-slate-700 hover:border-amber-300 hover:bg-white"
                     ].join(" ")}
                     aria-current={active ? "location" : undefined}
                   >

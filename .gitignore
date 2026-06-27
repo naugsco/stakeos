@@ -19,6 +19,12 @@ npm-debug.log*
 
 .DS_Store
 tsconfig.tsbuildinfo
+
+# Local tooling / scratch (not part of the app)
+.claude/
+.ui-design/
+.codex-write-check
+
 StakeOS Dashboard.app/
 StakeOS Dashboard Launcher.app/
 

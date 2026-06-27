@@ -62,7 +62,7 @@ export function VisualOrgBrowser({ availableUnits, initialUnit = null }: VisualO
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-amber-900/10 bg-[var(--panel)] p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Scope</p>

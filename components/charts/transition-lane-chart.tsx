@@ -27,7 +27,7 @@ export function TransitionLaneChart({ rows }: { rows: TransitionLaneRow[] }) {
   let previousSection: string | undefined;
 
   return (
-    <div className="rounded-2xl border border-amber-900/15 bg-[var(--panel)] p-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
       <div className="space-y-5">
         {rows.map((row) => {
           const showSection = row.section && row.section !== previousSection;

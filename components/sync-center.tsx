@@ -36,7 +36,7 @@ type SyncLogPayload = {
 };
 
 const cardClassName =
-  "rounded-[28px] border border-amber-900/10 bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
+  "rounded-panel border border-line bg-white/85 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
 
 const formatSyncType = (value: string) => {
   switch (value) {
@@ -206,7 +206,7 @@ export function SyncCenter() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[32px] border border-amber-900/10 bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
+      <section className="rounded-panel-lg border border-line bg-white/80 p-8 shadow-[0_20px_70px_rgba(15,23,42,0.06)] backdrop-blur">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Desktop Operations</p>
         <h1 className="mt-3 font-serif text-4xl text-slate-900">Sync Center</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
@@ -240,7 +240,7 @@ export function SyncCenter() {
                 type="button"
                 onClick={() => runSync("callings")}
                 disabled={Boolean(status?.running) || action !== null}
-                className="rounded-full border border-amber-900/10 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-line bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {action === "callings" ? "Starting Calling Sync..." : "Run Calling Sync"}
               </button>
@@ -251,11 +251,11 @@ export function SyncCenter() {
             <h2 className="font-serif text-2xl text-slate-900">Sync Snapshot</h2>
             <p className="mt-2 text-sm text-slate-600">{runStateDescription}</p>
             <div className="mt-6 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+              <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Phase</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">{phaseLabel}</div>
               </div>
-              <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+              <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active Sync</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
                   {status?.activeJob
@@ -265,7 +265,7 @@ export function SyncCenter() {
                     : "None"}
                 </div>
               </div>
-              <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+              <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Elapsed</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">{elapsedLabel}</div>
               </div>
@@ -280,19 +280,19 @@ export function SyncCenter() {
             {status?.latestSuccessfulFullSyncSummary ? (
               <>
                 <div className="mt-6 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                  <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Members Imported</div>
                     <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.membersImported}</div>
                   </div>
-                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                  <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Units Found</div>
                     <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.unitsFound}</div>
                   </div>
-                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                  <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Callings Imported</div>
                     <div className="mt-1 text-base font-semibold text-slate-900">{status.latestSuccessfulFullSyncSummary.callingsImported}</div>
                   </div>
-                  <div className="rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-3 text-sm text-slate-700">
+                  <div className="rounded-2xl border border-line bg-panel-warm px-4 py-3 text-sm text-slate-700">
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last Sync Time</div>
                     <div className="mt-1 text-base font-semibold text-slate-900">
                       {status.latestSuccessfulFullSyncSummary.completedAt
@@ -306,7 +306,7 @@ export function SyncCenter() {
                 </div>
               </>
             ) : (
-              <div className="mt-6 rounded-2xl border border-amber-900/10 bg-[#fffaf0] px-4 py-4 text-sm text-slate-600">
+              <div className="mt-6 rounded-2xl border border-line bg-panel-warm px-4 py-4 text-sm text-slate-600">
                 No successful full sync has been recorded yet.
               </div>
             )}
@@ -321,7 +321,7 @@ export function SyncCenter() {
               <button
                 type="button"
                 onClick={() => setShowAdvanced((current) => !current)}
-                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 {showAdvanced ? "Hide Advanced" : "Show Advanced"}
               </button>
@@ -329,7 +329,7 @@ export function SyncCenter() {
             {showAdvanced ? (
               <div className="mt-6 space-y-6">
                 {status?.activeJob ? (
-                  <div className="rounded-2xl border border-amber-900/10 bg-white px-4 py-3 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-line bg-white px-4 py-3 text-sm text-slate-600">
                     <div>
                       <span className="font-semibold text-slate-900">Started:</span> {new Date(status.activeJob.startedAt).toLocaleString()}
                     </div>
@@ -375,14 +375,14 @@ export function SyncCenter() {
               <button
                 type="button"
                 onClick={() => setAutoScroll((current) => !current)}
-                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 {autoScroll ? "Pause Auto-Scroll" : "Resume Auto-Scroll"}
               </button>
               <button
                 type="button"
                 onClick={() => void loadLog()}
-                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 Refresh Log
               </button>
@@ -390,7 +390,7 @@ export function SyncCenter() {
                 type="button"
                 onClick={() => void openLogAction("open")}
                 disabled={!log?.logFile || logAction !== null}
-                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {logAction === "open" ? "Opening..." : "Open Log File"}
               </button>
@@ -398,13 +398,13 @@ export function SyncCenter() {
                 type="button"
                 onClick={() => void openLogAction("reveal")}
                 disabled={!log?.logFile || logAction !== null}
-                className="rounded-full border border-amber-900/10 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {logAction === "reveal" ? "Revealing..." : "Reveal In Finder"}
               </button>
             </div>
           </div>
-          <div className="mt-6 rounded-[24px] border border-slate-900/10 bg-slate-950 p-4 shadow-inner">
+          <div className="mt-6 rounded-panel border border-slate-900/10 bg-slate-950 p-4 shadow-inner">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
               {log?.logFile ? log.logFile : "No log selected"}
             </div>
