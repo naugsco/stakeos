@@ -5298,3 +5298,482 @@ export const getStakeOverview = async (unit?: string | null) => {
 export const closePool = async () => {
   // No-op for SQLite (connections are opened/closed per call)
 };
+
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
+const splitMinisteringNames = (value: string | null): string[] =>
+  (value ?? "")
+    .split("/")
+    .map((n) => n.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+const memberLookupSql = (alias = "m") => `
+  SELECT
+    ${alias}.lcr_member_id AS lcrMemberId,
+    TRIM(COALESCE(NULLIF(${alias}.preferred_name, ''), ${alias}.first_name) || ' ' || ${alias}.last_name) AS fullName,
+    TRIM(${alias}.first_name || ' ' || ${alias}.last_name) AS legalFullName,
+    ${unitNameExpr(alias)} AS unitName
+  FROM members ${alias}
+`;
+
+// ── ministering_assignments ────────────────────────────────────────────────────
+
+export interface MinisteringAssignmentResult {
+  query: string;
+  matched: boolean;
+  member?: { lcrMemberId: string; fullName: string; unitName: string | null };
+  ministeringBrothers: string[];
+  ministeringSisters: string[];
+  candidates?: Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+  note?: string;
+}
+
+export async function getMinisteringAssignments(member: string): Promise<MinisteringAssignmentResult> {
+  const search = member.trim();
+  const base: MinisteringAssignmentResult = { query: search, matched: false, ministeringBrothers: [], ministeringSisters: [] };
+  if (!search) return { ...base, note: "No member name or LCR id provided." };
+
+  const db = openSqliteSpikeDb();
+  try {
+    const like = `%${search.replace(/\s+/g, "%")}%`;
+    const rows = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
+        ${unitNameExpr()} AS unitName,
+        m.ministering_brothers AS ministeringBrothers,
+        m.ministering_sisters AS ministeringSisters
+      FROM members m
+      WHERE m.lcr_member_id = @search
+         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
+         OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
+         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
+         OR (m.first_name || ' ' || m.last_name) LIKE @like
+      ORDER BY
+        (m.lcr_member_id = @search) DESC,
+        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+      LIMIT 25
+    `).all({ search, like }) as Array<{
+      lcrMemberId: string; fullName: string; legalFullName: string;
+      unitName: string | null; ministeringBrothers: string | null; ministeringSisters: string | null;
+    }>;
+
+    if (rows.length === 0) return { ...base, note: "No member matched that name or id." };
+
+    const top = rows[0];
+    const exact =
+      top.lcrMemberId === search ||
+      top.fullName.toLowerCase() === search.toLowerCase() ||
+      top.legalFullName.toLowerCase() === search.toLowerCase();
+
+    if (!exact && rows.length > 1) {
+      return {
+        ...base,
+        note: `Multiple members matched "${search}". Re-run with a full name or LCR id.`,
+        candidates: rows.map((r) => ({ lcrMemberId: r.lcrMemberId, fullName: r.fullName, unitName: r.unitName }))
+      };
+    }
+
+    const brothers = splitMinisteringNames(top.ministeringBrothers);
+    const sisters = splitMinisteringNames(top.ministeringSisters);
+    return {
+      query: search,
+      matched: true,
+      member: { lcrMemberId: top.lcrMemberId, fullName: top.fullName, unitName: top.unitName },
+      ministeringBrothers: brothers,
+      ministeringSisters: sisters,
+      note: brothers.length === 0 && sisters.length === 0
+        ? "No ministering brothers or sisters on record for this member."
+        : undefined
+    };
+  } finally {
+    db.close();
+  }
+}
+
+// ── reverse_ministering_lookup ─────────────────────────────────────────────────
+
+export interface ReverseMinisteringResult {
+  query: string;
+  matched: boolean;
+  minister?: { lcrMemberId: string; fullName: string; unitName: string | null };
+  assignedTo: Array<{ lcrMemberId: string; fullName: string; unitName: string | null; type: "brother" | "sister" }>;
+  candidates?: Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+  note?: string;
+}
+
+export async function getReverseMinisteringLookup(member: string): Promise<ReverseMinisteringResult> {
+  const search = member.trim();
+  const base: ReverseMinisteringResult = { query: search, matched: false, assignedTo: [] };
+  if (!search) return { ...base, note: "No member name or LCR id provided." };
+
+  const db = openSqliteSpikeDb();
+  try {
+    // First resolve the minister
+    const like = `%${search.replace(/\s+/g, "%")}%`;
+    const candidates = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
+        ${unitNameExpr()} AS unitName
+      FROM members m
+      WHERE m.lcr_member_id = @search
+         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
+         OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
+         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
+         OR (m.first_name || ' ' || m.last_name) LIKE @like
+      ORDER BY
+        (m.lcr_member_id = @search) DESC,
+        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+      LIMIT 25
+    `).all({ search, like }) as Array<{ lcrMemberId: string; fullName: string; legalFullName: string; unitName: string | null }>;
+
+    if (candidates.length === 0) return { ...base, note: "No member matched that name or id." };
+
+    const top = candidates[0];
+    const exact =
+      top.lcrMemberId === search ||
+      top.fullName.toLowerCase() === search.toLowerCase() ||
+      top.legalFullName.toLowerCase() === search.toLowerCase();
+
+    if (!exact && candidates.length > 1) {
+      return {
+        ...base,
+        note: `Multiple members matched "${search}". Re-run with a full name or LCR id.`,
+        candidates: candidates.map((r) => ({ lcrMemberId: r.lcrMemberId, fullName: r.fullName, unitName: r.unitName }))
+      };
+    }
+
+    const name = top.fullName;
+
+    // Scan all members whose ministering_brothers or ministering_sisters contains this name
+    const brotherMatches = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        ${unitNameExpr()} AS unitName
+      FROM members m
+      WHERE m.ministering_brothers LIKE @pat
+      ORDER BY fullName
+    `).all({ pat: `%${name}%` }) as Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+
+    const sisterMatches = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        ${unitNameExpr()} AS unitName
+      FROM members m
+      WHERE m.ministering_sisters LIKE @pat
+      ORDER BY fullName
+    `).all({ pat: `%${name}%` }) as Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+
+    const assignedTo = [
+      ...brotherMatches.map((r) => ({ ...r, type: "brother" as const })),
+      ...sisterMatches.map((r) => ({ ...r, type: "sister" as const }))
+    ];
+
+    return {
+      query: search,
+      matched: true,
+      minister: { lcrMemberId: top.lcrMemberId, fullName: top.fullName, unitName: top.unitName },
+      assignedTo,
+      note: assignedTo.length === 0 ? "No households found assigned to this minister." : undefined
+    };
+  } finally {
+    db.close();
+  }
+}
+
+// ── member_profile (360 card) ──────────────────────────────────────────────────
+
+export interface MemberProfileResult {
+  query: string;
+  matched: boolean;
+  profile?: {
+    lcrMemberId: string;
+    fullName: string;
+    unitName: string | null;
+    age: number | null;
+    birthdate: string | null;
+    primaryEmail: string | null;
+    primaryPhone: string | null;
+    isConvert: boolean;
+    isReturnedMissionary: boolean;
+    templeRecommendStatus: string | null;
+    callings: Array<{ title: string; organization: string | null; sustainedOn: string | null }>;
+    spouse: { fullName: string; email: string | null; phone: string | null } | null;
+    ministeringBrothers: string[];
+    ministeringSisters: string[];
+  };
+  candidates?: Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+  note?: string;
+}
+
+export async function getMemberProfile(member: string): Promise<MemberProfileResult> {
+  const search = member.trim();
+  const base: MemberProfileResult = { query: search, matched: false };
+  if (!search) return { ...base, note: "No member name or LCR id provided." };
+
+  const db = openSqliteSpikeDb();
+  try {
+    const like = `%${search.replace(/\s+/g, "%")}%`;
+    const candidates = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
+        ${unitNameExpr()} AS unitName,
+        m.id AS internalId,
+        m.household_id AS householdId,
+        m.age,
+        m.birthdate,
+        m.primary_email AS primaryEmail,
+        m.primary_phone AS primaryPhone,
+        m.is_convert AS isConvert,
+        m.is_returned_missionary AS isReturnedMissionary,
+        m.temple_recommend_status AS templeRecommendStatus,
+        m.ministering_brothers AS ministeringBrothers,
+        m.ministering_sisters AS ministeringSisters
+      FROM members m
+      WHERE m.lcr_member_id = @search
+         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
+         OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
+         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
+         OR (m.first_name || ' ' || m.last_name) LIKE @like
+      ORDER BY
+        (m.lcr_member_id = @search) DESC,
+        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+      LIMIT 25
+    `).all({ search, like }) as Array<{
+      lcrMemberId: string; fullName: string; legalFullName: string; unitName: string | null;
+      internalId: number; householdId: number | null; age: number | null; birthdate: string | null;
+      primaryEmail: string | null; primaryPhone: string | null;
+      isConvert: number | null; isReturnedMissionary: number | null; templeRecommendStatus: string | null;
+      ministeringBrothers: string | null; ministeringSisters: string | null;
+    }>;
+
+    if (candidates.length === 0) return { ...base, note: "No member matched that name or id." };
+
+    const top = candidates[0];
+    const exact =
+      top.lcrMemberId === search ||
+      top.fullName.toLowerCase() === search.toLowerCase() ||
+      top.legalFullName.toLowerCase() === search.toLowerCase();
+
+    if (!exact && candidates.length > 1) {
+      return {
+        ...base,
+        note: `Multiple members matched "${search}". Re-run with a full name or LCR id.`,
+        candidates: candidates.map((r) => ({ lcrMemberId: r.lcrMemberId, fullName: r.fullName, unitName: r.unitName }))
+      };
+    }
+
+    // Callings
+    const callings = db.prepare(`
+      SELECT c.title, c.organization, c.sustained_on AS sustainedOn
+      FROM callings c
+      WHERE c.lcr_member_id = ? AND c.released_on IS NULL AND c.is_current = 1
+      ORDER BY c.sustained_on DESC
+    `).all(top.lcrMemberId) as Array<{ title: string; organization: string | null; sustainedOn: string | null }>;
+
+    // Spouse
+    let spouse: { fullName: string; email: string | null; phone: string | null } | null = null;
+    if (top.householdId) {
+      const spouseRow = db.prepare(`
+        SELECT
+          TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+          m.primary_email AS email,
+          m.primary_phone AS phone
+        FROM members m
+        WHERE m.household_id = ? AND m.id <> ?
+        LIMIT 1
+      `).get(top.householdId, top.internalId) as { fullName: string; email: string | null; phone: string | null } | undefined;
+      if (spouseRow) spouse = spouseRow;
+    }
+
+    return {
+      query: search,
+      matched: true,
+      profile: {
+        lcrMemberId: top.lcrMemberId,
+        fullName: top.fullName,
+        unitName: top.unitName,
+        age: top.age,
+        birthdate: top.birthdate,
+        primaryEmail: top.primaryEmail,
+        primaryPhone: top.primaryPhone,
+        isConvert: Boolean(top.isConvert),
+        isReturnedMissionary: Boolean(top.isReturnedMissionary),
+        templeRecommendStatus: top.templeRecommendStatus,
+        callings,
+        spouse,
+        ministeringBrothers: splitMinisteringNames(top.ministeringBrothers),
+        ministeringSisters: splitMinisteringNames(top.ministeringSisters)
+      }
+    };
+  } finally {
+    db.close();
+  }
+}
+
+// ── upcoming_birthdays ─────────────────────────────────────────────────────────
+
+export interface UpcomingBirthdayResult {
+  windowDays: number;
+  unit: string | null;
+  minAge: number | null;
+  maxAge: number | null;
+  members: Array<{
+    lcrMemberId: string;
+    fullName: string;
+    unitName: string | null;
+    birthdate: string;
+    age: number | null;
+    turningAge: number | null;
+    daysUntil: number;
+  }>;
+}
+
+export async function getUpcomingBirthdays(
+  windowDays = 30,
+  unit?: string | null,
+  minAge?: number | null,
+  maxAge?: number | null
+): Promise<UpcomingBirthdayResult> {
+  const db = openSqliteSpikeDb();
+  try {
+    const today = new Date();
+    const todayMD = `${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + windowDays);
+    const endMD = `${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+
+    const conditions: string[] = ["m.birthdate IS NOT NULL", "m.birthdate <> ''"];
+    const params: Record<string, unknown> = { todayMD, endMD };
+
+    if (unit) {
+      conditions.push(`${unitNameExpr()} = @unit`);
+      params.unit = unit;
+    }
+    if (minAge != null) {
+      conditions.push("m.age >= @minAge");
+      params.minAge = minAge;
+    }
+    if (maxAge != null) {
+      conditions.push("m.age <= @maxAge");
+      params.maxAge = maxAge;
+    }
+
+    const where = conditions.map((c) => `AND ${c}`).join("\n        ");
+
+    const rows = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        ${unitNameExpr()} AS unitName,
+        m.birthdate,
+        m.age,
+        SUBSTR(m.birthdate, 6, 5) AS birthdayMD
+      FROM members m
+      WHERE 1=1
+        ${where}
+    `).all(params) as Array<{
+      lcrMemberId: string; fullName: string; unitName: string | null;
+      birthdate: string; age: number | null; birthdayMD: string;
+    }>;
+
+    const todayTime = today.getTime();
+    const thisYear = today.getFullYear();
+
+    const withDays = rows
+      .map((r) => {
+        const [mm, dd] = r.birthdayMD.split("-").map(Number);
+        let candidate = new Date(thisYear, mm - 1, dd);
+        if (candidate.getTime() < todayTime) candidate = new Date(thisYear + 1, mm - 1, dd);
+        const daysUntil = Math.round((candidate.getTime() - todayTime) / 86400000);
+        const birthYear = Number(r.birthdate.substring(0, 4));
+        const turningAge = candidate.getFullYear() - birthYear;
+        return { ...r, daysUntil, turningAge };
+      })
+      .filter((r) => r.daysUntil <= windowDays)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    return {
+      windowDays,
+      unit: unit ?? null,
+      minAge: minAge ?? null,
+      maxAge: maxAge ?? null,
+      members: withDays.map(({ lcrMemberId, fullName, unitName, birthdate, age, turningAge, daysUntil }) => ({
+        lcrMemberId, fullName, unitName, birthdate, age, turningAge, daysUntil
+      }))
+    };
+  } finally {
+    db.close();
+  }
+}
+
+// ── unit_ministering_coverage ──────────────────────────────────────────────────
+
+export interface UnitMinisteringCoverageResult {
+  unit: string;
+  totalHouseholds: number;
+  assignedBrothers: number;
+  assignedSisters: number;
+  unassignedBrothers: number;
+  unassignedSisters: number;
+  households: Array<{
+    lcrMemberId: string;
+    fullName: string;
+    ministeringBrothers: string[];
+    ministeringSisters: string[];
+    hasBrothers: boolean;
+    hasSisters: boolean;
+  }>;
+}
+
+export async function getUnitMinisteringCoverage(unit: string): Promise<UnitMinisteringCoverageResult | { error: string }> {
+  if (!unit?.trim()) return { error: "A unit name is required." };
+
+  const db = openSqliteSpikeDb();
+  try {
+    const rows = db.prepare(`
+      SELECT
+        m.lcr_member_id AS lcrMemberId,
+        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        m.ministering_brothers AS ministeringBrothers,
+        m.ministering_sisters AS ministeringSisters,
+        m.has_ministering_brothers AS hasMinisteringBrothers,
+        m.has_ministering_sisters AS hasMinisteringSisters
+      FROM members m
+      WHERE ${unitNameExpr()} = @unit
+      ORDER BY m.last_name, m.first_name
+    `).all({ unit: unit.trim() }) as Array<{
+      lcrMemberId: string; fullName: string;
+      ministeringBrothers: string | null; ministeringSisters: string | null;
+      hasMinisteringBrothers: number | null; hasMinisteringSisters: number | null;
+    }>;
+
+    const households = rows.map((r) => ({
+      lcrMemberId: r.lcrMemberId,
+      fullName: r.fullName,
+      ministeringBrothers: splitMinisteringNames(r.ministeringBrothers),
+      ministeringSisters: splitMinisteringNames(r.ministeringSisters),
+      hasBrothers: Boolean(r.hasMinisteringBrothers),
+      hasSisters: Boolean(r.hasMinisteringSisters)
+    }));
+
+    return {
+      unit: unit.trim(),
+      totalHouseholds: households.length,
+      assignedBrothers: households.filter((h) => h.hasBrothers).length,
+      assignedSisters: households.filter((h) => h.hasSisters).length,
+      unassignedBrothers: households.filter((h) => !h.hasBrothers).length,
+      unassignedSisters: households.filter((h) => !h.hasSisters).length,
+      households
+    };
+  } finally {
+    db.close();
+  }
+}

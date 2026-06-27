@@ -47,6 +47,11 @@ import {
   getRecentBaptismReport,
   getRecommendExpirationRiskReport,
   getSeminaryInstituteOpportunityReport,
+  getMinisteringAssignments,
+  getMemberProfile,
+  getReverseMinisteringLookup,
+  getUpcomingBirthdays,
+  getUnitMinisteringCoverage,
   getSpouse,
   getYouthHouseholdContactList,
   missionEligibleContactList,
@@ -90,6 +95,64 @@ const tools = [
         member: { type: "string", description: "Member full name or LCR member id" }
       },
       required: ["member"]
+    }
+  },
+  {
+    name: "ministering_assignments",
+    description: "Return the ministering brothers and sisters assigned to a member, by name or LCR member id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        member: { type: "string", description: "Member full name or LCR member id" }
+      },
+      required: ["member"]
+    }
+  },
+  {
+    name: "reverse_ministering_lookup",
+    description: "Find which households a minister is assigned to — i.e. who does Brother or Sister X minister to.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        member: { type: "string", description: "Minister's full name or LCR member id" }
+      },
+      required: ["member"]
+    }
+  },
+  {
+    name: "member_profile",
+    description: "360 profile card for a member: calling(s), household, spouse, ministering, recommend status, and convert/RM flags — one call instead of four.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        member: { type: "string", description: "Member full name or LCR member id" }
+      },
+      required: ["member"]
+    }
+  },
+  {
+    name: "upcoming_birthdays",
+    description: "List members with birthdays in the next N days, optionally filtered by unit and age range.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        windowDays: { type: "number", description: "How many days ahead to look (default 30)" },
+        unit: { type: "string", description: "Ward/branch name to filter by (optional)" },
+        minAge: { type: "number", description: "Minimum age to include (optional)" },
+        maxAge: { type: "number", description: "Maximum age to include (optional)" }
+      },
+      required: []
+    }
+  },
+  {
+    name: "unit_ministering_coverage",
+    description: "Companionship-level ministering coverage for a ward/branch: who is assigned to whom and which households are unassigned.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        unit: { type: "string", description: "Ward or branch name" }
+      },
+      required: ["unit"]
     }
   },
   {
@@ -732,6 +795,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       case "get_spouse": {
         const result = await getSpouse(String(args.member ?? ""));
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "ministering_assignments": {
+        const result = await getMinisteringAssignments(String(args.member ?? ""));
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "reverse_ministering_lookup": {
+        const result = await getReverseMinisteringLookup(String(args.member ?? ""));
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "member_profile": {
+        const result = await getMemberProfile(String(args.member ?? ""));
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "upcoming_birthdays": {
+        const result = await getUpcomingBirthdays(
+          args.windowDays ? Number(args.windowDays) : 30,
+          args.unit ? String(args.unit) : null,
+          args.minAge != null ? Number(args.minAge) : null,
+          args.maxAge != null ? Number(args.maxAge) : null
+        );
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      case "unit_ministering_coverage": {
+        const result = await getUnitMinisteringCoverage(String(args.unit ?? ""));
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
       case "years_in_calling": {
