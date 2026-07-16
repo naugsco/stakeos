@@ -10,14 +10,19 @@ const execFileAsync = promisify(execFile);
 export type SetupActionKey = "initialize_local_store" | "install_chromium" | "configure_mcp";
 
 const projectRoot = process.env.STAKEOS_PROJECT_ROOT || process.cwd();
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+const isWindows = process.platform === "win32";
+const npmCommand = isWindows ? "npm.cmd" : "npm";
+const npxCommand = isWindows ? "npx.cmd" : "npx";
 const packagedMode = process.env.STAKEOS_PACKAGED === "1";
 const desktopEnv = getEffectiveDesktopEnv();
 
 const runCommand = async (command: string, args: string[]) => {
   const result = await execFileAsync(command, args, {
     cwd: projectRoot,
+    // npm and npx are .cmd files on Windows, and since CVE-2024-27980 Node refuses to spawn
+    // .bat/.cmd without a shell. Callers only ever pass hardcoded literals, so the shell
+    // adds no injection surface. Left off elsewhere to keep argument handling unchanged.
+    shell: isWindows,
     timeout: 10 * 60 * 1000,
     maxBuffer: 10 * 1024 * 1024,
     env: {

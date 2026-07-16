@@ -933,6 +933,17 @@ export function DesktopSettingsForm({ initialSnapshot, initialSetup = false, res
         ) : null}
       </div>
 
+      {/* Repeated next to the sync controls: the shared banners sit far below this button,
+          so a failure here would otherwise scroll out of view and read as a dead button. */}
+      {error ? (
+        <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      ) : null}
+      {!error && message ? (
+        <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {message}
+        </div>
+      ) : null}
+
       <div className="rounded-2xl border border-line bg-slate-950 text-slate-100 shadow-inner">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <div>

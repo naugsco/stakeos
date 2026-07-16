@@ -88,7 +88,7 @@ export type HighCouncilAssignmentMetadata = {
 
 const REQUIRED_FIELDS = ["LCR_DIRECTORY_URL"] as const;
 
-const getDesktopConfigDir = () => {
+export const getDesktopConfigDir = () => {
   const home = os.homedir();
 
   switch (process.platform) {

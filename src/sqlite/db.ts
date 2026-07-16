@@ -1,11 +1,14 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { getDesktopConfigDir } from "@/src/config/desktopConfig";
 import { env } from "@/src/config/env";
 
-const legacyDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "sqlite-spike", "stakeos-spike.db");
-const defaultDbPath = resolve(homedir(), "Library", "Application Support", "StakeOS", "stakeos.db");
+// Resolved from the same per-platform support directory the desktop config uses, so the
+// app and the setup diagnostics always agree on which database file is live. On macOS this
+// is the unchanged ~/Library/Application Support/StakeOS path.
+const legacyDbPath = resolve(getDesktopConfigDir(), "sqlite-spike", "stakeos-spike.db");
+const defaultDbPath = resolve(getDesktopConfigDir(), "stakeos.db");
 
 const getSchemaPath = () => {
   const candidates = [

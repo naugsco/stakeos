@@ -149,9 +149,25 @@ export const launchSyncJob = (kind: SyncJobKind) => {
     });
   }
 
+  // A failed spawn reports asynchronously. Without a listener the error is unhandled and the
+  // caller is told the sync started, so record it in the log the UI already surfaces.
+  child.on("error", (error) => {
+    try {
+      writeFileSync(logFile, `Failed to launch ${kind} sync: ${error.message}\n`, { flag: "a" });
+    } catch {
+      // The log is best-effort; never mask the original failure.
+    }
+    clearSyncLaunchState();
+  });
+
+  if (typeof child.pid !== "number") {
+    clearSyncLaunchState();
+    throw new Error(`The ${kind} sync process could not be started.`);
+  }
+
   const state: SyncLaunchState = {
     kind,
-    pid: child.pid ?? -1,
+    pid: child.pid,
     logFile,
     startedAt: new Date().toISOString()
   };

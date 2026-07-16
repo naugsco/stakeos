@@ -33,7 +33,15 @@ export async function POST() {
     );
   }
 
-  const state = launchSyncJob("callings");
+  let state;
+  try {
+    state = launchSyncJob("callings");
+  } catch (error) {
+    return NextResponse.json(
+      { started: false, message: error instanceof Error ? error.message : "Unable to start the calling sync." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     started: true,

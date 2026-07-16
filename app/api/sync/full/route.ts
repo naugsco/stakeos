@@ -16,7 +16,21 @@ export async function POST() {
   const { chromium } = await import("playwright");
   let executablePath = chromium.executablePath();
   if (!executablePath || !existsSync(executablePath)) {
-    await runSetupAction("install_chromium");
+    try {
+      await runSetupAction("install_chromium");
+    } catch (error) {
+      // Surface the real reason as JSON; an uncaught throw here returns an HTML error page
+      // that the client cannot parse, leaving the button with no visible explanation.
+      return NextResponse.json(
+        {
+          started: false,
+          message: `Chromium could not be installed automatically: ${
+            error instanceof Error ? error.message : "Unknown error."
+          }`
+        },
+        { status: 412 }
+      );
+    }
 
     process.env.PLAYWRIGHT_BROWSERS_PATH = desktopEnv.PLAYWRIGHT_BROWSERS_PATH;
     process.env.PLAYWRIGHT_USER_DATA_DIR = desktopEnv.PLAYWRIGHT_USER_DATA_DIR;
@@ -60,7 +74,15 @@ export async function POST() {
     );
   }
 
-  const state = launchSyncJob("full");
+  let state;
+  try {
+    state = launchSyncJob("full");
+  } catch (error) {
+    return NextResponse.json(
+      { started: false, message: error instanceof Error ? error.message : "Unable to start the full sync." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
     started: true,
