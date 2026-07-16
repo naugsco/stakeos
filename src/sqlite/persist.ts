@@ -194,8 +194,8 @@ const persistMembers = (
       is_attending_seminary, is_attending_institute, potential_institute_student, potential_seminary_student,
       has_ministering_brothers, has_ministering_sisters, ministering_brothers, ministering_sisters,
       spouse_name, head_of_house, household_position, sealing_to_parents, sealing_to_spouse,
-      priesthood_type, priesthood_office, ordination_date, institute_status, seminary_status, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      priesthood_type, priesthood_office, ordination_date, institute_status, seminary_status, callings_text, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   for (const member of snapshot.members) {
@@ -263,6 +263,7 @@ const persistMembers = (
       member.ordinationDate ?? null,
       member.instituteStatus ?? null,
       member.seminaryStatus ?? null,
+      member.callingsText ?? null,
       isoNow()
     );
   }
@@ -276,9 +277,9 @@ const persistCallings = (db: Database.Database, snapshot: DirectorySnapshot) => 
   const insertCalling = db.prepare(
     `INSERT INTO callings (
       lcr_calling_id, unit_number, unit_name, lcr_member_id, lcr_organization_id, organization_name,
-      title, sustained_on, set_apart_on, released_on, is_current, updated_at
+      title, sustained_on, set_apart_on, released_on, is_current, is_set_apart, updated_at
     )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   for (const calling of snapshot.callings) {
@@ -294,6 +295,7 @@ const persistCallings = (db: Database.Database, snapshot: DirectorySnapshot) => 
       calling.setApartOn ?? null,
       calling.releasedOn ?? null,
       boolToInt(calling.isCurrent),
+      calling.isSetApart === undefined ? null : boolToInt(calling.isSetApart),
       isoNow()
     );
   }

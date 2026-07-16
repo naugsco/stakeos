@@ -592,9 +592,12 @@ const normalizeCallingTitleForKey = (value: string): string =>
       .replace(/[^a-z0-9]+/g, " ")
   );
 
+// LCR column "Callings with Date Sustained and Set Apart" renders each entry as
+// "Title (<date sustained> / <set apart Yes|No>)". The trailing flag is set-apart
+// status; it does not indicate whether the calling is current.
 const parseDatedCallingEntries = (
   rawValue?: string
-): Array<{ title: string; calledOn?: string; sustained: boolean }> => {
+): Array<{ title: string; sustainedOn?: string; setApart: boolean }> => {
   if (!rawValue) {
     return [];
   }
@@ -607,7 +610,7 @@ const parseDatedCallingEntries = (
   const datePattern = String.raw`(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2})`;
   const entryPattern = new RegExp(String.raw`([^()]+?)\s*\(\s*${datePattern}\s*\/\s*(Yes|No)\s*\)`, "gi");
 
-  const entries: Array<{ title: string; calledOn?: string; sustained: boolean }> = [];
+  const entries: Array<{ title: string; sustainedOn?: string; setApart: boolean }> = [];
   for (const match of value.matchAll(entryPattern)) {
     const rawTitle = normalizeWhitespace(match[1]).replace(/\bwith\s+date\b/gi, "").replace(/[\/\-,]+$/, "");
     const title = normalizeWhitespace(rawTitle);
@@ -616,15 +619,15 @@ const parseDatedCallingEntries = (
     }
     entries.push({
       title,
-      calledOn: toIsoDate(match[2]),
-      sustained: (match[3] ?? "Yes").toLowerCase() === "yes"
+      sustainedOn: toIsoDate(match[2]),
+      setApart: (match[3] ?? "Yes").toLowerCase() === "yes"
     });
   }
 
   return entries;
 };
 
-const parseCallingsFromMembers = (members: MemberRecord[]): CallingRecord[] => {
+export const parseCallingsFromMembers = (members: MemberRecord[]): CallingRecord[] => {
   const callings = new Map<string, CallingRecord>();
 
   for (const member of members) {
@@ -640,13 +643,16 @@ const parseCallingsFromMembers = (members: MemberRecord[]): CallingRecord[] => {
       }
 
       const callingId = `generated-calling-${stableHash(`${member.lcrMemberId}:${titleKey}`)}`;
+      // Every entry in this column is a calling the member currently holds. Whether they
+      // have been set apart yet is tracked separately and must not gate isCurrent.
       const nextRecord: CallingRecord = {
         lcrCallingId: callingId,
         unitNumber: member.unitNumber,
         lcrMemberId: member.lcrMemberId,
         title: entry.title,
-        sustainedOn: entry.calledOn,
-        isCurrent: entry.sustained
+        sustainedOn: entry.sustainedOn,
+        isCurrent: true,
+        isSetApart: entry.setApart
       };
 
       const existing = callings.get(callingId);
@@ -655,18 +661,13 @@ const parseCallingsFromMembers = (members: MemberRecord[]): CallingRecord[] => {
         continue;
       }
 
-      if (nextRecord.isCurrent && !existing.isCurrent) {
-        callings.set(callingId, nextRecord);
-        continue;
-      }
-
-      if (nextRecord.isCurrent === existing.isCurrent) {
-        const existingDate = existing.sustainedOn ? new Date(existing.sustainedOn).getTime() : -1;
-        const nextDate = nextRecord.sustainedOn ? new Date(nextRecord.sustainedOn).getTime() : -1;
-        if (nextDate > existingDate) {
-          callings.set(callingId, nextRecord);
-        }
-      }
+      // Same member and title listed more than once: keep the most recent sustaining,
+      // and treat the calling as set apart if any entry reports it.
+      const existingDate = existing.sustainedOn ? new Date(existing.sustainedOn).getTime() : -1;
+      const nextDate = nextRecord.sustainedOn ? new Date(nextRecord.sustainedOn).getTime() : -1;
+      const winner = nextDate > existingDate ? nextRecord : existing;
+      winner.isSetApart = Boolean(existing.isSetApart || nextRecord.isSetApart);
+      callings.set(callingId, winner);
     }
   }
 

@@ -13,6 +13,20 @@ interface MemberDetailPageProps {
 
 const yesNo = (value: boolean | null) => (value === null ? "-" : value ? "Yes" : "No");
 
+// LCR reports set-apart as Yes/No rather than a date, so prefer the flag and fall back
+// to a date only if some other source ever supplies one.
+const setApartLabel = (calling: { setApartOn: string | null; isSetApart: number | null }) => {
+  if (calling.setApartOn) {
+    return calling.setApartOn;
+  }
+
+  if (calling.isSetApart === null) {
+    return "-";
+  }
+
+  return calling.isSetApart === 1 ? "Yes" : "No";
+};
+
 export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
   const member = await loadMemberDetailPageDataBySource(params.lcrMemberId);
   if (!member) {
@@ -140,10 +154,17 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
             <ul className="space-y-2 text-sm">
               {member.currentCallings.map((calling, index) => (
                 <li key={`${calling.callingTitle}-${index}`} className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2">
-                  <p className="font-medium text-slate-900">{calling.callingTitle}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium text-slate-900">{calling.callingTitle}</p>
+                    {calling.isSetApart === 0 ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        Not set apart
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="text-slate-600">{calling.organizationName ?? "Unassigned Organization"}</p>
                   <p className="text-slate-500">
-                    Sustained: {calling.sustainedOn ?? "-"} | Set Apart: {calling.setApartOn ?? "-"}
+                    Sustained: {calling.sustainedOn ?? "-"} | Set Apart: {setApartLabel(calling)}
                   </p>
                 </li>
               ))}

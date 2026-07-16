@@ -334,6 +334,7 @@ export interface MemberDetail {
     organizationName: string | null;
     sustainedOn: string | null;
     setApartOn: string | null;
+    isSetApart: number | null;
   }>;
   householdMembers: Array<{
     lcrMemberId: string;
@@ -4818,7 +4819,8 @@ export const getMemberDetail = async (lcrMemberId: string): Promise<MemberDetail
         c.title AS callingTitle,
         c.organization_name AS organizationName,
         c.sustained_on AS sustainedOn,
-        c.set_apart_on AS setApartOn
+        c.set_apart_on AS setApartOn,
+        c.is_set_apart AS isSetApart
       FROM callings c
       WHERE c.released_on IS NULL AND c.is_current = 1
         AND c.lcr_member_id = ?
@@ -4829,6 +4831,7 @@ export const getMemberDetail = async (lcrMemberId: string): Promise<MemberDetail
       organizationName: string | null;
       sustainedOn: string | null;
       setApartOn: string | null;
+      isSetApart: number | null;
     }>;
 
     const householdRows = member.householdId
@@ -4854,7 +4857,10 @@ export const getMemberDetail = async (lcrMemberId: string): Promise<MemberDetail
       : [];
 
     // Deduplicate callings
-    const byCallingTitle = new Map<string, { callingTitle: string; organizationName: string | null; sustainedOn: string | null; setApartOn: string | null }>();
+    const byCallingTitle = new Map<
+      string,
+      { callingTitle: string; organizationName: string | null; sustainedOn: string | null; setApartOn: string | null; isSetApart: number | null }
+    >();
     for (const row of callingRows) {
       const cleanedTitle = cleanCallingTitle(row.callingTitle);
       const key = cleanedTitle.toLowerCase();

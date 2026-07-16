@@ -131,6 +131,8 @@ export interface CallingRecord {
   setApartOn?: string;
   releasedOn?: string;
   isCurrent: boolean;
+  /** LCR reports set-apart as a Yes/No flag, not a date, so setApartOn stays unset. */
+  isSetApart?: boolean;
 }
 
 export interface MeetingAssignmentRecord {

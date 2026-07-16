@@ -243,10 +243,15 @@ export default async function StakeOverviewPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Recent Leadership Calls" value={data.newLeadershipAlerts.length} hint="Current leaders sustained or set apart in the last 60 days." />
           <StatCard label="Training Groups Active" value={groupedLeadershipAlerts.length} hint="Groups with at least one recent follow-up item." />
-          <StatCard label="Sustained, Not Set Apart" value={pendingSetApartCount} hint="Recent callings still missing a set-apart date." />
+          <StatCard label="Sustained, Not Set Apart" value={pendingSetApartCount} hint="Recent callings LCR reports as not yet set apart." />
+          <StatCard
+            label="Calling List Mismatches"
+            value={data.callingListMismatches.length}
+            hint="Members whose LCR Callings column omits a dated calling."
+          />
         </div>
 
         {groupedLeadershipAlerts.length > 0 ? (

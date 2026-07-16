@@ -1048,7 +1048,8 @@ export const loadSqliteSpikeMemberDetail = async (lcrMemberId: string): Promise<
         title AS callingTitle,
         organization_name AS organizationName,
         sustained_on AS sustainedOn,
-        set_apart_on AS setApartOn
+        set_apart_on AS setApartOn,
+        is_set_apart AS isSetApart
        FROM callings
        WHERE is_current = 1
          AND lcr_member_id = ?
@@ -2553,6 +2554,70 @@ const getLeadershipTrainingGroup = (callingTitle: string) => {
   return null;
 };
 
+// Cross-check LCR's plain "Callings" column against the callings parsed out of the
+// "Callings with Date Sustained and Set Apart" column. Comparing on alphanumerics only
+// avoids depending on how LCR separates entries in the plain column.
+const normalizeForCallingMatch = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+export type SqliteSpikeCallingListMismatch = {
+  lcrMemberId: string;
+  fullName: string;
+  unitName: string;
+  missingTitles: string[];
+};
+
+const loadSqliteCallingListMismatches = (
+  db: ReturnType<typeof openSqliteSpikeDb>
+): SqliteSpikeCallingListMismatch[] => {
+  const rows = db.prepare(
+    `SELECT
+      m.lcr_member_id AS lcrMemberId,
+      m.callings_text AS callingsText,
+      COALESCE(NULLIF(m.preferred_name, ''), TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, ''))) AS fullName,
+      COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
+      c.title AS callingTitle
+     FROM members m
+     JOIN callings c
+       ON c.lcr_member_id = m.lcr_member_id
+      AND c.is_current = 1
+     WHERE m.callings_text IS NOT NULL
+       AND TRIM(m.callings_text) <> ''`
+  ).all() as Array<{
+    lcrMemberId: string;
+    callingsText: string;
+    fullName: string | null;
+    unitName: string;
+    callingTitle: string;
+  }>;
+
+  const byMember = new Map<string, { fullName: string; unitName: string; callingsText: string; titles: string[] }>();
+  for (const row of rows) {
+    const entry = byMember.get(row.lcrMemberId) ?? {
+      fullName: collapseWhitespace(row.fullName ?? "Unknown"),
+      unitName: row.unitName || "Unknown",
+      callingsText: row.callingsText,
+      titles: []
+    };
+    entry.titles.push(row.callingTitle);
+    byMember.set(row.lcrMemberId, entry);
+  }
+
+  const mismatches: SqliteSpikeCallingListMismatch[] = [];
+  for (const [lcrMemberId, entry] of byMember) {
+    const haystack = normalizeForCallingMatch(entry.callingsText);
+    const missingTitles = entry.titles.filter((title) => {
+      const needle = normalizeForCallingMatch(cleanCallingTitle(title));
+      return needle.length > 0 && !haystack.includes(needle);
+    });
+
+    if (missingTitles.length > 0) {
+      mismatches.push({ lcrMemberId, fullName: entry.fullName, unitName: entry.unitName, missingTitles });
+    }
+  }
+
+  return mismatches;
+};
+
 const loadSqliteLeadershipTrainingAlerts = (db: ReturnType<typeof openSqliteSpikeDb>): SqliteSpikeLeadershipTrainingAlert[] => {
   const today = startOfToday();
   const threshold = daysAgoThreshold(60);
@@ -2562,6 +2627,7 @@ const loadSqliteLeadershipTrainingAlerts = (db: ReturnType<typeof openSqliteSpik
       c.title AS callingTitle,
       c.sustained_on AS sustainedOn,
       c.set_apart_on AS setApartOn,
+      c.is_set_apart AS isSetApart,
       COALESCE(NULLIF(m.unit_name, ''), NULLIF(c.unit_name, ''), 'Unknown') AS unitName,
       m.preferred_name AS preferredName,
       m.first_name AS firstName,
@@ -2577,6 +2643,7 @@ const loadSqliteLeadershipTrainingAlerts = (db: ReturnType<typeof openSqliteSpik
     callingTitle: string;
     sustainedOn: string | null;
     setApartOn: string | null;
+    isSetApart: number | null;
     unitName: string;
     preferredName: string | null;
     firstName: string | null;
@@ -2618,7 +2685,12 @@ const loadSqliteLeadershipTrainingAlerts = (db: ReturnType<typeof openSqliteSpik
         recentDateLabel: recentSetApart ? "Set Apart" : "Sustained",
         recentDate: recentDate.toISOString(),
         daysAgo: daysBetween(today, recentDate),
-        pendingSetApart: Boolean(recentSustained && !setApartDate),
+        // LCR gives set-apart as a Yes/No flag rather than a date, so trust the flag and
+        // fall back to the date only when the flag is absent (pre-migration rows).
+        pendingSetApart:
+          row.isSetApart === null || row.isSetApart === undefined
+            ? Boolean(recentSustained && !setApartDate)
+            : row.isSetApart === 0,
         trainerGroup: trainerGroup.key,
         trainerGroupLabel: trainerGroup.label
       } satisfies SqliteSpikeLeadershipTrainingAlert;
@@ -3032,7 +3104,8 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
       converts: [],
       syncDiff,
       unitHealthRadar: [] as UnitHealthRadarRow[],
-      newLeadershipAlerts: [] as SqliteSpikeLeadershipTrainingAlert[]
+      newLeadershipAlerts: [] as SqliteSpikeLeadershipTrainingAlert[],
+      callingListMismatches: [] as SqliteSpikeCallingListMismatch[]
     };
   }
   const db = openSqliteSpikeDb();
@@ -3043,6 +3116,9 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
     const callings = allCallings.filter((calling) => !selectedUnit || (calling.unitName ?? "Unknown") === selectedUnit);
     const members = allMembers.filter((member) => matchesSelectedUnit(member, selectedUnit));
     const newLeadershipAlerts = loadSqliteLeadershipTrainingAlerts(db).filter(
+      (row) => !selectedUnit || row.unitName === selectedUnit
+    );
+    const callingListMismatches = loadSqliteCallingListMismatches(db).filter(
       (row) => !selectedUnit || row.unitName === selectedUnit
     );
 
@@ -3110,7 +3186,8 @@ export const loadSqliteSpikeStakeOverviewPageData = async (selectedUnitArg?: str
       converts: monthKeys.map((month) => ({ month, converts: convertMap.get(month) ?? 0 })),
       syncDiff,
       unitHealthRadar,
-      newLeadershipAlerts
+      newLeadershipAlerts,
+      callingListMismatches
     };
   } finally {
     db.close();

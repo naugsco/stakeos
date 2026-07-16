@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS members (
   ordination_date TEXT,
   institute_status TEXT,
   seminary_status TEXT,
+  callings_text TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL,
   FOREIGN KEY (household_id) REFERENCES households(id) ON DELETE SET NULL
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS callings (
   set_apart_on TEXT,
   released_on TEXT,
   is_current INTEGER NOT NULL,
+  is_set_apart INTEGER,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

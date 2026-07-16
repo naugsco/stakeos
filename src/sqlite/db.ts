@@ -41,12 +41,43 @@ export const getSqliteSpikeDbPath = () => {
   return resolveDefaultDbPath();
 };
 
+const tableExists = (db: Database.Database, table: string) =>
+  Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
+
+const hasColumn = (db: Database.Database, table: string, column: string) =>
+  (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some((row) => row.name === column);
+
+const ensureColumn = (db: Database.Database, table: string, column: string, type: string) => {
+  if (!tableExists(db, table) || hasColumn(db, table, column)) {
+    return;
+  }
+
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  } catch (error) {
+    // Another process may have added the column first; only surface a real failure.
+    if (!hasColumn(db, table, column)) {
+      throw error;
+    }
+  }
+};
+
+// Columns that reads depend on, added here rather than only in ensureSqliteSpikeSchema so
+// that consumers which never run a sync (the MCP server, dashboard reads) cannot observe a
+// database that is missing them. schema.sql is not readable from every bundle, so these are
+// applied directly.
+const ensureReadCriticalColumns = (db: Database.Database) => {
+  ensureColumn(db, "callings", "is_set_apart", "INTEGER");
+  ensureColumn(db, "members", "callings_text", "TEXT");
+};
+
 export const openSqliteSpikeDb = () => {
   const dbPath = getSqliteSpikeDbPath();
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  ensureReadCriticalColumns(db);
   return db;
 };
 
@@ -95,7 +126,8 @@ export const ensureSqliteSpikeSchema = (db: Database.Database) => {
     { name: "priesthood_office", type: "TEXT" },
     { name: "ordination_date", type: "TEXT" },
     { name: "institute_status", type: "TEXT" },
-    { name: "seminary_status", type: "TEXT" }
+    { name: "seminary_status", type: "TEXT" },
+    { name: "callings_text", type: "TEXT" }
   ];
 
   for (const column of missingColumns) {
@@ -111,7 +143,8 @@ export const ensureSqliteSpikeSchema = (db: Database.Database) => {
     { name: "organization_name", type: "TEXT" },
     { name: "sustained_on", type: "TEXT" },
     { name: "set_apart_on", type: "TEXT" },
-    { name: "released_on", type: "TEXT" }
+    { name: "released_on", type: "TEXT" },
+    { name: "is_set_apart", type: "INTEGER" }
   ];
 
   for (const column of missingCallingColumns) {

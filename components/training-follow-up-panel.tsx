@@ -155,7 +155,7 @@ export function TrainingFollowUpPanel({ groups, pendingSetApartCount, initialSta
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-semibold text-slate-900">Training Group Follow-Up</h3>
             <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200">
-              {pendingSetApartCount} recent calling{pendingSetApartCount === 1 ? " is" : "s are"} still missing a set-apart date
+              {pendingSetApartCount} recent calling{pendingSetApartCount === 1 ? " is" : "s are"} not yet set apart
             </span>
           </div>
           <p className="text-sm leading-6 text-slate-600">
