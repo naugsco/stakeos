@@ -707,12 +707,14 @@ export const resolveMember = async (input: {
       ? `+ CASE WHEN COALESCE(NULLIF(m.unit_name, ''), u.name, '') LIKE ? THEN 10 ELSE 0 END`
       : ``;
 
-    const sqlParams: unknown[] = [queryText, queryText, searchLike, searchLike, searchLike, searchLike];
+    // Positional params bind in SQL text order: SELECT score clause, then WHERE, then LIMIT.
+    // score params
+    const sqlParams: unknown[] = [queryText, queryText, searchLike, searchLike, searchLike];
     if (unitFilter !== null) {
       sqlParams.push(unitFilter);
     }
-    // score params
-    sqlParams.push(queryText, queryText, searchLike, searchLike, searchLike);
+    // where params
+    sqlParams.push(queryText, searchLike, searchLike, searchLike);
     if (unitFilter !== null) {
       sqlParams.push(unitFilter);
     }

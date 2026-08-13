@@ -5316,7 +5316,7 @@ const splitMinisteringNames = (value: string | null): string[] =>
 const memberLookupSql = (alias = "m") => `
   SELECT
     ${alias}.lcr_member_id AS lcrMemberId,
-    TRIM(COALESCE(NULLIF(${alias}.preferred_name, ''), ${alias}.first_name) || ' ' || ${alias}.last_name) AS fullName,
+    TRIM(${alias}.first_name || ' ' || ${alias}.last_name) AS fullName,
     TRIM(${alias}.first_name || ' ' || ${alias}.last_name) AS legalFullName,
     ${unitNameExpr(alias)} AS unitName
   FROM members ${alias}
@@ -5345,20 +5345,18 @@ export async function getMinisteringAssignments(member: string): Promise<Ministe
     const rows = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
         TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
         ${unitNameExpr()} AS unitName,
         m.ministering_brothers AS ministeringBrothers,
         m.ministering_sisters AS ministeringSisters
       FROM members m
       WHERE m.lcr_member_id = @search
-         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
          OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
-         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
          OR (m.first_name || ' ' || m.last_name) LIKE @like
       ORDER BY
         (m.lcr_member_id = @search) DESC,
-        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+        (LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)) DESC
       LIMIT 25
     `).all({ search, like }) as Array<{
       lcrMemberId: string; fullName: string; legalFullName: string;
@@ -5421,18 +5419,16 @@ export async function getReverseMinisteringLookup(member: string): Promise<Rever
     const candidates = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
         TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
         ${unitNameExpr()} AS unitName
       FROM members m
       WHERE m.lcr_member_id = @search
-         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
          OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
-         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
          OR (m.first_name || ' ' || m.last_name) LIKE @like
       ORDER BY
         (m.lcr_member_id = @search) DESC,
-        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+        (LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)) DESC
       LIMIT 25
     `).all({ search, like }) as Array<{ lcrMemberId: string; fullName: string; legalFullName: string; unitName: string | null }>;
 
@@ -5452,32 +5448,44 @@ export async function getReverseMinisteringLookup(member: string): Promise<Rever
       };
     }
 
-    const name = top.fullName;
+    const targetVariants = new Set(buildNameVariants(top.fullName));
 
-    // Scan all members whose ministering_brothers or ministering_sisters contains this name
-    const brotherMatches = db.prepare(`
+    // LCR stores ministering assignments as "Last, First" entries joined by " / ", so a raw
+    // LIKE against "First Last" never matches. Compare canonical name variants instead.
+    const ministeringRows = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
-        ${unitNameExpr()} AS unitName
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
+        ${unitNameExpr()} AS unitName,
+        m.ministering_brothers AS ministeringBrothers,
+        m.ministering_sisters AS ministeringSisters
       FROM members m
-      WHERE m.ministering_brothers LIKE @pat
+      WHERE NULLIF(TRIM(COALESCE(m.ministering_brothers, '')), '') IS NOT NULL
+         OR NULLIF(TRIM(COALESCE(m.ministering_sisters, '')), '') IS NOT NULL
       ORDER BY fullName
-    `).all({ pat: `%${name}%` }) as Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+    `).all() as Array<{
+      lcrMemberId: string; fullName: string; unitName: string | null;
+      ministeringBrothers: string | null; ministeringSisters: string | null;
+    }>;
 
-    const sisterMatches = db.prepare(`
-      SELECT
-        m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
-        ${unitNameExpr()} AS unitName
-      FROM members m
-      WHERE m.ministering_sisters LIKE @pat
-      ORDER BY fullName
-    `).all({ pat: `%${name}%` }) as Array<{ lcrMemberId: string; fullName: string; unitName: string | null }>;
+    const isAssignedMinister = (value: string | null) =>
+      splitMinisteringAssignments(value).some((entry) =>
+        buildNameVariants(entry).some((variant) => targetVariants.has(variant))
+      );
+
+    const toMatch = (r: (typeof ministeringRows)[number]) => ({
+      lcrMemberId: r.lcrMemberId,
+      fullName: r.fullName,
+      unitName: r.unitName
+    });
 
     const assignedTo = [
-      ...brotherMatches.map((r) => ({ ...r, type: "brother" as const })),
-      ...sisterMatches.map((r) => ({ ...r, type: "sister" as const }))
+      ...ministeringRows
+        .filter((r) => isAssignedMinister(r.ministeringBrothers))
+        .map((r) => ({ ...toMatch(r), type: "brother" as const })),
+      ...ministeringRows
+        .filter((r) => isAssignedMinister(r.ministeringSisters))
+        .map((r) => ({ ...toMatch(r), type: "sister" as const }))
     ];
 
     return {
@@ -5528,7 +5536,7 @@ export async function getMemberProfile(member: string): Promise<MemberProfileRes
     const candidates = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
         TRIM(m.first_name || ' ' || m.last_name) AS legalFullName,
         ${unitNameExpr()} AS unitName,
         m.id AS internalId,
@@ -5544,13 +5552,11 @@ export async function getMemberProfile(member: string): Promise<MemberProfileRes
         m.ministering_sisters AS ministeringSisters
       FROM members m
       WHERE m.lcr_member_id = @search
-         OR LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)
          OR LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)
-         OR (COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) LIKE @like
          OR (m.first_name || ' ' || m.last_name) LIKE @like
       ORDER BY
         (m.lcr_member_id = @search) DESC,
-        (LOWER(TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name)) = LOWER(@search)) DESC
+        (LOWER(TRIM(m.first_name || ' ' || m.last_name)) = LOWER(@search)) DESC
       LIMIT 25
     `).all({ search, like }) as Array<{
       lcrMemberId: string; fullName: string; legalFullName: string; unitName: string | null;
@@ -5578,7 +5584,7 @@ export async function getMemberProfile(member: string): Promise<MemberProfileRes
 
     // Callings
     const callings = db.prepare(`
-      SELECT c.title, c.organization, c.sustained_on AS sustainedOn
+      SELECT c.title, c.organization_name AS organization, c.sustained_on AS sustainedOn
       FROM callings c
       WHERE c.lcr_member_id = ? AND c.released_on IS NULL AND c.is_current = 1
       ORDER BY c.sustained_on DESC
@@ -5589,7 +5595,7 @@ export async function getMemberProfile(member: string): Promise<MemberProfileRes
     if (top.householdId) {
       const spouseRow = db.prepare(`
         SELECT
-          TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+          TRIM(m.first_name || ' ' || m.last_name) AS fullName,
           m.primary_email AS email,
           m.primary_phone AS phone
         FROM members m
@@ -5650,14 +5656,10 @@ export async function getUpcomingBirthdays(
 ): Promise<UpcomingBirthdayResult> {
   const db = openSqliteSpikeDb();
   try {
-    const today = new Date();
-    const todayMD = `${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + windowDays);
-    const endMD = `${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+    const today = startOfToday();
 
     const conditions: string[] = ["m.birthdate IS NOT NULL", "m.birthdate <> ''"];
-    const params: Record<string, unknown> = { todayMD, endMD };
+    const params: Record<string, unknown> = {};
 
     if (unit) {
       conditions.push(`${unitNameExpr()} = @unit`);
@@ -5677,31 +5679,33 @@ export async function getUpcomingBirthdays(
     const rows = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
         ${unitNameExpr()} AS unitName,
         m.birthdate,
-        m.age,
-        SUBSTR(m.birthdate, 6, 5) AS birthdayMD
+        m.age
       FROM members m
       WHERE 1=1
         ${where}
     `).all(params) as Array<{
       lcrMemberId: string; fullName: string; unitName: string | null;
-      birthdate: string; age: number | null; birthdayMD: string;
+      birthdate: string; age: number | null;
     }>;
 
     const todayTime = today.getTime();
     const thisYear = today.getFullYear();
 
     const withDays = rows
-      .map((r) => {
-        const [mm, dd] = r.birthdayMD.split("-").map(Number);
-        let candidate = new Date(thisYear, mm - 1, dd);
-        if (candidate.getTime() < todayTime) candidate = new Date(thisYear + 1, mm - 1, dd);
+      .flatMap((r) => {
+        // Birthdates arrive from LCR as "17 Aug 1957", not ISO; parseStakeDate handles both.
+        const born = safeDate(r.birthdate);
+        if (!born) return [];
+        let candidate = new Date(thisYear, born.getMonth(), born.getDate());
+        if (candidate.getTime() < todayTime) {
+          candidate = new Date(thisYear + 1, born.getMonth(), born.getDate());
+        }
         const daysUntil = Math.round((candidate.getTime() - todayTime) / 86400000);
-        const birthYear = Number(r.birthdate.substring(0, 4));
-        const turningAge = candidate.getFullYear() - birthYear;
-        return { ...r, daysUntil, turningAge };
+        const turningAge = candidate.getFullYear() - born.getFullYear();
+        return [{ ...r, daysUntil, turningAge }];
       })
       .filter((r) => r.daysUntil <= windowDays)
       .sort((a, b) => a.daysUntil - b.daysUntil);
@@ -5747,7 +5751,7 @@ export async function getUnitMinisteringCoverage(unit: string): Promise<UnitMini
     const rows = db.prepare(`
       SELECT
         m.lcr_member_id AS lcrMemberId,
-        TRIM(COALESCE(NULLIF(m.preferred_name, ''), m.first_name) || ' ' || m.last_name) AS fullName,
+        TRIM(m.first_name || ' ' || m.last_name) AS fullName,
         m.ministering_brothers AS ministeringBrothers,
         m.ministering_sisters AS ministeringSisters,
         m.has_ministering_brothers AS hasMinisteringBrothers,
