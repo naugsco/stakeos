@@ -5,42 +5,61 @@ $ProjectDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 $PidFile = Join-Path $ProjectDir ".run/dashboard.pid"
 
 function Show-Message([string]$message) {
-  Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue | Out-Null
-  [System.Windows.MessageBox]::Show($message, "StakeOS Dashboard") | Out-Null
+  Write-Host $message
+  try {
+    Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+    [System.Windows.MessageBox]::Show($message, "StakeOS Dashboard") | Out-Null
+  } catch {
+    # No desktop/WPF available (Server Core, remote session). The console line above
+    # is the message in that case.
+  }
 }
 
 function Get-StakeOsNextProcesses {
   Get-CimInstance Win32_Process |
     Where-Object {
       $_.Name -match '^node(.exe)?$' -and
-      $_.CommandLine -match 'next[\\/]dist[\\/]bin[\\/]next' -and
+      $_.CommandLine -match 'next[\\/]dist[\\/]bin[\\/]next"?\s+(start|dev)\b' -and
       $_.CommandLine -match [regex]::Escape($ProjectDir)
     }
 }
 
-function Stop-ProcessIfRunning([int]$pid) {
+function Stop-ProcessIfRunning([int]$TargetPid) {
   try {
-    Get-Process -Id $pid -ErrorAction Stop | Out-Null
-    Stop-Process -Id $pid -Force
+    Get-Process -Id $TargetPid -ErrorAction Stop | Out-Null
+    Stop-Process -Id $TargetPid -Force
+    return $true
   } catch {
+    return $false
   }
 }
+
+$stopped = 0
 
 if (Test-Path $PidFile) {
-  $pid = Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($pid) {
-    Stop-ProcessIfRunning ([int]$pid)
-    Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-    Show-Message "StakeOS dashboard stopped."
-    exit 0
+  $storedPid = Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($storedPid) {
+    try {
+      if (Stop-ProcessIfRunning ([int]$storedPid)) {
+        $stopped++
+      }
+    } catch {
+      # A corrupt pid file should not stop the sweep below from cleaning up.
+    }
+  }
+  Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+}
+
+# Always sweep afterwards: the recorded pid can be stale, and a server started
+# outside the launcher never had one recorded at all.
+foreach ($process in @(Get-StakeOsNextProcesses)) {
+  if (Stop-ProcessIfRunning $process.ProcessId) {
+    $stopped++
   }
 }
 
-$processes = @(Get-StakeOsNextProcesses)
-if ($processes.Count -gt 0) {
-  $processes | ForEach-Object { Stop-ProcessIfRunning $_.ProcessId }
-  Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-  Show-Message "Stopped StakeOS dashboard process(es)."
+if ($stopped -gt 0) {
+  Show-Message "StakeOS dashboard stopped."
   exit 0
 }
 

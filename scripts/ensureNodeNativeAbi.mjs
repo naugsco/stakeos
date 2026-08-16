@@ -58,7 +58,12 @@ console.log(
 );
 
 try {
-  execFileSync("npm", ["rebuild", "better-sqlite3"], { stdio: "inherit" });
+  // On Windows npm is a .cmd shim: Node refuses to spawn it without a shell.
+  const isWindows = process.platform === "win32";
+  execFileSync(isWindows ? "npm.cmd" : "npm", ["rebuild", "better-sqlite3"], {
+    stdio: "inherit",
+    shell: isWindows
+  });
   console.log("[stakeos] better-sqlite3 rebuilt for Node. Continuing.");
 } catch (error) {
   console.error(

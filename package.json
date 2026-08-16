@@ -13,7 +13,7 @@
     "rebuild:node": "npm rebuild better-sqlite3",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "build": "next build && npm run build:backend",
-    "build:backend": "tsup src/mcp/server.ts src/sqlite/runFullSync.ts src/sqlite/runCallingSync.ts src/sqlite/init.ts src/sqlite/seedSyncSnapshots.ts src/sqlite/runSyncJob.ts --format cjs --out-dir dist --clean && cp dist/mcp/server.cjs dist/server.cjs",
+    "build:backend": "tsup src/mcp/server.ts src/sqlite/runFullSync.ts src/sqlite/runCallingSync.ts src/sqlite/init.ts src/sqlite/seedSyncSnapshots.ts src/sqlite/runSyncJob.ts --format cjs --out-dir dist --clean && node -e \"require('node:fs').copyFileSync('dist/mcp/server.cjs', 'dist/server.cjs')\"",
     "desktop:start": "node scripts/ensureNodeNativeAbi.mjs && electron electron/main.cjs",
     "desktop:clean": "rm -rf release",
     "desktop:reset-setup": "node scripts/resetLocalSetup.mjs",

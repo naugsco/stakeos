@@ -119,7 +119,12 @@ A small popup will usually tell you what happened. Common cases:
 | Browser didn't open on its own | Open a browser and go to **http://localhost:3000/dashboard** manually. |
 
 If you get stuck, the `.run\dashboard.log` file inside the StakeOS folder is the
-best place to look — it records exactly what happened during launch.
+best place to look — it records exactly what happened during launch, and copies in
+the server's own error output whenever startup fails.
+
+The `.run` folder also keeps `server.out.log` and `server.err.log`, which hold the
+full output of the running dashboard if you need more detail than the summary in
+`dashboard.log`.
 
 ---
 

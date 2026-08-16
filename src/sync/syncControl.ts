@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export type SyncJobKind = "full" | "callings";
@@ -114,7 +114,7 @@ export const launchSyncJob = (kind: SyncJobKind) => {
   ensureRunDir();
 
   const logFile = path.join(runDir, getLogFileName(kind));
-  let child;
+  let child: ChildProcess;
 
   if (isPackagedRuntime) {
     const runnerPath = getPackagedScriptPath("runSyncJob.cjs");
@@ -135,18 +135,40 @@ export const launchSyncJob = (kind: SyncJobKind) => {
     child.stderr?.pipe(logStream);
   } else {
     const syncCommand = getCommandForKind(kind);
-    const shellCommand = isWindows
-      ? `cd /d "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`
-      : `cd "${projectRoot}" && ( ${syncCommand} ) >> "${logFile}" 2>&1`;
+    if (!syncCommand) {
+      throw new Error(`No sync command is defined for the ${kind} job.`);
+    }
 
-    child = spawn(shell, isWindows ? ["/c", shellCommand] : ["-lc", shellCommand], {
-      cwd: projectRoot,
-      detached: true,
-      stdio: "ignore",
-      env: {
-        ...process.env
-      }
-    });
+    // The log is wired up with real file descriptors instead of the shell's
+    // `>> file 2>&1`. The shell form needs a quoted path inside the command, and on
+    // Windows Node escapes those quotes as \" when it builds the command line, which
+    // cmd.exe reads literally: the redirect target is invalid and cmd dies before it
+    // runs anything. Handing cmd a command with no quotes to mangle avoids that
+    // entirely, and pointing stdout and stderr at one descriptor keeps the single
+    // merged log. `cwd` below replaces the old `cd` prefix.
+    const logFd = openSync(logFile, "a");
+
+    try {
+      child = spawn(shell, isWindows ? ["/c", syncCommand] : ["-lc", syncCommand], {
+        cwd: projectRoot,
+        // Windows: a cmd.exe started with DETACHED_PROCESS has no console, so the
+        // console programs it launches are given a fresh one and write there rather
+        // than to the handles they inherited - the log file is created and then stays
+        // empty. The child still outlives this request without it, because Windows
+        // does not tie a child's lifetime to its parent. zsh has no such problem.
+        detached: !isWindows,
+        stdio: ["ignore", logFd, logFd],
+        windowsVerbatimArguments: isWindows,
+        env: {
+          ...process.env
+        }
+      });
+    } finally {
+      // The child holds its own duplicate of the descriptor.
+      closeSync(logFd);
+    }
+
+    child.unref();
   }
 
   // A failed spawn reports asynchronously. Without a listener the error is unhandled and the

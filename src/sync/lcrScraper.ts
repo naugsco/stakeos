@@ -1,6 +1,9 @@
 import path from "node:path";
-import { chromium, type Page } from "playwright";
+// Must be imported before playwright: env.ts sets PLAYWRIGHT_BROWSERS_PATH, and
+// playwright-core resolves its browser registry once, at module load. Imported the
+// other way round it reads the default location and reports Chromium as missing.
 import { env } from "@/src/config/env";
+import { chromium, type Page } from "playwright";
 import type {
   CallingRecord,
   DirectorySnapshot,
