@@ -2,6 +2,7 @@ import { differenceInYears } from "date-fns";
 import { openSqliteSpikeDb } from "@/src/sqlite/db";
 import { env } from "@/src/config/env";
 import { compareStakeDates, formatStakeMonthKey, isOnOrAfterDate, parseStakeDate } from "@/src/utils/date";
+import { RETURNED_MISSIONARY_STATUS } from "@/src/types/directory";
 
 export interface CallingMember {
   memberId: number;
@@ -1081,15 +1082,19 @@ export const getCurrentlyServingMissionaries = async (): Promise<CurrentlyServin
         (SELECT c.title FROM ${currentCallingSql} AND c.lcr_member_id = m.lcr_member_id ORDER BY c.sustained_on DESC LIMIT 1) AS currentCalling
       FROM members m
       WHERE
-        NULLIF(TRIM(COALESCE(m.mission_status, '')), '') IS NOT NULL
-        OR (
-          NULLIF(TRIM(COALESCE(m.mission_country, '')), '') IS NOT NULL
-          AND COALESCE(m.is_returned_missionary, 0) = 0
+        -- Mission status is derived at sync time and resolves to "Returned Missionary" for
+        -- anyone LCR has served-a-mission data on, so it must never on its own imply current
+        -- service. Only a member carrying mission data WITHOUT the returned flag qualifies.
+        COALESCE(m.is_returned_missionary, 0) = 0
+        AND TRIM(COALESCE(m.mission_status, '')) <> @returnedStatus
+        AND (
+          NULLIF(TRIM(COALESCE(m.mission_status, '')), '') IS NOT NULL
+          OR NULLIF(TRIM(COALESCE(m.mission_country, '')), '') IS NOT NULL
         )
       ORDER BY ${nullsLast('m.age')}, m.age DESC, m.last_name, m.first_name
       LIMIT 500
       `
-    ).all() as CurrentlyServingMissionaryRow[];
+    ).all({ returnedStatus: RETURNED_MISSIONARY_STATUS }) as CurrentlyServingMissionaryRow[];
 
     return rows.map((row) => ({
       ...row,

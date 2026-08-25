@@ -13,6 +13,7 @@ import type {
   OrganizationRecord,
   UnitRecord
 } from "@/src/types/directory";
+import { RETURNED_MISSIONARY_STATUS } from "@/src/types/directory";
 import { asBoolean, normalizeWhitespace } from "@/src/utils/text";
 import { stableHash } from "@/src/utils/hash";
 
@@ -298,6 +299,17 @@ export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberReco
 
       const isEndowedFlag = asBoolean(valueFromRow(row, ["Is Endowed"], { strict: true }));
       const hasEndowmentStatus = /endowed/i.test(valueFromRow(row, ["Endowment Status"], { strict: true }) ?? "");
+
+      // LCR offers no "Mission" column on this report, so mission status is deduced from the
+      // three columns it does expose. Mission country/language are only ever populated for
+      // members already flagged as returned missionaries, which means these columns can
+      // establish "Returned Missionary" but cannot identify anyone currently serving.
+      const isReturnedMissionary = asBoolean(valueFromRow(row, ["Is Returned Missionary"], { strict: true }));
+      const missionLanguage = valueFromRow(row, ["Mission Language"], { strict: true });
+      const missionCountry = valueFromRow(row, ["Mission Country"], { strict: true });
+      const missionStatus =
+        valueFromRow(row, ["Mission"], { strict: true }) ??
+        (isReturnedMissionary || missionCountry || missionLanguage ? RETURNED_MISSIONARY_STATUS : undefined);
       const templeEndowed = isEndowedFlag ?? (hasEndowmentStatus ? true : undefined);
 
       const record: MemberRecord = {
@@ -325,9 +337,9 @@ export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberReco
         moveInDate: valueFromRow(row, ["Move In Date"], { strict: true }),
         isConvert: asBoolean(valueFromRow(row, ["Is Convert"], { strict: true })),
         isWidowed: asBoolean(valueFromRow(row, ["Is Widowed"], { strict: true })),
-        isReturnedMissionary: asBoolean(valueFromRow(row, ["Is Returned Missionary"], { strict: true })),
+        isReturnedMissionary,
         isAccountable: asBoolean(valueFromRow(row, ["Is Accountable"], { strict: true })),
-        isBornInCovenant: asBoolean(valueFromRow(row, ["Is Born in Covenant"], { strict: true })),
+        isBornInCovenant: asBoolean(valueFromRow(row, ["Is Born in Covenant", "custom-reports.is.bic"], { strict: true })),
         isDivorced: asBoolean(valueFromRow(row, ["Is Divorced"], { strict: true })),
         isMarried: asBoolean(valueFromRow(row, ["Is Married"], { strict: true })),
         hasChildren: asBoolean(valueFromRow(row, ["Has Children"], { strict: true })),
@@ -335,7 +347,9 @@ export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberReco
         isSingle: asBoolean(valueFromRow(row, ["Is Single"], { strict: true })),
         isSealedToSpouse: asBoolean(valueFromRow(row, ["Is Sealed to a Spouse"], { strict: true })),
         isSealedToCurrentSpouse: asBoolean(valueFromRow(row, ["Is Sealed to Current Spouse"], { strict: true })),
-        isSealedToPriorSpouse: asBoolean(valueFromRow(row, ["Is Sealed to a Prior Spouse"], { strict: true })),
+        isSealedToPriorSpouse: asBoolean(
+          valueFromRow(row, ["Is Sealed to a Prior Spouse", "custom-reports.is.sealed.to.prior.spouse"], { strict: true })
+        ),
         baptismDate: valueFromRow(row, ["Baptism Date"], { strict: true }),
         confirmationDate: valueFromRow(row, ["Confirmation Date"], { strict: true }),
         endowmentDate: valueFromRow(row, ["Endowment Date"], { strict: true }),
@@ -344,9 +358,9 @@ export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberReco
         templeRecommendStatus: valueFromRow(row, ["Temple Recommend Status"], { strict: true }),
         templeRecommendExpirationDate: valueFromRow(row, ["Temple Recommend Expiration Date"], { strict: true }),
         templeRecommendType: valueFromRow(row, ["Temple Recommend Type"], { strict: true }),
-        missionLanguage: valueFromRow(row, ["Mission Language"], { strict: true }),
-        missionCountry: valueFromRow(row, ["Mission Country"], { strict: true }),
-        missionStatus: valueFromRow(row, ["Mission"], { strict: true }),
+        missionLanguage,
+        missionCountry,
+        missionStatus,
         priesthoodType: valueFromRow(row, ["Priesthood"], { strict: true }),
         priesthoodOffice: valueFromRow(row, ["Priesthood office"], { strict: true }),
         callingsText: valueFromRow(row, ["Callings"], { strict: true }),
@@ -361,10 +375,16 @@ export const parseReportMembersFromTables = (tables: ScrapedTable[]): MemberReco
         isAttendingInstitute: asBoolean(valueFromRow(row, ["Is Attending Institute"], { strict: true })),
         potentialInstituteStudent: asBoolean(valueFromRow(row, ["Potential Institute Student"], { strict: true })),
         potentialSeminaryStudent: asBoolean(valueFromRow(row, ["Potential Seminary Student"], { strict: true })),
-        hasMinisteringSisters: asBoolean(valueFromRow(row, ["Has Ministering Sisters"], { strict: true })),
-        hasMinisteringBrothers: asBoolean(valueFromRow(row, ["Has Ministering Brothers"], { strict: true })),
-        ministeringBrothers: valueFromRow(row, ["Ministering Brothers"], { strict: true }),
-        ministeringSisters: valueFromRow(row, ["Ministering Sisters"], { strict: true }),
+        // LCR's machine keys for ministering still use the pre-2018 home/visiting teacher
+        // terminology, so the friendly aliases alone match nothing on a machine-header scrape.
+        hasMinisteringSisters: asBoolean(
+          valueFromRow(row, ["Has Ministering Sisters", "custom-reports.has.visiting.teachers"], { strict: true })
+        ),
+        hasMinisteringBrothers: asBoolean(
+          valueFromRow(row, ["Has Ministering Brothers", "custom-reports.has.home.teachers"], { strict: true })
+        ),
+        ministeringBrothers: valueFromRow(row, ["Ministering Brothers", "record.home.teachers"], { strict: true }),
+        ministeringSisters: valueFromRow(row, ["Ministering Sisters", "record.visiting.teachers"], { strict: true }),
         ordinationDate: valueFromRow(row, ["Ordination Date"], { strict: true }),
         marriageDate: valueFromRow(row, ["Marriage Date"], { strict: true }),
         marriageStatus: valueFromRow(row, ["Marriage Status"], { strict: true }),

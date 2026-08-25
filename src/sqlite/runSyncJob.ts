@@ -5,6 +5,7 @@ import {
   persistSqliteSpikeSnapshot,
   seedSqliteSpikeSnapshotsFromCurrentState
 } from "@/src/sqlite/persist";
+import { assertMemberCoverageDidNotCollapse } from "@/src/sqlite/syncHealth";
 
 type SyncKind = "full" | "callings";
 
@@ -23,6 +24,14 @@ const runFullSync = async () => {
   ensureSchema();
   const scraper = new LcrScraper();
   const snapshot = await scraper.scrapeDirectory();
+
+  const db = openSqliteSpikeDb();
+  try {
+    assertMemberCoverageDidNotCollapse(db, snapshot.members);
+  } finally {
+    db.close();
+  }
+
   const result = await persistSqliteSpikeSnapshot("sqlite_full_sync", snapshot);
   console.log(`SQLite sync completed. Records processed: ${result.recordsProcessed}`);
   const baseline = await seedSqliteSpikeSnapshotsFromCurrentState("sqlite_baseline_seed");

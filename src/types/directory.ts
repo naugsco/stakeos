@@ -1,3 +1,8 @@
+// LCR's member report has no "Mission" column, so mission status is derived during sync.
+// Mission country/language only ever accompany the returned-missionary flag, so this is the
+// only status the source data can establish — nothing here implies current service.
+export const RETURNED_MISSIONARY_STATUS = "Returned Missionary";
+
 export interface UnitRecord {
   unitNumber: string;
   name: string;
