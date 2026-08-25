@@ -64,9 +64,12 @@ function Stop-ProcessIfRunning([int]$TargetPid) {
   }
 }
 
-function Test-StakeOsServerHealthy {
+# Probes the dedicated health route rather than /dashboard: rendering the dashboard
+# reads the database and can outlast a short timeout on a cold server, which made
+# the launcher declare a healthy server dead.
+function Test-StakeOsServerHealthy([int]$TimeoutSec = 15) {
   try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$Port/dashboard" -TimeoutSec 5
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$Port/api/health" -TimeoutSec $TimeoutSec
     if (-not $response.Content) {
       return $false
     }
@@ -74,6 +77,18 @@ function Test-StakeOsServerHealthy {
   } catch {
     return $false
   }
+}
+
+# A false negative here is expensive: it kills a healthy server and rebuilds from
+# scratch, costing minutes. One slow response must not be enough to trigger that.
+function Test-StakeOsServerHealthyWithRetry {
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    if (Test-StakeOsServerHealthy) {
+      return $true
+    }
+    Start-Sleep -Seconds 2
+  }
+  return $false
 }
 
 # The build runs for minutes with no window of its own, so an impatient second
@@ -170,7 +185,7 @@ try {
 
   $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($listener) {
-    if (Test-StakeOsServerHealthy) {
+    if (Test-StakeOsServerHealthyWithRetry) {
       Write-Log "StakeOS is already running. Opening the dashboard."
       Start-Process "http://localhost:$Port/dashboard"
       exit 0
@@ -208,7 +223,7 @@ try {
   $startProcess = Start-Process -FilePath $npmPath -ArgumentList "run", "start", "--", "--port", "$Port" -WorkingDirectory $ProjectDir -RedirectStandardOutput $ServerOutLog -RedirectStandardError $ServerErrLog -PassThru -WindowStyle Hidden
 
   for ($i = 0; $i -lt 90; $i++) {
-    if (Test-StakeOsServerHealthy) {
+    if (Test-StakeOsServerHealthy -TimeoutSec 3) {
       # $startProcess is the npm.cmd wrapper, not the server. Record the node process
       # actually serving the dashboard so the stop script can shut it down.
       $serverProcess = Get-StakeOsNextProcesses | Select-Object -First 1

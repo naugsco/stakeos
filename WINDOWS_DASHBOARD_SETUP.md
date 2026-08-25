@@ -5,9 +5,9 @@ small program on your own PC that opens in your web browser. It still works full
 offline and keeps all data on your computer — there's no website and nothing is
 uploaded anywhere.
 
-**Who this is for:** anyone comfortable installing a program and copying/pasting a
-line into a Windows PowerShell window. You do **not** need to be a programmer. Plan
-on about 15–20 minutes the first time.
+**Who this is for:** anyone comfortable installing a program and double-clicking a
+file. You do **not** need to be a programmer. Plan on about 15–20 minutes the first
+time.
 
 > macOS users: don't use this guide. Download the ready-made app from the
 > [GitHub Releases page](https://github.com/naugsco/stakeos/releases) instead.
@@ -47,29 +47,25 @@ You only ever do this once.
 
 1. Open the extracted **stakeos** folder.
 2. Go into the `scripts\launchers` folder.
-3. **Right-click** the file named **`Launch StakeOS Dashboard.ps1`** and choose
-   **Run with PowerShell**.
+3. **Double-click `Launch StakeOS Dashboard.cmd`.**
 
-The first launch takes a few minutes — it's setting itself up and building the
-dashboard. When it's ready it opens StakeOS in your browser automatically. Later
-launches are much faster.
+A black window opens and shows what it's doing. The first launch takes a few
+minutes — it's setting itself up and building the dashboard. When it's ready it
+opens StakeOS in your browser automatically and the window closes on its own.
+Later launches take a couple of seconds.
 
-> **If right-click → "Run with PowerShell" isn't there, or you see a red security
-> message,** open it manually instead:
->
-> 1. Click the Windows **Start** button, type **PowerShell**, and open it.
-> 2. Copy and paste the line below, then press **Enter** (replace the path with
->    wherever you extracted StakeOS):
->
-> ```powershell
-> powershell -ExecutionPolicy Bypass -File "C:\Users\<you>\StakeOS\scripts\launchers\Launch StakeOS Dashboard.ps1"
-> ```
->
-> `-ExecutionPolicy Bypass` just tells Windows it's OK to run this one trusted
-> script. It doesn't change any system settings.
+If something goes wrong, the window **stays open** with the error and the location
+of the log file, so you can read it before it disappears.
 
-**Tip:** right-click `Launch StakeOS Dashboard.ps1` → **Send to** → **Desktop
-(create shortcut)** so you have a one-click launcher on your desktop afterward.
+> **Use the `.cmd` file, not the `.ps1` sitting next to it.** Double-clicking a
+> `.ps1` doesn't reliably work on Windows: PowerShell refuses to run script files
+> by default, and `.ps1` is often handed to a text editor or a Store app instead —
+> which is why a window can flash open and vanish with nothing happening. The
+> `.cmd` file is a small wrapper that starts the very same script the correct way.
+
+**Tip:** right-click `Launch StakeOS Dashboard.cmd` → **Show more options** →
+**Send to** → **Desktop (create shortcut)** so you have a one-click launcher on
+your desktop afterward. Rename the shortcut to whatever you like.
 
 ## Step 4 — First-time setup inside StakeOS
 
@@ -89,9 +85,7 @@ After the first sync finishes, your dashboard is populated and ready.
 StakeOS keeps running quietly in the background after you close the browser tab.
 To fully stop it, run the matching stopper script:
 
-- Right-click `scripts\maintenance\Stop StakeOS Dashboard.ps1` → **Run with
-  PowerShell** (or use the same PowerShell command from Step 3, pointing at that
-  file).
+- **Double-click `scripts\maintenance\Stop StakeOS Dashboard.cmd`.**
 
 Simply closing the browser tab does **not** stop it — your data stays put either
 way, this just frees up the program.
@@ -114,7 +108,8 @@ A small popup will usually tell you what happened. Common cases:
 |---|---|
 | "Node.js is not installed" | Finish **Step 1**, then relaunch. |
 | "Port 3000 is already in use" | StakeOS may already be running — check your browser for `localhost:3000`. If another program owns that port, close it and relaunch. |
-| Red text about scripts being disabled | Use the manual **PowerShell command** in Step 3 (the `-ExecutionPolicy Bypass` one). |
+| A window flashes open and closes, nothing happens | You launched the `.ps1` instead of the `.cmd`. Use `Launch StakeOS Dashboard.cmd` (Step 3). |
+| Red text about scripts being disabled | Same cause — use the `.cmd` file, which handles this for you. |
 | "Dashboard build failed" / "failed to start" | Open `.run\dashboard.log` inside the StakeOS folder — the last lines explain the error. |
 | Browser didn't open on its own | Open a browser and go to **http://localhost:3000/dashboard** manually. |
 

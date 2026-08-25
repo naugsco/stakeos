@@ -1,0 +1,10 @@
+# Launcher scripts must keep the line endings their interpreter expects,
+# regardless of what a contributor's core.autocrlf happens to be set to.
+
+# cmd.exe mis-parses multi-line if(...) blocks in LF-only batch files.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# A carriage return in the shebang line breaks the script on macOS/Linux.
+*.command text eol=lf
+*.sh      text eol=lf
