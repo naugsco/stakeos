@@ -17,6 +17,7 @@ const primaryLinks = [
 ];
 
 const utilityLinks = [
+  { href: "/bus", label: "Next Bus" },
   { href: "/settings", label: "Settings" },
   { href: "/sync-center", label: "Sync Center" }
 ];

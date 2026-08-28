@@ -45,6 +45,7 @@ If macOS blocks the app on first launch because Apple cannot confirm it is free 
 - Technical users running the browser dashboard from source on Windows: [WINDOWS_DASHBOARD_SETUP.md](./WINDOWS_DASHBOARD_SETUP.md)
 - Maintainers building the desktop app: [DESKTOP_RELEASE.md](./DESKTOP_RELEASE.md)
 - Maintainers publishing a GitHub release: [GITHUB_RELEASE_CHECKLIST.md](./GITHUB_RELEASE_CHECKLIST.md)
+- Setting up the live TransLink next-bus board: [TRANSIT_SETUP.md](./TRANSIT_SETUP.md)
 
 ## Stack
 
